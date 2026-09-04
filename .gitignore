@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# env
+.env
+.env.local
+.env.*.local
+
+# build
+dist/
+build/
+*.log
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# locks optional - keep package-lock for npm
+bun.lock
