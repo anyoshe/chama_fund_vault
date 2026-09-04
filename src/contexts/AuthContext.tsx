@@ -175,26 +175,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Finish chama creation deferred from email-confirm signup
+    // Finish chama creation deferred from email-confirm signup + always sync phone
     try {
       const raw = localStorage.getItem(PENDING_CHAMA_KEY);
+      const meta = (authUser.user_metadata ?? {}) as Record<string, unknown>;
+      const metaPhone =
+        typeof meta.phone === "string" && meta.phone.trim()
+          ? normalizePhone(meta.phone)
+          : null;
+      const metaName =
+        typeof meta.full_name === "string" && meta.full_name.trim()
+          ? meta.full_name.trim()
+          : null;
+
       if (raw) {
         const pending = JSON.parse(raw) as PendingChama;
         const existing = await fetchMemberships(authUser.id);
+        // Always write profile with phone (pending wins, else metadata)
+        await supabase.from("profiles").upsert({
+          id: authUser.id,
+          full_name: pending.fullName || metaName || authUser.email?.split("@")[0] || "Member",
+          email: (authUser.email ?? pending.email).toLowerCase(),
+          phone: pending.phone || metaPhone,
+          avatar_hue: Math.floor(Math.random() * 360),
+        });
         if (existing.length === 0) {
-          await supabase.from("profiles").upsert({
-            id: authUser.id,
-            full_name: pending.fullName,
-            email: pending.email,
-            phone: pending.phone,
-            avatar_hue: Math.floor(Math.random() * 360),
-          });
           await createChamaForUser(authUser.id, pending);
         }
         localStorage.removeItem(PENDING_CHAMA_KEY);
+      } else {
+        // No pending chama — still ensure phone/name land on profile after confirm
+        const current = await fetchProfile(authUser.id);
+        if (!current?.phone && metaPhone) {
+          await supabase.from("profiles").upsert({
+            id: authUser.id,
+            full_name: current?.full_name || metaName || authUser.email?.split("@")[0] || "Member",
+            email: (authUser.email ?? current?.email ?? "").toLowerCase(),
+            phone: metaPhone,
+            avatar_hue: current?.avatar_hue ?? Math.floor(Math.random() * 360),
+          });
+        } else if (!current) {
+          await supabase.from("profiles").upsert({
+            id: authUser.id,
+            full_name: metaName || authUser.email?.split("@")[0] || "Member",
+            email: (authUser.email ?? "").toLowerCase(),
+            phone: metaPhone,
+            avatar_hue: Math.floor(Math.random() * 360),
+          });
+        }
       }
     } catch (e) {
-      console.error("pending chama", e);
+      console.error("pending chama / profile sync", e);
     }
 
     const [profile, memberships] = await Promise.all([
@@ -255,18 +286,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (isPhoneLike(trimmed)) {
       const phone = normalizePhone(trimmed);
-      const { data: profile, error: lookupError } = await supabase
-        .from("profiles")
-        .select("email")
-        .eq("phone", phone)
-        .maybeSingle();
+      const candidates = Array.from(
+        new Set([
+          phone,
+          trimmed.replace(/[\s\-()]/g, ""),
+          phone.replace(/^\+/, ""),
+        ]),
+      );
 
-      if (lookupError || !profile?.email) {
+      let resolvedEmail: string | null = null;
+      for (const candidate of candidates) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("email")
+          .eq("phone", candidate)
+          .maybeSingle();
+        if (profile?.email) {
+          resolvedEmail = profile.email;
+          break;
+        }
+      }
+
+      if (!resolvedEmail) {
         return {
           error: "No account found for this phone number. Try email instead.",
         };
       }
-      email = profile.email;
+      email = resolvedEmail;
     }
 
     const { error } = await supabase.auth.signInWithPassword({
