@@ -46,7 +46,7 @@ interface AuthContextValue {
   activeChamaId: string | null;
   setActiveChamaId: (id: string) => void;
   login: (identifier: string, password: string) => Promise<{ error?: string }>;
-  registerChama: (payload: RegisterChamaPayload) => Promise<{ error?: string }>;
+  registerChama: (payload: RegisterChamaPayload) => Promise<{ error?: string; needsEmailConfirmation?: boolean }>;
   logout: () => Promise<void>;
   refreshMemberships: () => Promise<void>;
 }
@@ -68,6 +68,72 @@ function normalizePhone(phone: string): string {
     p = "+" + p;
   }
   return p;
+}
+
+
+const PENDING_CHAMA_KEY = "chamavault-pending-chama";
+
+interface PendingChama {
+  chamaName: string;
+  tagline: string;
+  activities: ChamaActivity[];
+  minMonthlyContribution: number;
+  fullName: string;
+  phone: string | null;
+  email: string;
+}
+
+async function createChamaForUser(
+  userId: string,
+  payload: {
+    chamaName: string;
+    tagline: string;
+    activities: ChamaActivity[];
+    minMonthlyContribution: number;
+  },
+) {
+  const kind = deriveKind(payload.activities);
+  const { data: chama, error: chamaError } = await supabase
+    .from("chamas")
+    .insert({
+      name: payload.chamaName.trim(),
+      tagline: payload.tagline.trim() || `${payload.chamaName.trim()} savings group`,
+      kind,
+      pool_balance: 0,
+      monthly_target: payload.minMonthlyContribution,
+      month_collected: 0,
+      constitution: {
+        minMonthlyContribution: payload.minMonthlyContribution,
+        lateFineRate: 5,
+        quorumPercent: 60,
+        maxLoanMultiple: 3,
+        payoutCycle: "1st Monday",
+        activities: payload.activities,
+      },
+      currency: "KES",
+      created_by: userId,
+    })
+    .select()
+    .single();
+
+  if (chamaError || !chama) {
+    return { error: chamaError?.message ?? "Failed to create chama." };
+  }
+
+  const { error: memberError } = await supabase.from("chama_members").insert({
+    chama_id: chama.id,
+    user_id: userId,
+    role: "Chairperson" as MemberRole,
+    monthly_contribution: payload.minMonthlyContribution,
+    total_paid: 0,
+    active_loans: 0,
+    status: "active",
+  });
+
+  if (memberError) {
+    return { error: memberError.message };
+  }
+  return { chamaId: chama.id as string };
 }
 
 async function fetchProfile(userId: string): Promise<Profile | null> {
@@ -108,6 +174,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setActiveChamaId(null);
       return;
     }
+
+    // Finish chama creation deferred from email-confirm signup
+    try {
+      const raw = localStorage.getItem(PENDING_CHAMA_KEY);
+      if (raw) {
+        const pending = JSON.parse(raw) as PendingChama;
+        const existing = await fetchMemberships(authUser.id);
+        if (existing.length === 0) {
+          await supabase.from("profiles").upsert({
+            id: authUser.id,
+            full_name: pending.fullName,
+            email: pending.email,
+            phone: pending.phone,
+            avatar_hue: Math.floor(Math.random() * 360),
+          });
+          await createChamaForUser(authUser.id, pending);
+        }
+        localStorage.removeItem(PENDING_CHAMA_KEY);
+      }
+    } catch (e) {
+      console.error("pending chama", e);
+    }
+
     const [profile, memberships] = await Promise.all([
       fetchProfile(authUser.id),
       fetchMemberships(authUser.id),
@@ -214,7 +303,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const normalizedPhone = phone ? normalizePhone(phone) : null;
-    const kind = deriveKind(activities);
 
     // 1. Create auth user
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
@@ -237,9 +325,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: "Could not create account. Please try again." };
     }
 
-    // 2. Upsert profile (trigger may already create it; we ensure phone/name)
+    // 2–4. Profile + chama (or defer if email confirmation required)
+    // Profile upsert (may fail without session if email confirm is on — non-fatal)
     const avatarHue = Math.floor(Math.random() * 360);
-    const { error: profileError } = await supabase.from("profiles").upsert({
+    await supabase.from("profiles").upsert({
       id: newUser.id,
       full_name: fullName.trim(),
       email: email.trim().toLowerCase(),
@@ -247,60 +336,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       avatar_hue: avatarHue,
     });
 
-    if (profileError) {
-      console.error("profile upsert", profileError);
-      // non-fatal if trigger already created it
-    }
+    // If email confirmation is required, there is often no session yet.
+    // Creating chama would fail RLS — stash and finish after first login.
+    const { data: sessionData } = await supabase.auth.getSession();
+    const hasSession = Boolean(sessionData.session);
 
-    // 3. Create chama (activities stored in constitution JSON for flexibility)
-    const { data: chama, error: chamaError } = await supabase
-      .from("chamas")
-      .insert({
-        name: chamaName.trim(),
-        tagline: tagline.trim() || `${chamaName.trim()} savings group`,
-        kind,
-        pool_balance: 0,
-        monthly_target: minMonthlyContribution,
-        month_collected: 0,
-        constitution: {
-          minMonthlyContribution,
-          lateFineRate: 5,
-          quorumPercent: 60,
-          maxLoanMultiple: 3,
-          payoutCycle: "1st Monday",
-          activities,
-        },
-        currency: "KES",
-        created_by: newUser.id,
-      })
-      .select()
-      .single();
-
-    if (chamaError || !chama) {
-      return {
-        error: chamaError?.message ?? "Failed to create chama. Please try again.",
+    if (!hasSession) {
+      const pending: PendingChama = {
+        chamaName,
+        tagline,
+        activities,
+        minMonthlyContribution,
+        fullName: fullName.trim(),
+        phone: normalizedPhone,
+        email: email.trim().toLowerCase(),
       };
+      try {
+        localStorage.setItem(PENDING_CHAMA_KEY, JSON.stringify(pending));
+      } catch {
+        /* ignore */
+      }
+      return { needsEmailConfirmation: true };
     }
 
-    // 4. Add founder as Chairperson
-    const { error: memberError } = await supabase.from("chama_members").insert({
-      chama_id: chama.id,
-      user_id: newUser.id,
-      role: "Chairperson" as MemberRole,
-      monthly_contribution: minMonthlyContribution,
-      total_paid: 0,
-      active_loans: 0,
-      status: "active",
+    const created = await createChamaForUser(newUser.id, {
+      chamaName,
+      tagline,
+      activities,
+      minMonthlyContribution,
     });
-
-    if (memberError) {
-      return { error: memberError.message };
+    if (created.error) {
+      return { error: created.error };
     }
 
-    // Session should already be set by signUp (if email confirmation is off)
     await hydrateUser(newUser);
     return {};
   }, [hydrateUser]);
+
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut();

@@ -18,6 +18,7 @@ export default function RegisterChama() {
 
   const [step, setStep] = useState<1 | 2>(1);
   const [error, setError] = useState<string | null>(null);
+  const [checkEmail, setCheckEmail] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -81,6 +82,10 @@ export default function RegisterChama() {
       setError(result.error);
       return;
     }
+    if (result.needsEmailConfirmation) {
+      setCheckEmail(email.trim());
+      return;
+    }
     navigate("/app", { replace: true });
   };
 
@@ -115,6 +120,21 @@ export default function RegisterChama() {
             <StepPill active={step === 2} done={false} icon={<UsersFour size={16} />} label="Chama details" />
           </div>
 
+          {checkEmail ? (
+            <div className="rounded-2xl border border-emerald-500/30 bg-slate-900/80 p-6 shadow-2xl shadow-black/40 sm:p-8">
+              <h2 className="text-lg font-bold text-white">Check your email</h2>
+              <p className="mt-2 text-sm leading-relaxed text-slate-300">
+                We created your account for <span className="font-semibold text-emerald-400">{checkEmail}</span>.
+                Open the confirmation link in that inbox, then sign in. Your chama will be set up automatically on first login.
+              </p>
+              <Link
+                to="/login"
+                className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-4 py-3 text-sm font-bold text-white"
+              >
+                Go to sign in
+              </Link>
+            </div>
+          ) : (
           <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-2xl shadow-black/40 backdrop-blur-sm sm:p-8">
             <form onSubmit={handleSubmit} className="space-y-5">
               {step === 1 && (
@@ -299,6 +319,7 @@ export default function RegisterChama() {
               </div>
             </form>
           </div>
+          )}
 
           <p className="mt-6 text-center text-sm text-slate-400">
             Already have an account?{" "}

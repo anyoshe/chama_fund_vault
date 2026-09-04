@@ -75,10 +75,12 @@ export default function Dashboard() {
       });
   }, [user?.memberships]);
 
-  const displayChamas = realChamas.length > 0 ? realChamas : seedChamas;
+  // Never show demo placeholders when the user is signed in
+  const displayChamas = realChamas;
+  const usingDemoData = false;
 
   const [activeChamaId, setActiveChamaIdLocal] = useState(
-    () => authChamaId ?? displayChamas[0]?.id ?? seedChamas[0].id,
+    () => authChamaId ?? displayChamas[0]?.id ?? "",
   );
 
   useEffect(() => {
@@ -119,7 +121,7 @@ export default function Dashboard() {
   }, [contributions, proposals, ledger]);
 
   const chama = useMemo(
-    () => displayChamas.find((c) => c.id === activeChamaId) ?? displayChamas[0] ?? seedChamas[0],
+    () => displayChamas.find((c) => c.id === activeChamaId) ?? displayChamas[0],
     [activeChamaId, displayChamas],
   );
   const currentMember = useMemo(
@@ -263,6 +265,25 @@ export default function Dashboard() {
     { id: "loans", label: "Loans & Ledger" },
     { id: "members", label: "Members" },
   ];
+
+  if (!chama) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-4 text-center text-slate-100">
+        <h1 className="text-xl font-bold text-white">No chama linked to this account yet</h1>
+        <p className="mt-2 max-w-md text-sm text-slate-400">
+          If you just confirmed your email, sign out and sign in again once. Your chama is created on first login after confirmation.
+          Otherwise create a chama from the registration page.
+        </p>
+        <button
+          type="button"
+          onClick={() => logout()}
+          className="mt-6 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-bold text-white"
+        >
+          Sign out
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
