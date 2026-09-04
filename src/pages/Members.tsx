@@ -62,13 +62,10 @@ export default function Members() {
     if (!activeChamaId) return;
     setLoading(true);
 
-    const { data: memberRows, error } = await supabase
-      .from("chama_members")
-      .select(
-        "id, user_id, role, monthly_contribution, total_paid, active_loans, status, joined_at",
-      )
-      .eq("chama_id", activeChamaId)
-      .order("joined_at", { ascending: true });
+    // Security-definer RPCs avoid RLS recursion on chama_members
+    const { data: memberRows, error } = await supabase.rpc("list_chama_members", {
+      p_chama_id: activeChamaId,
+    });
 
     if (error) {
       console.error(error);
@@ -77,32 +74,32 @@ export default function Members() {
       return;
     }
 
-    const userIds = (memberRows ?? []).map((m) => m.user_id);
+    const { data: profiles } = await supabase.rpc("list_chama_profiles", {
+      p_chama_id: activeChamaId,
+    });
+
     const profileMap: Record<
       string,
       { full_name: string; email: string; phone: string | null; avatar_hue: number }
     > = {};
-
-    if (userIds.length > 0) {
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, phone, avatar_hue")
-        .in("id", userIds);
-      for (const p of profiles ?? []) {
-        profileMap[p.id] = {
-          full_name: p.full_name,
-          email: p.email,
-          phone: p.phone,
-          avatar_hue: p.avatar_hue,
-        };
-      }
+    for (const p of profiles ?? []) {
+      profileMap[p.id] = {
+        full_name: p.full_name,
+        email: p.email,
+        phone: p.phone,
+        avatar_hue: p.avatar_hue,
+      };
     }
 
+    const rows = (memberRows ?? []) as MemberRow[];
     setMembers(
-      (memberRows ?? []).map((row) => ({
-        ...row,
-        profile: profileMap[row.user_id] ?? null,
-      })) as MemberRow[],
+      rows
+        .slice()
+        .sort((a, b) => a.joined_at.localeCompare(b.joined_at))
+        .map((row) => ({
+          ...row,
+          profile: profileMap[row.user_id] ?? null,
+        })),
     );
     setLoading(false);
   };
