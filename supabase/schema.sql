@@ -85,10 +85,64 @@ alter table public.profiles enable row level security;
 alter table public.chamas enable row level security;
 alter table public.chama_members enable row level security;
 
--- Profiles: users can read/update their own; members of same chama can read each other
+-- Helpers (security definer — avoid RLS recursion on chama_members)
+create or replace function public.is_chama_member(p_chama_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.chama_members m
+    where m.chama_id = p_chama_id
+      and m.user_id = auth.uid()
+      and m.status = 'active'
+  );
+$$;
+
+create or replace function public.is_chama_officer(p_chama_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.chama_members m
+    where m.chama_id = p_chama_id
+      and m.user_id = auth.uid()
+      and m.role in ('Chairperson', 'Treasurer', 'Secretary')
+      and m.status = 'active'
+  );
+$$;
+
+create or replace function public.shares_chama_with(p_other_user_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.chama_members me
+    join public.chama_members them
+      on them.chama_id = me.chama_id and them.status = 'active'
+    where me.user_id = auth.uid()
+      and me.status = 'active'
+      and them.user_id = p_other_user_id
+  );
+$$;
+
+-- Profiles
 create policy "Profiles: read own"
   on public.profiles for select
   using (auth.uid() = id);
+
+create policy "Profiles: read same-chama members"
+  on public.profiles for select
+  using (public.shares_chama_with(id));
 
 create policy "Profiles: update own"
   on public.profiles for update
@@ -98,32 +152,10 @@ create policy "Profiles: insert own"
   on public.profiles for insert
   with check (auth.uid() = id);
 
--- Allow reading profiles of people in the same chama
-create policy "Profiles: read same-chama members"
-  on public.profiles for select
-  using (
-    exists (
-      select 1 from public.chama_members cm1
-      join public.chama_members cm2 on cm1.chama_id = cm2.chama_id
-      where cm1.user_id = auth.uid()
-        and cm2.user_id = profiles.id
-        and cm1.status = 'active'
-        and cm2.status = 'active'
-    )
-  );
-
--- Chamas: members can read their chamas; creator can insert
+-- Chamas
 create policy "Chamas: members can read"
   on public.chamas for select
-  using (
-    exists (
-      select 1 from public.chama_members m
-      where m.chama_id = chamas.id
-        and m.user_id = auth.uid()
-        and m.status = 'active'
-    )
-    or created_by = auth.uid()
-  );
+  using (public.is_chama_member(id) or created_by = auth.uid());
 
 create policy "Chamas: authenticated can create"
   on public.chamas for insert
@@ -131,53 +163,20 @@ create policy "Chamas: authenticated can create"
 
 create policy "Chamas: officers can update"
   on public.chamas for update
-  using (
-    exists (
-      select 1 from public.chama_members m
-      where m.chama_id = chamas.id
-        and m.user_id = auth.uid()
-        and m.role in ('Chairperson', 'Treasurer', 'Secretary')
-        and m.status = 'active'
-    )
-  );
+  using (public.is_chama_officer(id));
 
 -- Chama members
-create policy "Members: read own memberships and same-chama"
+create policy "Members: read own or same-chama"
   on public.chama_members for select
-  using (
-    user_id = auth.uid()
-    or exists (
-      select 1 from public.chama_members m
-      where m.chama_id = chama_members.chama_id
-        and m.user_id = auth.uid()
-        and m.status = 'active'
-    )
-  );
+  using (user_id = auth.uid() or public.is_chama_member(chama_id));
 
-create policy "Members: founder can insert self as chair"
+create policy "Members: insert self or officer"
   on public.chama_members for insert
-  with check (
-    user_id = auth.uid()
-    or exists (
-      select 1 from public.chama_members m
-      where m.chama_id = chama_members.chama_id
-        and m.user_id = auth.uid()
-        and m.role in ('Chairperson', 'Secretary')
-        and m.status = 'active'
-    )
-  );
+  with check (user_id = auth.uid() or public.is_chama_officer(chama_id));
 
 create policy "Members: officers can update"
   on public.chama_members for update
-  using (
-    exists (
-      select 1 from public.chama_members m
-      where m.chama_id = chama_members.chama_id
-        and m.user_id = auth.uid()
-        and m.role in ('Chairperson', 'Secretary')
-        and m.status = 'active'
-    )
-  );
+  using (public.is_chama_officer(chama_id));
 
 -- IMPORTANT: In Supabase Dashboard → Authentication → Providers
 -- 1. Enable Email provider
