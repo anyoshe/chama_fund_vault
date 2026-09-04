@@ -10,7 +10,7 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import type { AuthUser, ChamaMembership, Profile } from "@/types/auth";
-import type { ChamaKind, MemberRole } from "@/types/chama";
+import type { ChamaActivity, ChamaKind, MemberRole } from "@/types/chama";
 
 interface RegisterChamaPayload {
   // Admin account
@@ -21,8 +21,22 @@ interface RegisterChamaPayload {
   // Chama
   chamaName: string;
   tagline: string;
-  kind: ChamaKind;
+  /** Multi-select activities that apply to this chama */
+  activities: ChamaActivity[];
   minMonthlyContribution: number;
+}
+
+function deriveKind(activities: ChamaActivity[]): ChamaKind {
+  if (activities.length === 0) return "hybrid";
+  if (activities.length > 1) return "hybrid";
+  const only = activities[0];
+  if (only === "merry-go-round") return "merry-go-round";
+  if (only === "table-banking" || only === "member-loans") return "table-banking";
+  if (only === "welfare" || only === "education-fund") return "welfare-pot";
+  if (only === "investment-pool" || only === "housing-project" || only === "agribusiness" || only === "share-capital") {
+    return "investment-pool";
+  }
+  return "hybrid";
 }
 
 interface AuthContextValue {
@@ -185,7 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       chamaName,
       tagline,
-      kind,
+      activities,
       minMonthlyContribution,
     } = payload;
 
@@ -195,8 +209,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (password.length < 6) {
       return { error: "Password must be at least 6 characters." };
     }
+    if (!activities || activities.length === 0) {
+      return { error: "Select at least one activity that applies to your chama." };
+    }
 
     const normalizedPhone = phone ? normalizePhone(phone) : null;
+    const kind = deriveKind(activities);
 
     // 1. Create auth user
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
@@ -234,7 +252,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // non-fatal if trigger already created it
     }
 
-    // 3. Create chama
+    // 3. Create chama (activities stored in constitution JSON for flexibility)
     const { data: chama, error: chamaError } = await supabase
       .from("chamas")
       .insert({
@@ -250,6 +268,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           quorumPercent: 60,
           maxLoanMultiple: 3,
           payoutCycle: "1st Monday",
+          activities,
         },
         currency: "KES",
         created_by: newUser.id,

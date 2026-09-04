@@ -16,7 +16,7 @@ create table if not exists public.chamas (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   tagline text not null default '',
-  kind text not null check (kind in ('merry-go-round', 'table-banking', 'welfare-pot', 'investment-pool')),
+  kind text not null check (kind in ('merry-go-round', 'table-banking', 'welfare-pot', 'investment-pool', 'hybrid')),
   pool_balance numeric not null default 0,
   monthly_target numeric not null default 0,
   month_collected numeric not null default 0,

@@ -1,4 +1,4 @@
-import type { MemberRole, ChamaKind } from "./chama";
+import type { MemberRole, ChamaKind, ChamaActivity } from "./chama";
 
 export interface Profile {
   id: string;
@@ -23,6 +23,7 @@ export interface ChamaRecord {
     quorumPercent: number;
     maxLoanMultiple: number;
     payoutCycle: string;
+    activities?: ChamaActivity[];
   };
   currency: string;
   created_by: string;

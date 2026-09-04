@@ -10,14 +10,7 @@ import {
   UserCircle,
 } from "@phosphor-icons/react";
 import { useAuth } from "@/contexts/AuthContext";
-import type { ChamaKind } from "@/types/chama";
-
-const KINDS: { value: ChamaKind; label: string; desc: string }[] = [
-  { value: "table-banking", label: "Table Banking", desc: "Pool savings & lend to members" },
-  { value: "merry-go-round", label: "Merry-go-round", desc: "Rotating lump-sum payouts" },
-  { value: "welfare-pot", label: "Welfare Pot", desc: "Emergency & social support fund" },
-  { value: "investment-pool", label: "Investment Pool", desc: "Group investments & assets" },
-];
+import { CHAMA_ACTIVITIES, type ChamaActivity } from "@/types/chama";
 
 export default function RegisterChama() {
   const { registerChama } = useAuth();
@@ -37,8 +30,17 @@ export default function RegisterChama() {
   // Chama
   const [chamaName, setChamaName] = useState("");
   const [tagline, setTagline] = useState("");
-  const [kind, setKind] = useState<ChamaKind>("table-banking");
+  const [activities, setActivities] = useState<ChamaActivity[]>([
+    "table-banking",
+    "member-loans",
+  ]);
   const [minContribution, setMinContribution] = useState(5000);
+
+  const toggleActivity = (value: ChamaActivity) => {
+    setActivities((prev) =>
+      prev.includes(value) ? prev.filter((a) => a !== value) : [...prev, value],
+    );
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -56,6 +58,11 @@ export default function RegisterChama() {
       return;
     }
 
+    if (activities.length === 0) {
+      setError("Select at least one activity that applies to your chama.");
+      return;
+    }
+
     setError(null);
     setSubmitting(true);
     const result = await registerChama({
@@ -65,7 +72,7 @@ export default function RegisterChama() {
       password,
       chamaName,
       tagline,
-      kind,
+      activities,
       minMonthlyContribution: minContribution,
     });
     setSubmitting(false);
@@ -187,26 +194,50 @@ export default function RegisterChama() {
                   />
 
                   <div>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      Chama type
+                    <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                      What does this chama do?
                     </p>
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      {KINDS.map((k) => (
-                        <button
-                          key={k.value}
-                          type="button"
-                          onClick={() => setKind(k.value)}
-                          className={`rounded-xl border px-3 py-3 text-left transition ${
-                            kind === k.value
-                              ? "border-emerald-500/50 bg-emerald-500/10"
-                              : "border-slate-700 bg-slate-950/50 hover:border-slate-600"
-                          }`}
-                        >
-                          <p className="text-sm font-semibold text-slate-100">{k.label}</p>
-                          <p className="text-[11px] text-slate-400">{k.desc}</p>
-                        </button>
-                      ))}
+                    <p className="mb-2 text-[11px] text-slate-500">
+                      Select all that apply — most groups combine several.
+                    </p>
+                    <div className="grid max-h-64 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
+                      {CHAMA_ACTIVITIES.map((k) => {
+                        const selected = activities.includes(k.value);
+                        return (
+                          <button
+                            key={k.value}
+                            type="button"
+                            onClick={() => toggleActivity(k.value)}
+                            className={`rounded-xl border px-3 py-3 text-left transition ${
+                              selected
+                                ? "border-emerald-500/50 bg-emerald-500/10"
+                                : "border-slate-700 bg-slate-950/50 hover:border-slate-600"
+                            }`}
+                          >
+                            <div className="flex items-start gap-2">
+                              <span
+                                className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ${
+                                  selected
+                                    ? "border-emerald-400 bg-emerald-500 text-white"
+                                    : "border-slate-600 bg-transparent text-transparent"
+                                }`}
+                              >
+                                ✓
+                              </span>
+                              <div>
+                                <p className="text-sm font-semibold text-slate-100">{k.label}</p>
+                                <p className="text-[11px] text-slate-400">{k.desc}</p>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
+                    {activities.length > 0 && (
+                      <p className="mt-2 text-[11px] text-emerald-400/90">
+                        {activities.length} selected
+                      </p>
+                    )}
                   </div>
 
                   <div>

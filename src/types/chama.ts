@@ -1,6 +1,82 @@
 // ChamaVault domain types — collective savings, cashless rails & quorum governance.
 
-export type ChamaKind = "merry-go-round" | "table-banking" | "welfare-pot" | "investment-pool";
+/** Primary display kind (legacy + hybrid). Prefer `activities` for full multi-select. */
+export type ChamaKind =
+  | "merry-go-round"
+  | "table-banking"
+  | "welfare-pot"
+  | "investment-pool"
+  | "hybrid";
+
+/** What the chama actually does — multi-select at registration. */
+export type ChamaActivity =
+  | "merry-go-round"
+  | "table-banking"
+  | "member-loans"
+  | "welfare"
+  | "investment-pool"
+  | "housing-project"
+  | "education-fund"
+  | "agribusiness"
+  | "share-capital"
+  | "general-savings";
+
+export const CHAMA_ACTIVITIES: {
+  value: ChamaActivity;
+  label: string;
+  desc: string;
+}[] = [
+  {
+    value: "merry-go-round",
+    label: "Merry-go-round",
+    desc: "Rotating lump-sum payouts (ROSCA)",
+  },
+  {
+    value: "table-banking",
+    label: "Table banking",
+    desc: "Pool savings and lend from the table",
+  },
+  {
+    value: "member-loans",
+    label: "Member loans",
+    desc: "Loans among members with interest & guarantors",
+  },
+  {
+    value: "welfare",
+    label: "Welfare / emergency",
+    desc: "Bereavement, medical and social support",
+  },
+  {
+    value: "investment-pool",
+    label: "Investment pool",
+    desc: "Group investments in assets or businesses",
+  },
+  {
+    value: "housing-project",
+    label: "Housing / property",
+    desc: "Land, housing or rental projects",
+  },
+  {
+    value: "education-fund",
+    label: "Education fund",
+    desc: "School fees and education support",
+  },
+  {
+    value: "agribusiness",
+    label: "Agribusiness",
+    desc: "Farming or agribusiness collective",
+  },
+  {
+    value: "share-capital",
+    label: "Share capital & dividends",
+    desc: "Buy shares in the group and earn dividends",
+  },
+  {
+    value: "general-savings",
+    label: "General savings",
+    desc: "Flexible savings pot without a fixed model",
+  },
+];
 
 export type MemberRole =
   | "Chairperson"
@@ -77,6 +153,8 @@ export interface Chama {
   name: string;
   tagline: string;
   kind: ChamaKind;
+  /** Multi-select activities chosen at registration */
+  activities?: ChamaActivity[];
   memberCount: number;
   poolBalance: number;
   monthlyTarget: number;
@@ -87,6 +165,7 @@ export interface Chama {
     quorumPercent: number; // e.g. 60
     maxLoanMultiple: number; // e.g. 3x own savings
     payoutCycle: string; // e.g. "1st Monday"
+    activities?: ChamaActivity[];
   };
   nextPayout: {
     recipientName: string;
