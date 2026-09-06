@@ -159,6 +159,7 @@ declare
   v_chama_id uuid;
   v_phone text;
   v_kind text;
+  v_phone_owner uuid;
 begin
   if v_uid is null then
     raise exception 'Not authenticated';
@@ -180,18 +181,36 @@ begin
     v_phone := '+' || v_phone;
   end if;
 
-  -- Ensure profile exists + phone saved
+  -- Profile first (no phone yet — avoids unique conflict mid-upsert)
   insert into public.profiles (id, full_name, email, phone, avatar_hue)
   values (
     v_uid,
     coalesce(nullif(trim(p_full_name), ''), split_part(coalesce(auth.jwt()->>'email', 'member'), '@', 1)),
     coalesce(auth.jwt()->>'email', ''),
-    v_phone,
+    null,
     floor(random() * 360)::int
   )
   on conflict (id) do update set
     full_name = coalesce(nullif(trim(p_full_name), ''), public.profiles.full_name),
-    phone = coalesce(v_phone, public.profiles.phone);
+    email = coalesce(nullif(auth.jwt()->>'email', ''), public.profiles.email);
+
+  -- Attach phone only if free or already owned by this user
+  if v_phone is not null then
+    select id into v_phone_owner from public.profiles where phone = v_phone limit 1;
+    if v_phone_owner is null or v_phone_owner = v_uid then
+      update public.profiles set phone = v_phone where id = v_uid;
+    else
+      raise exception 'Phone % is already registered to another account. Use a different number or sign in with that account.', v_phone;
+    end if;
+  end if;
+
+  -- Block same founder + same chama name
+  if exists (
+    select 1 from public.chamas c
+    where c.created_by = v_uid and lower(c.name) = lower(trim(p_name))
+  ) then
+    raise exception 'You already have a chama named "%". Choose a different name.', trim(p_name);
+  end if;
 
   insert into public.chamas (
     name, tagline, kind, pool_balance, monthly_target, month_collected,
@@ -221,7 +240,21 @@ begin
   ) values (
     v_chama_id, v_uid, 'Chairperson',
     coalesce(p_min_contribution, 0), 0, 0, 'active'
-  );
+  )
+  on conflict do nothing;
+
+  -- If membership unique prevented insert, try plain insert without conflict target
+  if not exists (
+    select 1 from public.chama_members
+    where chama_id = v_chama_id and user_id = v_uid
+  ) then
+    insert into public.chama_members (
+      chama_id, user_id, role, monthly_contribution, total_paid, active_loans, status
+    ) values (
+      v_chama_id, v_uid, 'Chairperson',
+      coalesce(p_min_contribution, 0), 0, 0, 'active'
+    );
+  end if;
 
   return v_chama_id;
 end;
