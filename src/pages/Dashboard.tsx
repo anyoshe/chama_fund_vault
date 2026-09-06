@@ -344,14 +344,53 @@ export default function Dashboard() {
       }),
     );
     if (passed) {
-      toast.success("Quorum reached - motion approved & auto-executed", {
-        description: `${target.title} | ${fmtKsh(target.amount)}`,
-        icon: <ShieldCheck className="text-emerald-400" />,
-      });
+      void (async () => {
+        const { data, error } = await supabase.rpc("disburse_from_loan_fund", {
+          p_chama_id: activeChamaId,
+          p_amount: target.amount,
+          p_borrower_id: target.requesterId,
+          p_reference: `DISB-${target.id}`,
+        });
+        if (error) {
+          console.error(error);
+          toast.error(error.message || "Approved, but loan fund could not disburse.");
+          setProposals((prev) =>
+            prev.map((p) => (p.id === proposalId ? { ...p, status: "approved" as const } : p)),
+          );
+          return;
+        }
+        setProposals((prev) =>
+          prev.map((p) =>
+            p.id === proposalId
+              ? {
+                  ...p,
+                  status: "disbursed" as const,
+                  disbursedAt: new Date().toISOString(),
+                }
+              : p,
+          ),
+        );
+        const { data: kitRows } = await supabase.rpc("list_chama_kits", {
+          p_chama_id: activeChamaId,
+        });
+        if (kitRows) {
+          setKits(
+            kitRows.map((k: ChamaKit) => ({
+              ...k,
+              balance: Number(k.balance) || 0,
+            })),
+          );
+        }
+        toast.success("Quorum reached — paid from loan fund kit", {
+          description: `${target.title} | ${fmtKsh(target.amount)}`,
+          icon: <ShieldCheck className="text-emerald-400" />,
+        });
+        void data;
+      })();
     }
   };
 
-  const handleRepay = (proposalId: string) => {
+  const handleRepay = async (proposalId: string) => {
     const target = proposals.find((p) => p.id === proposalId);
     if (!target || !target.repayment) return;
     const today = new Date().toISOString().slice(0, 10);
@@ -383,13 +422,108 @@ export default function Dashboard() {
         amount: paidAmount - existingPaid,
       }),
     );
-    toast.success("Repayment recorded - funds returned to group pool");
+    const repaid = paidAmount - existingPaid;
+    if (repaid > 0 && activeChamaId) {
+      const { error: repayError } = await supabase.rpc("credit_loan_fund", {
+        p_chama_id: activeChamaId,
+        p_amount: repaid,
+        p_reference: `REPAY-${proposalId}-${Date.now()}`,
+      });
+      if (repayError) {
+        console.error(repayError);
+        toast.error(repayError.message || "Schedule updated, but loan fund was not credited.");
+        return;
+      }
+      const { data: kitRows } = await supabase.rpc("list_chama_kits", {
+        p_chama_id: activeChamaId,
+      });
+      if (kitRows) {
+        setKits(
+          kitRows.map((k: ChamaKit) => ({
+            ...k,
+            balance: Number(k.balance) || 0,
+          })),
+        );
+      }
+    }
+    toast.success("Repayment recorded — credited to member-loans (loan fund) kit");
   };
 
-  const handleProposeLoan = () => {
+  const handleProposeLoan = async () => {
+    if (!activeChamaId || !user?.id) {
+      toast.error("Select a chama and sign in first.");
+      return;
+    }
+
+    const raw = window.prompt("Loan amount (KES)?");
+    if (raw == null) return;
+    const amount = Number(String(raw).replace(/[,\s]/g, ""));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Enter a valid amount greater than zero.");
+      return;
+    }
+
+    const { data: limitRows, error: limitError } = await supabase.rpc("get_member_loan_limit", {
+      p_chama_id: activeChamaId,
+      p_user_id: user.id,
+    });
+    if (limitError) {
+      console.error(limitError);
+      toast.error(limitError.message || "Could not load your loan limit. Run kits SQL in Supabase.");
+      return;
+    }
+    const limit = Array.isArray(limitRows) ? limitRows[0] : limitRows;
+    const maxLoan = Number(limit?.max_loan ?? 0);
+    const shares = Number(limit?.share_balance ?? 0);
+    const fund = Number(limit?.loan_fund_balance ?? 0);
+    const mult = Number(limit?.max_multiple ?? 3);
+
+    if (shares <= 0) {
+      toast.error("You have no share balance yet. Contribute to table banking, share capital, or general savings first.");
+      return;
+    }
+    if (amount > maxLoan) {
+      toast.error(
+        `Max you can request is ${fmtKsh(maxLoan)} (${mult}× your shares of ${fmtKsh(shares)}).`,
+      );
+      return;
+    }
+    if (amount > fund) {
+      toast.error(
+        `Loan fund only has ${fmtKsh(fund)}. Top up the member-loans kit or request a smaller amount.`,
+      );
+      return;
+    }
+
+    const id = `loan-${Date.now()}`;
+    const title = `Loan request · ${fmtKsh(amount)}`;
+    const quorumThreshold = (chama?.constitution?.quorumPercent ?? 60) / 100;
+    const newProposal: Proposal = {
+      id,
+      chamaId: activeChamaId,
+      type: "loan",
+      requesterId: user.id,
+      title,
+      reason: `Borrower shares ${fmtKsh(shares)}. Limit ${fmtKsh(maxLoan)}. Paid from loan fund only.`,
+      amount,
+      status: "active",
+      quorumThreshold,
+      votes: {},
+      requestedAt: new Date().toISOString(),
+    };
+
+    setProposals((prev) => [newProposal, ...prev]);
+    setLedger((prev) =>
+      pushAudit(prev, {
+        memberId: user.id,
+        type: "loan-disbursed",
+        description: `Proposed ${title}`,
+        amount: 0,
+      }),
+    );
     setTab("voting");
-    toast.info("New loan request drafts appear on the Voting Board", {
-      description: "Every disbursal needs quorum approval - no cash handling.",
+    toast.success("Loan request posted to Voting Board", {
+      description: `Needs quorum. If approved, ${fmtKsh(amount)} leaves the loan fund kit only.`,
     });
   };
 

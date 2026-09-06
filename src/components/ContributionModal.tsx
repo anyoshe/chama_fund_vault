@@ -152,9 +152,24 @@ export default function ContributionModal({
                       onChange={(event) => setDestination(event.target.value as ChamaActivity)}
                       className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none focus:border-emerald-500/60"
                     >
-                      {(chama.constitution.activities ?? ["general-savings"]).map((activity) => {
+                      {Array.from(
+                        new Set([
+                          ...(chama.constitution.activities ?? ["general-savings"]),
+                          "member-loans" as ChamaActivity,
+                        ]),
+                      ).map((activity) => {
                         const option = CHAMA_ACTIVITIES.find((item) => item.value === activity);
-                        return <option key={activity} value={activity}>{option?.label ?? activity}</option>;
+                        const hint =
+                          activity === "member-loans"
+                            ? " (loan fund — repayments / top-ups)"
+                            : ["table-banking", "share-capital", "general-savings"].includes(activity)
+                              ? " (counts toward your loan limit)"
+                              : "";
+                        return (
+                          <option key={activity} value={activity}>
+                            {(option?.label ?? activity) + hint}
+                          </option>
+                        );
                       })}
                     </select>
                   </label>
