@@ -393,6 +393,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!fullName || !email || !password || !chamaName) {
       return { error: "Please fill in all required fields." };
     }
+    if (!phone || !phone.trim()) {
+      return { error: "Founders must provide a phone number as well as email." };
+    }
     if (password.length < 6) {
       return { error: "Password must be at least 6 characters." };
     }

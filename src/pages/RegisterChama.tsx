@@ -46,12 +46,17 @@ export default function RegisterChama() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (step === 1) {
-      if (!fullName.trim() || !email.trim() || !password) {
-        setError("Please fill in your name, email and password.");
+      if (!fullName.trim() || !email.trim() || !phone.trim() || !password) {
+        setError("Founders must provide name, email, phone number and password.");
         return;
       }
       if (password.length < 6) {
         setError("Password must be at least 6 characters.");
+        return;
+      }
+      const digits = phone.replace(/[\s\-()]/g, "");
+      if (digits.length < 9) {
+        setError("Enter a valid phone number for the founder account.");
         return;
       }
       setError(null);

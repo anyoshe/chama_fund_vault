@@ -112,43 +112,66 @@ export default function Members() {
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeChamaId || !canManage) return;
-    if (!fullName.trim() || !phone.trim() || !password) {
-      toast.error("Name, phone number and temporary password are required");
+    if (!fullName.trim() || !password) {
+      toast.error("Name and temporary password are required");
       return;
     }
-    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      toast.error("Enter a valid email address or leave email blank.");
+    const hasEmail = Boolean(email.trim());
+    const hasPhone = Boolean(phone.trim());
+    if (!hasEmail && !hasPhone) {
+      toast.error("Provide at least a phone number or an email for the member.");
       return;
     }
-    let normalizedPhone = phone.replace(/[\s\-()]/g, "");
-    if (normalizedPhone.startsWith("0") && normalizedPhone.length === 10) {
-      normalizedPhone = `+254${normalizedPhone.slice(1)}`;
-    } else if (!normalizedPhone.startsWith("+") && normalizedPhone.length === 12) {
-      normalizedPhone = `+${normalizedPhone}`;
-    }
-    if (!/^\+254[17]\d{8}$/.test(normalizedPhone)) {
-      toast.error("Enter a valid Kenyan phone number, e.g. +254 7XX XXX XXX");
+    if (hasEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      toast.error("Enter a valid email address.");
       return;
+    }
+
+    let normalizedPhone: string | null = null;
+    if (hasPhone) {
+      normalizedPhone = phone.replace(/[\s\-()]/g, "");
+      if (normalizedPhone.startsWith("0") && normalizedPhone.length === 10) {
+        normalizedPhone = `+254${normalizedPhone.slice(1)}`;
+      } else if (!normalizedPhone.startsWith("+") && normalizedPhone.length === 12) {
+        normalizedPhone = `+${normalizedPhone}`;
+      }
+      if (!/^\+254[17]\d{8}$/.test(normalizedPhone)) {
+        toast.error("Enter a valid Kenyan phone number, e.g. +254 7XX XXX XXX");
+        return;
+      }
     }
     setSubmitting(true);
 
-    const { data: existingProfile } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("phone", normalizedPhone)
-      .maybeSingle();
-    if (existingProfile) {
-      setSubmitting(false);
-      toast.error("That phone number already has an account.");
-      return;
+    if (normalizedPhone) {
+      const { data: existingByPhone } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("phone", normalizedPhone)
+        .maybeSingle();
+      if (existingByPhone) {
+        setSubmitting(false);
+        toast.error("That phone number already has an account.");
+        return;
+      }
+    }
+    if (hasEmail) {
+      const { data: existingByEmail } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("email", email.trim().toLowerCase())
+        .maybeSingle();
+      if (existingByEmail) {
+        setSubmitting(false);
+        toast.error("That email already has an account.");
+        return;
+      }
     }
 
     const { data: adminSession } = await supabase.auth.getSession();
-    // Password auth requires an email internally. Members never need to know
-    // or use this generated address; they sign in with their phone number.
+    // Supabase Auth always needs an email; synthesize one if member is phone-only
     const authEmail =
       email.trim().toLowerCase() ||
-      `member-${normalizedPhone.replace(/\D/g, "")}@accounts.chamavault.app`;
+      `member-${(normalizedPhone ?? fullName).toString().replace(/\W/g, "").toLowerCase()}@accounts.chamavault.app`;
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email: authEmail,
       password,
@@ -205,7 +228,24 @@ export default function Members() {
       return;
     }
 
-    toast.success(`${fullName} added — they can log in with their phone number + password`);
+    // Ensure profile row has real phone/email (trigger may have run as new user)
+    await supabase.from("profiles").upsert({
+      id: newUserId,
+      full_name: fullName.trim(),
+      email: authEmail,
+      phone: normalizedPhone,
+      avatar_hue: Math.floor(Math.random() * 360),
+    });
+
+    const loginHint = [
+      normalizedPhone ? `phone ${normalizedPhone}` : null,
+      hasEmail ? `email ${email.trim().toLowerCase()}` : null,
+    ]
+      .filter(Boolean)
+      .join(" or ");
+    toast.success(
+      `${fullName} added — they can log in with ${loginHint || "their credentials"} + password`,
+    );
     setShowAdd(false);
     setFullName("");
     setEmail("");
@@ -273,17 +313,16 @@ export default function Members() {
             />
             <input
               className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 outline-none focus:border-emerald-500/60"
-              placeholder="Email (optional)"
+              placeholder="Email (optional if phone given)"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
             <input
               className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 outline-none focus:border-emerald-500/60"
-              placeholder="Phone e.g. +254 7XX XXX XXX"
+              placeholder="Phone (optional if email given)"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              required
             />
             <input
               className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 outline-none focus:border-emerald-500/60"
@@ -337,7 +376,7 @@ export default function Members() {
             </button>
           </div>
           <p className="text-[11px] text-slate-500">
-            Share the phone number and temporary password with the member so they can sign in.
+            Share the phone and/or email plus temporary password so they can sign in with either.
             Email is optional and is retained when provided.
             They should change the password after first login.
           </p>
