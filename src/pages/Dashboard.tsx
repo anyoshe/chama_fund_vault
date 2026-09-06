@@ -480,6 +480,54 @@ export default function Dashboard() {
     toast.success("Repayment recorded — returned to the loaning pool (liquidity kits)");
   };
 
+
+  const handleReschedule = (
+    proposalId: string,
+    repayment: import("@/types/chama").LoanRepaymentPlan,
+    meta: { mode: "early" | "extend"; settleAmount?: number },
+  ) => {
+    setProposals((prev) =>
+      prev.map((p) => {
+        if (p.id !== proposalId) return p;
+        if (meta.mode === "early") {
+          return {
+            ...p,
+            repayment,
+            status: "settled" as const,
+          };
+        }
+        return {
+          ...p,
+          repayment,
+          status: p.status === "settled" ? p.status : p.status,
+        };
+      }),
+    );
+    setLedger((prev) =>
+      pushAudit(prev, {
+        memberId: user?.id ?? "system",
+        type: "repayment",
+        description:
+          meta.mode === "early"
+            ? `Early settlement on ${proposalId}${meta.settleAmount != null ? ` · ${fmtKsh(meta.settleAmount)}` : ""}`
+            : `Loan term extended / recalculated on ${proposalId}`,
+        amount: meta.settleAmount ?? 0,
+      }),
+    );
+    if (meta.mode === "early" && meta.settleAmount && activeChamaId) {
+      void supabase.rpc("credit_loan_fund", {
+        p_chama_id: activeChamaId,
+        p_amount: meta.settleAmount,
+        p_reference: `EARLY-${proposalId}-${Date.now()}`,
+      }).then(({ error }) => {
+        if (error) toast.error(error.message);
+        else toast.success("Early settlement recorded — loaning pool credited");
+      });
+    } else if (meta.mode === "extend") {
+      toast.success("Repayment schedule updated");
+    }
+  };
+
   const handleProposeLoan = async () => {
     if (!activeChamaId || !user?.id) {
       toast.error("Select a chama and sign in first.");
@@ -702,6 +750,7 @@ export default function Dashboard() {
                 proposals={proposals}
                 ledger={chamaLedger}
                 onRepay={handleRepay}
+                onReschedule={handleReschedule}
               />
             )}
             {tab === "members" && <Members />}

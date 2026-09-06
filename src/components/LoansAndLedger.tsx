@@ -27,6 +27,11 @@ interface LoansAndLedgerProps {
   proposals: Proposal[];
   ledger: AuditEvent[];
   onRepay: (proposalId: string) => void;
+  onReschedule: (
+    proposalId: string,
+    repayment: LoanRepaymentPlan,
+    meta: { mode: "early" | "extend"; settleAmount?: number },
+  ) => void;
 }
 
 export default function LoansAndLedger({
@@ -35,6 +40,7 @@ export default function LoansAndLedger({
   proposals,
   ledger,
   onRepay,
+  onReschedule,
 }: LoansAndLedgerProps) {
   const [tab, setTab] = useState<"loans" | "ledger">("loans");
   const [query, setQuery] = useState("");
@@ -149,7 +155,7 @@ export default function LoansAndLedger({
             ) : (
               <div className="grid gap-3 lg:grid-cols-2">
                 {loans.map((p) => (
-                  <LoanCard key={p.id} proposal={p} members={members} defaultOpen={p.status === "approved"} onRepay={onRepay} />
+                  <LoanCard key={p.id} proposal={p} members={members} defaultOpen={p.status === "approved" || p.status === "disbursed"} onRepay={onRepay} onReschedule={onReschedule} />
                 ))}
               </div>
             )}
@@ -295,11 +301,17 @@ function LoanCard({
   members,
   defaultOpen,
   onRepay,
+  onReschedule,
 }: {
   proposal: Proposal;
   members: Member[];
   defaultOpen: boolean;
   onRepay: (id: string) => void;
+  onReschedule: (
+    proposalId: string,
+    repayment: LoanRepaymentPlan,
+    meta: { mode: "early" | "extend"; settleAmount?: number },
+  ) => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const requester = memberById(proposal.requesterId, members);
@@ -307,6 +319,69 @@ function LoanCard({
   const paidCount = plan?.schedule.filter((s) => s.paid).length ?? 0;
   const totalInstallments = plan?.schedule.length ?? 0;
   const remaining = plan?.schedule.filter((s) => !s.paid).reduce((a, s) => a + s.amount, 0) ?? proposal.amount;
+  const unpaidCount = totalInstallments - paidCount;
+  const monthlyRate = (plan?.interestRate ?? 10) / 100;
+  const monthlyInterest = proposal.amount * monthlyRate;
+  const unpaidPrincipal =
+    totalInstallments > 0 ? proposal.amount * (unpaidCount / totalInstallments) : proposal.amount;
+
+  const handlePayEarly = () => {
+    if (!plan || unpaidCount <= 0) return;
+    // Pay remaining principal only — future months of 10% interest are waived
+    const settleAmount = Math.round(unpaidPrincipal * 100) / 100;
+    const savedInterest = Math.round((remaining - settleAmount) * 100) / 100;
+    const ok = window.confirm(
+      `Pay early / settle now?\n\n` +
+        `Remaining principal: ${fmtKsh(settleAmount)}\n` +
+        `Interest waived (future months): ${fmtKsh(Math.max(0, savedInterest))}\n\n` +
+        `Confirm to mark the loan settled at this amount.`,
+    );
+    if (!ok) return;
+    const schedule = plan.schedule.map((s) => ({ ...s, paid: true }));
+    onReschedule(
+      proposal.id,
+      { ...plan, schedule, installments: plan.installments },
+      { mode: "early", settleAmount },
+    );
+  };
+
+  const handleExtend = () => {
+    if (!plan || unpaidCount <= 0) return;
+    const raw = window.prompt(
+      `Extend remaining term.\nUnpaid principal ≈ ${fmtKsh(unpaidPrincipal)}.\n` +
+        `Interest stays 10% of original principal (${fmtKsh(monthlyInterest)}) per month.\n\n` +
+        `How many monthly installments from now?`,
+      String(Math.max(unpaidCount, 3)),
+    );
+    if (raw == null) return;
+    const months = Math.max(1, Math.min(24, Math.floor(Number(raw) || 0)));
+    if (!months) {
+      toast.error("Enter a valid number of months.");
+      return;
+    }
+    const totalInterest = monthlyInterest * months;
+    const totalRepay = unpaidPrincipal + totalInterest;
+    const installment = totalRepay / months;
+    const start = new Date();
+    const paidPart = plan.schedule.filter((s) => s.paid);
+    const newUnpaid = Array.from({ length: months }, (_, i) => {
+      const due = new Date(start);
+      due.setMonth(due.getMonth() + i + 1);
+      return {
+        dueDate: due.toISOString().slice(0, 10),
+        amount: Math.round(installment * 100) / 100,
+        paid: false,
+      };
+    });
+    const nextPlan: LoanRepaymentPlan = {
+      interestRate: plan.interestRate ?? 10,
+      interestModel: "flat",
+      installments: paidPart.length + months,
+      schedule: [...paidPart, ...newUnpaid],
+    };
+    onReschedule(proposal.id, nextPlan, { mode: "extend" });
+    toast.success(`Rescheduled: ${months} payments of ${fmtKsh(installment)} (incl. 10%/mo flat interest)`);
+  };
 
   const statusChip =
     proposal.status === "approved"
@@ -389,6 +464,24 @@ function LoanCard({
           <span className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 py-2.5 text-xs font-bold text-emerald-300">
             <CheckCircle size={15} weight="fill" /> Fully settled
           </span>
+        )}
+        {plan && unpaidCount > 0 && proposal.status !== "settled" && proposal.status !== "rejected" && (
+          <>
+            <button
+              type="button"
+              onClick={handlePayEarly}
+              className="flex items-center justify-center gap-1 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2.5 text-[11px] font-bold text-emerald-300 transition hover:bg-emerald-500/20"
+            >
+              Pay early
+            </button>
+            <button
+              type="button"
+              onClick={handleExtend}
+              className="flex items-center justify-center gap-1 rounded-xl border border-violet-500/40 bg-violet-500/10 px-3 py-2.5 text-[11px] font-bold text-violet-200 transition hover:bg-violet-500/20"
+            >
+              Extend / recalc
+            </button>
+          </>
         )}
         <button
           onClick={() => setOpen((v) => !v)}
