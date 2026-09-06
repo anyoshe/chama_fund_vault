@@ -27,7 +27,6 @@ begin
     raise exception 'Not allowed';
   end if;
 
-  -- Do not INSERT here (would fail in read-only contexts). Kits should already exist.
   select coalesce(sum(b.balance), 0) into v_shares
   from public.member_kit_balances b
   join public.chama_kits k on k.chama_id = b.chama_id and k.kit_code = b.kit_code
@@ -35,25 +34,29 @@ begin
     and b.user_id = p_user_id
     and k.counts_toward_loan_limit = true;
 
-  select coalesce((constitution->>'maxLoanMultiple')::numeric, 3) into v_mult
-  from public.chamas where id = p_chama_id;
+  select coalesce((c.constitution->>'maxLoanMultiple')::numeric, 3) into v_mult
+  from public.chamas c
+  where c.id = p_chama_id;
 
-  select coalesce(balance, 0) into v_fund
-  from public.chama_kits
-  where chama_id = p_chama_id and kit_code = 'member-loans';
+  select coalesce(k.balance, 0) into v_fund
+  from public.chama_kits k
+  where k.chama_id = p_chama_id and k.kit_code = 'member-loans';
 
-  select coalesce(active_loans, 0) into v_loans
-  from public.chama_members
-  where chama_id = p_chama_id and user_id = p_user_id and status = 'active';
+  select coalesce(m.active_loans, 0) into v_loans
+  from public.chama_members m
+  where m.chama_id = p_chama_id
+    and m.user_id = p_user_id
+    and m.status = 'active';
 
-  return query select
-    coalesce(v_shares, 0),
-    coalesce(v_mult, 3),
-    coalesce(v_shares, 0) * coalesce(v_mult, 3),
-    coalesce(v_fund, 0),
-    coalesce(v_loans, 0);
+  share_balance := coalesce(v_shares, 0);
+  max_multiple := coalesce(v_mult, 3);
+  max_loan := coalesce(v_shares, 0) * coalesce(v_mult, 3);
+  loan_fund_balance := coalesce(v_fund, 0);
+  active_loans := coalesce(v_loans, 0);
+  return next;
 end;
 $$;
+
 
 grant execute on function public.get_member_loan_limit(uuid, uuid) to authenticated;
 
