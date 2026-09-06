@@ -294,7 +294,33 @@ export default function LoansAndLedger({
   );
 }
 
+
 /* ---------- Loan card ---------- */
+
+function ensurePlan(proposal: Proposal): LoanRepaymentPlan {
+  if (proposal.repayment?.schedule?.length) return proposal.repayment;
+  // Default: 3 months @ 10% of principal per month flat
+  const months = 3;
+  const monthlyInterest = proposal.amount * 0.1;
+  const totalInterest = monthlyInterest * months;
+  const totalRepay = proposal.amount + totalInterest;
+  const installment = totalRepay / months;
+  const start = new Date();
+  return {
+    interestRate: 10,
+    interestModel: "flat",
+    installments: months,
+    schedule: Array.from({ length: months }, (_, i) => {
+      const due = new Date(start);
+      due.setMonth(due.getMonth() + i + 1);
+      return {
+        dueDate: due.toISOString().slice(0, 10),
+        amount: Math.round(installment * 100) / 100,
+        paid: false,
+      };
+    }),
+  };
+}
 
 function LoanCard({
   proposal,
@@ -313,59 +339,59 @@ function LoanCard({
     meta: { mode: "early" | "extend"; settleAmount?: number },
   ) => void;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(true);
   const requester = memberById(proposal.requesterId, members);
-  const plan = proposal.repayment as LoanRepaymentPlan | undefined;
-  const paidCount = plan?.schedule.filter((s) => s.paid).length ?? 0;
-  const totalInstallments = plan?.schedule.length ?? 0;
-  const remaining = plan?.schedule.filter((s) => !s.paid).reduce((a, s) => a + s.amount, 0) ?? proposal.amount;
+  const plan = ensurePlan(proposal);
+  const paidCount = plan.schedule.filter((s) => s.paid).length;
+  const totalInstallments = plan.schedule.length;
   const unpaidCount = totalInstallments - paidCount;
-  const monthlyRate = (plan?.interestRate ?? 10) / 100;
+  const remaining = plan.schedule.filter((s) => !s.paid).reduce((a, s) => a + s.amount, 0);
+  const monthlyRate = (plan.interestRate ?? 10) / 100;
   const monthlyInterest = proposal.amount * monthlyRate;
   const unpaidPrincipal =
     totalInstallments > 0 ? proposal.amount * (unpaidCount / totalInstallments) : proposal.amount;
 
+  const [extendMonths, setExtendMonths] = useState(Math.max(unpaidCount, 3) || 3);
+
+  const previewExtend = (() => {
+    const months = extendMonths;
+    const totalInterest = monthlyInterest * months;
+    const totalRepay = unpaidPrincipal + totalInterest;
+    const installment = months > 0 ? totalRepay / months : 0;
+    return {
+      months,
+      totalInterest: Math.round(totalInterest * 100) / 100,
+      totalRepay: Math.round(totalRepay * 100) / 100,
+      installment: Math.round(installment * 100) / 100,
+    };
+  })();
+
+  const earlyAmount = Math.round(unpaidPrincipal * 100) / 100;
+  const waivedInterest = Math.round(Math.max(0, remaining - earlyAmount) * 100) / 100;
+
   const handlePayEarly = () => {
-    if (!plan || unpaidCount <= 0) return;
-    // Pay remaining principal only — future months of 10% interest are waived
-    const settleAmount = Math.round(unpaidPrincipal * 100) / 100;
-    const savedInterest = Math.round((remaining - settleAmount) * 100) / 100;
+    if (unpaidCount <= 0) return;
     const ok = window.confirm(
-      `Pay early / settle now?\n\n` +
-        `Remaining principal: ${fmtKsh(settleAmount)}\n` +
-        `Interest waived (future months): ${fmtKsh(Math.max(0, savedInterest))}\n\n` +
-        `Confirm to mark the loan settled at this amount.`,
+      `Pay early / settle?\n\nRemaining principal: ${fmtKsh(earlyAmount)}\nInterest waived: ${fmtKsh(waivedInterest)}\n\nConfirm settlement.`,
     );
     if (!ok) return;
-    const schedule = plan.schedule.map((s) => ({ ...s, paid: true }));
     onReschedule(
       proposal.id,
-      { ...plan, schedule, installments: plan.installments },
-      { mode: "early", settleAmount },
+      { ...plan, schedule: plan.schedule.map((s) => ({ ...s, paid: true })) },
+      { mode: "early", settleAmount: earlyAmount },
     );
   };
 
-  const handleExtend = () => {
-    if (!plan || unpaidCount <= 0) return;
-    const raw = window.prompt(
-      `Extend remaining term.\nUnpaid principal ≈ ${fmtKsh(unpaidPrincipal)}.\n` +
-        `Interest stays 10% of original principal (${fmtKsh(monthlyInterest)}) per month.\n\n` +
-        `How many monthly installments from now?`,
-      String(Math.max(unpaidCount, 3)),
-    );
-    if (raw == null) return;
-    const months = Math.max(1, Math.min(24, Math.floor(Number(raw) || 0)));
-    if (!months) {
-      toast.error("Enter a valid number of months.");
-      return;
-    }
+  const handleApplyExtend = () => {
+    if (unpaidCount <= 0) return;
+    const months = Math.max(1, Math.min(24, extendMonths));
     const totalInterest = monthlyInterest * months;
     const totalRepay = unpaidPrincipal + totalInterest;
     const installment = totalRepay / months;
-    const start = new Date();
+    const startDate = new Date();
     const paidPart = plan.schedule.filter((s) => s.paid);
     const newUnpaid = Array.from({ length: months }, (_, i) => {
-      const due = new Date(start);
+      const due = new Date(startDate);
       due.setMonth(due.getMonth() + i + 1);
       return {
         dueDate: due.toISOString().slice(0, 10),
@@ -373,15 +399,20 @@ function LoanCard({
         paid: false,
       };
     });
-    const nextPlan: LoanRepaymentPlan = {
-      interestRate: plan.interestRate ?? 10,
-      interestModel: "flat",
-      installments: paidPart.length + months,
-      schedule: [...paidPart, ...newUnpaid],
-    };
-    onReschedule(proposal.id, nextPlan, { mode: "extend" });
-    toast.success(`Rescheduled: ${months} payments of ${fmtKsh(installment)} (incl. 10%/mo flat interest)`);
+    onReschedule(
+      proposal.id,
+      {
+        interestRate: plan.interestRate ?? 10,
+        interestModel: "flat",
+        installments: paidPart.length + months,
+        schedule: [...paidPart, ...newUnpaid],
+      },
+      { mode: "extend" },
+    );
+    toast.success(`Schedule updated: ${months} × ${fmtKsh(installment)}`);
   };
+
+  const canManage = proposal.status !== "settled" && proposal.status !== "rejected" && unpaidCount > 0;
 
   const statusChip =
     proposal.status === "approved"
@@ -400,110 +431,131 @@ function LoanCard({
             <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${statusChip}`}>
               {proposal.status}
             </span>
-            <span className="font-mono text-[10px] text-slate-500">#{proposal.id.slice(1)}</span>
+            <span className="font-mono text-[10px] text-slate-500">#{proposal.id.slice(-6)}</span>
           </div>
           <h3 className="mt-2 text-sm font-bold leading-snug text-white">{proposal.title}</h3>
           {proposal.reason && (
             <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{proposal.reason}</p>
           )}
         </div>
-        <span className="shrink-0 font-mono text-lg font-bold tabular-nums text-emerald-300">{fmtKsh(proposal.amount)}</span>
+        <span className="shrink-0 font-mono text-lg font-bold tabular-nums text-emerald-300">
+          {fmtKsh(proposal.amount)}
+        </span>
       </div>
 
       <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
-        <span className="flex items-center gap-1.5">
-          <span
-            className="flex h-5 w-5 items-center justify-center rounded text-[8px] font-bold text-white"
-            style={{
-              background: `linear-gradient(135deg, hsl(${requester.avatarHue} 65% 42%), hsl(${(requester.avatarHue + 40) % 360} 70% 30%))`,
-            }}
-          >
-            {requester.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
-          </span>
-          {requester.name}
+        <span className="font-semibold text-slate-300">{requester.name}</span>
+        <span className="text-slate-600">·</span>
+        <span>
+          {paidCount}/{totalInstallments} paid · {fmtKsh(remaining)} left
         </span>
-        {proposal.disbursedAt && (
-          <>
-            <span className="text-slate-600">·</span>
-            <span>Disbursed {fmtDate(proposal.disbursedAt)}</span>
-          </>
-        )}
       </div>
 
-      {plan && (
-        <div className="mt-3">
-          <div className="flex items-center justify-between text-[11px]">
-            <span className="font-semibold uppercase tracking-[0.12em] text-slate-500">
-              Repayment {paidCount}/{totalInstallments}
-            </span>
-            <span className="font-mono font-bold text-slate-300">
-              {fmtKsh(remaining)} outstanding · {plan.interestRate}% of principal / month ({plan.interestModel})
-            </span>
-          </div>
-          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-800">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${(paidCount / totalInstallments) * 100}%` }}
-              transition={{ duration: 0.7, ease: "easeOut" }}
-              className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400"
-            />
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400"
+          style={{ width: `${totalInstallments ? (paidCount / totalInstallments) * 100 : 0}%` }}
+        />
+      </div>
+
+      {/* Always-visible repayment tools */}
+      {canManage && (
+        <div className="mt-4 space-y-3 rounded-xl border border-violet-500/25 bg-violet-950/20 p-3">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-violet-200">
+            Change repayment
+          </p>
+          <p className="text-[11px] text-slate-400">
+            Rate: <span className="text-slate-200">10% of principal / month flat</span> (
+            {fmtKsh(monthlyInterest)}/mo on {fmtKsh(proposal.amount)}). Paying early drops future interest.
+          </p>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+              <p className="text-[11px] font-semibold text-emerald-300">Pay early</p>
+              <p className="mt-1 text-[11px] text-slate-400">
+                Settle principal now: <span className="font-mono font-bold text-white">{fmtKsh(earlyAmount)}</span>
+              </p>
+              <p className="text-[10px] text-slate-500">Interest waived: {fmtKsh(waivedInterest)}</p>
+              <button
+                type="button"
+                onClick={handlePayEarly}
+                className="mt-2 w-full rounded-lg bg-emerald-500 py-2 text-xs font-bold text-white hover:bg-emerald-400"
+              >
+                Confirm early settlement
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-violet-500/30 bg-violet-500/5 p-3">
+              <p className="text-[11px] font-semibold text-violet-200">Extend / recalculate</p>
+              <label className="mt-1 block text-[10px] text-slate-500">Remaining installments</label>
+              <select
+                value={extendMonths}
+                onChange={(e) => setExtendMonths(Number(e.target.value))}
+                className="mt-0.5 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm font-semibold text-white"
+              >
+                {[1, 2, 3, 6, 9, 12, 18, 24].map((m) => (
+                  <option key={m} value={m}>
+                    {m} month{m > 1 ? "s" : ""}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-[10px] text-slate-400">
+                New payment: <span className="font-mono font-bold text-white">{fmtKsh(previewExtend.installment)}</span>
+                {" · "}
+                Total: <span className="font-mono text-emerald-300">{fmtKsh(previewExtend.totalRepay)}</span>
+                {" · "}
+                Interest: <span className="font-mono text-amber-200">{fmtKsh(previewExtend.totalInterest)}</span>
+              </p>
+              <button
+                type="button"
+                onClick={handleApplyExtend}
+                className="mt-2 w-full rounded-lg bg-violet-500 py-2 text-xs font-bold text-white hover:bg-violet-400"
+              >
+                Apply new schedule
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      <div className="mt-4 flex items-center gap-2">
-        {proposal.status === "approved" && (
-          <button
-            onClick={() => onRepay(proposal.id)}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-500/20 transition hover:from-emerald-400 hover:to-teal-500 active:scale-[0.98]"
-          >
-            <ArrowsCounterClockwise size={15} /> Repay via M-Pesa Standing Order
-          </button>
-        )}
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {(proposal.status === "approved" ||
+          proposal.status === "disbursed" ||
+          proposal.status === "active") &&
+          unpaidCount > 0 && (
+            <button
+              type="button"
+              onClick={() => onRepay(proposal.id)}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-500/20"
+            >
+              <ArrowsCounterClockwise size={15} /> Mark next installment paid
+            </button>
+          )}
         {proposal.status === "settled" && (
           <span className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 py-2.5 text-xs font-bold text-emerald-300">
             <CheckCircle size={15} weight="fill" /> Fully settled
           </span>
         )}
-        {plan && unpaidCount > 0 && proposal.status !== "settled" && proposal.status !== "rejected" && (
-          <>
-            <button
-              type="button"
-              onClick={handlePayEarly}
-              className="flex items-center justify-center gap-1 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2.5 text-[11px] font-bold text-emerald-300 transition hover:bg-emerald-500/20"
-            >
-              Pay early
-            </button>
-            <button
-              type="button"
-              onClick={handleExtend}
-              className="flex items-center justify-center gap-1 rounded-xl border border-violet-500/40 bg-violet-500/10 px-3 py-2.5 text-[11px] font-bold text-violet-200 transition hover:bg-violet-500/20"
-            >
-              Extend / recalc
-            </button>
-          </>
-        )}
         <button
+          type="button"
           onClick={() => setOpen((v) => !v)}
-          className="flex items-center justify-center gap-1 rounded-xl border border-slate-700 px-3 py-2.5 text-[11px] font-bold text-slate-400 transition hover:border-slate-500 hover:text-slate-200"
+          className="rounded-xl border border-slate-700 px-3 py-2.5 text-[11px] font-bold text-slate-400 hover:text-white"
         >
-          {open ? "Hide" : "Schedule"}
-          <CaretDownMini open={open} />
+          {open ? "Hide schedule" : "Show schedule"}
         </button>
       </div>
 
       <AnimatePresence>
-        {open && plan && (
+        {open && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22, ease: "easeOut" }}
             className="overflow-hidden"
           >
             <div className="mt-3 space-y-1.5 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
               {plan.schedule.map((s, i) => (
-                <div key={s.dueDate} className="flex items-center justify-between text-[11px]">
+                <div key={`${s.dueDate}-${i}`} className="flex items-center justify-between text-[11px]">
                   <span className="flex items-center gap-1.5 text-slate-400">
                     {s.paid ? (
                       <Check size={12} weight="bold" className="text-emerald-400" />
