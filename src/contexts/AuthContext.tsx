@@ -91,92 +91,77 @@ async function createChamaForUser(
     tagline: string;
     activities: ChamaActivity[];
     minMonthlyContribution: number;
+    fullName?: string;
+    phone?: string | null;
   },
 ) {
   const kind = deriveKind(payload.activities);
   const normalizedName = payload.chamaName.trim();
-  const { data: existingChama, error: lookupError } = await supabase
-    .from("chamas")
-    .select("id")
-    .eq("created_by", userId)
-    .ilike("name", normalizedName)
-    .order("created_at", { ascending: true })
-    .limit(1);
-  if (lookupError) return { error: lookupError.message };
-  if (existingChama?.[0]) {
-    const chamaId = existingChama[0].id;
-    const { data: existingMembership } = await supabase
-      .from("chama_members")
-      .select("id")
-      .eq("chama_id", chamaId)
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (!existingMembership) {
-      const { error } = await supabase.from("chama_members").insert({
-        chama_id: chamaId,
-        user_id: userId,
-        role: "Chairperson" as MemberRole,
-        monthly_contribution: payload.minMonthlyContribution,
-        total_paid: 0,
-        active_loans: 0,
-        status: "active",
-      });
-      if (error) return { error: error.message };
-    }
-    return { chamaId: chamaId as string };
+
+  // Prefer existing membership/chama for this user with same name (idempotent)
+  const existing = await fetchMemberships(userId);
+  const match = existing.find(
+    (m) => m.chama && m.chama.name.toLowerCase() === normalizedName.toLowerCase(),
+  );
+  if (match?.chama_id) {
+    return { chamaId: match.chama_id };
   }
 
-  const { data: chama, error: chamaError } = await supabase
-    .from("chamas")
-    .insert({
-      name: normalizedName,
-      tagline: payload.tagline.trim() || `${normalizedName} savings group`,
-      kind,
-      pool_balance: 0,
-      monthly_target: payload.minMonthlyContribution,
-      month_collected: 0,
-      constitution: {
-        minMonthlyContribution: payload.minMonthlyContribution,
-        lateFineRate: 5,
-        quorumPercent: 60,
-        maxLoanMultiple: 3,
-        payoutCycle: "1st Monday",
-        activities: payload.activities,
-      },
-      currency: "KES",
-      created_by: userId,
-    })
-    .select()
-    .single();
-
-  if (chamaError?.code === "23505") {
-    const { data: duplicate } = await supabase
-      .from("chamas")
-      .select("id")
-      .eq("created_by", userId)
-      .ilike("name", normalizedName)
-      .order("created_at", { ascending: true })
-      .limit(1);
-    if (duplicate?.[0]) return { chamaId: duplicate[0].id as string };
-  }
-  if (chamaError || !chama) {
-    return { error: chamaError?.message ?? "Failed to create chama." };
-  }
-
-  const { error: memberError } = await supabase.from("chama_members").insert({
-    chama_id: chama.id,
-    user_id: userId,
-    role: "Chairperson" as MemberRole,
-    monthly_contribution: payload.minMonthlyContribution,
-    total_paid: 0,
-    active_loans: 0,
-    status: "active",
+  // Phase A stability: security-definer RPC avoids RLS 401 on chamas insert
+  const { data: chamaId, error } = await supabase.rpc("create_chama_with_founder", {
+    p_name: normalizedName,
+    p_tagline: payload.tagline.trim() || `${normalizedName} savings group`,
+    p_kind: kind,
+    p_min_contribution: payload.minMonthlyContribution,
+    p_activities: payload.activities,
+    p_full_name: payload.fullName ?? null,
+    p_phone: payload.phone ?? null,
   });
 
-  if (memberError) {
-    return { error: memberError.message };
+  if (error || !chamaId) {
+    console.error("create_chama_with_founder", error);
+    // Fallback: direct insert (works only if RLS allows)
+    const { data: chama, error: chamaError } = await supabase
+      .from("chamas")
+      .insert({
+        name: normalizedName,
+        tagline: payload.tagline.trim() || `${normalizedName} savings group`,
+        kind,
+        pool_balance: 0,
+        monthly_target: payload.minMonthlyContribution,
+        month_collected: 0,
+        constitution: {
+          minMonthlyContribution: payload.minMonthlyContribution,
+          lateFineRate: 5,
+          quorumPercent: 60,
+          maxLoanMultiple: 3,
+          payoutCycle: "1st Monday",
+          activities: payload.activities,
+        },
+        currency: "KES",
+        created_by: userId,
+      })
+      .select()
+      .single();
+
+    if (chamaError || !chama) {
+      return { error: error?.message ?? chamaError?.message ?? "Failed to create chama." };
+    }
+
+    const { error: memberError } = await supabase.from("chama_members").insert({
+      chama_id: chama.id,
+      user_id: userId,
+      role: "Chairperson" as MemberRole,
+      monthly_contribution: payload.minMonthlyContribution,
+      total_paid: 0,
+      active_loans: 0,
+      status: "active",
+    });
+    if (memberError) return { error: memberError.message };
+    return { chamaId: chama.id as string };
   }
-  return { chamaId: chama.id as string };
+
+  return { chamaId: chamaId as string };
 }
 
 async function fetchProfile(userId: string): Promise<Profile | null> {
@@ -250,7 +235,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           avatar_hue: Math.floor(Math.random() * 360),
         });
         if (existing.length === 0) {
-          await createChamaForUser(authUser.id, pending);
+          await createChamaForUser(authUser.id, {
+            ...pending,
+            fullName: pending.fullName,
+            phone: pending.phone,
+          });
         }
         localStorage.removeItem(PENDING_CHAMA_KEY);
       } else {
@@ -443,6 +432,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tagline,
       activities,
       minMonthlyContribution,
+      fullName: fullName.trim(),
+      phone: normalizedPhone,
     });
     if (created.error) {
       return { error: created.error };
