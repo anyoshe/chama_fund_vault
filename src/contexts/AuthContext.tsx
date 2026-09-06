@@ -47,6 +47,7 @@ interface AuthContextValue {
   setActiveChamaId: (id: string) => void;
   login: (identifier: string, password: string) => Promise<{ error?: string }>;
   registerChama: (payload: RegisterChamaPayload) => Promise<{ error?: string; needsEmailConfirmation?: boolean }>;
+  resetPassword: (currentPassword: string, newPassword: string) => Promise<{ error?: string }>;
   logout: () => Promise<void>;
   refreshMemberships: () => Promise<void>;
 }
@@ -93,11 +94,43 @@ async function createChamaForUser(
   },
 ) {
   const kind = deriveKind(payload.activities);
+  const normalizedName = payload.chamaName.trim();
+  const { data: existingChama, error: lookupError } = await supabase
+    .from("chamas")
+    .select("id")
+    .eq("created_by", userId)
+    .ilike("name", normalizedName)
+    .order("created_at", { ascending: true })
+    .limit(1);
+  if (lookupError) return { error: lookupError.message };
+  if (existingChama?.[0]) {
+    const chamaId = existingChama[0].id;
+    const { data: existingMembership } = await supabase
+      .from("chama_members")
+      .select("id")
+      .eq("chama_id", chamaId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!existingMembership) {
+      const { error } = await supabase.from("chama_members").insert({
+        chama_id: chamaId,
+        user_id: userId,
+        role: "Chairperson" as MemberRole,
+        monthly_contribution: payload.minMonthlyContribution,
+        total_paid: 0,
+        active_loans: 0,
+        status: "active",
+      });
+      if (error) return { error: error.message };
+    }
+    return { chamaId: chamaId as string };
+  }
+
   const { data: chama, error: chamaError } = await supabase
     .from("chamas")
     .insert({
-      name: payload.chamaName.trim(),
-      tagline: payload.tagline.trim() || `${payload.chamaName.trim()} savings group`,
+      name: normalizedName,
+      tagline: payload.tagline.trim() || `${normalizedName} savings group`,
       kind,
       pool_balance: 0,
       monthly_target: payload.minMonthlyContribution,
@@ -116,6 +149,16 @@ async function createChamaForUser(
     .select()
     .single();
 
+  if (chamaError?.code === "23505") {
+    const { data: duplicate } = await supabase
+      .from("chamas")
+      .select("id")
+      .eq("created_by", userId)
+      .ilike("name", normalizedName)
+      .order("created_at", { ascending: true })
+      .limit(1);
+    if (duplicate?.[0]) return { chamaId: duplicate[0].id as string };
+  }
   if (chamaError || !chama) {
     return { error: chamaError?.message ?? "Failed to create chama." };
   }
@@ -154,12 +197,19 @@ async function fetchMemberships(userId: string): Promise<ChamaMembership[]> {
     .from("chama_members")
     .select("*, chama:chamas(*)")
     .eq("user_id", userId)
-    .eq("status", "active");
+    .eq("status", "active")
+    .order("joined_at", { ascending: true });
   if (error) {
     console.error("fetchMemberships", error);
     return [];
   }
-  return (data ?? []) as ChamaMembership[];
+  const memberships = (data ?? []) as ChamaMembership[];
+  const seenChamas = new Set<string>();
+  return memberships.filter((membership) => {
+    if (seenChamas.has(membership.chama_id)) return false;
+    seenChamas.add(membership.chama_id);
+    return true;
+  });
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -286,28 +336,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (isPhoneLike(trimmed)) {
       const phone = normalizePhone(trimmed);
-      const candidates = Array.from(
-        new Set([
-          phone,
-          trimmed.replace(/[\s\-()]/g, ""),
-          phone.replace(/^\+/, ""),
-        ]),
+      const { data: resolvedEmail, error: lookupError } = await supabase.rpc(
+        "resolve_login_email",
+        { p_phone: phone },
       );
-
-      let resolvedEmail: string | null = null;
-      for (const candidate of candidates) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("email")
-          .eq("phone", candidate)
-          .maybeSingle();
-        if (profile?.email) {
-          resolvedEmail = profile.email;
-          break;
-        }
-      }
-
-      if (!resolvedEmail) {
+      if (lookupError || !resolvedEmail) {
         return {
           error: "No account found for this phone number. Try email instead.",
         };
@@ -427,6 +460,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setActiveChamaId(null);
   }, []);
 
+  const resetPassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    if (currentPassword.length === 0) {
+      return { error: "Enter your current password." };
+    }
+    if (newPassword.length < 6) {
+      return { error: "Password must be at least 6 characters." };
+    }
+    const { data: sessionData } = await supabase.auth.getSession();
+    const email = sessionData.session?.user.email;
+    if (!email) {
+      return { error: "Could not verify the current account." };
+    }
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    });
+    if (verifyError) {
+      return { error: "Current password is incorrect." };
+    }
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    return error ? { error: error.message } : {};
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
@@ -436,6 +492,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setActiveChamaId,
       login,
       registerChama,
+      resetPassword,
       logout,
       refreshMemberships,
     }),

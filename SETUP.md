@@ -20,6 +20,14 @@ In Supabase → **SQL Editor** → New query → paste and run:
 
 `supabase/schema.sql`
 
+If the project already contains duplicate chamas from earlier signup retries, run
+`supabase/fix_duplicate_chamas.sql` first. It keeps the oldest chama for each
+owner/name pair and prevents future duplicates.
+
+For durable contribution records, run `supabase/contribution_persistence.sql`
+after the schema. It creates the contribution audit table and an atomic RPC that
+records a confirmed payment while updating the member standing and chama pool.
+
 ## 3. Auth settings
 
 Supabase Dashboard → **Authentication** → **Providers**:
@@ -71,7 +79,11 @@ Always collect a real email at registration (required by Supabase password auth)
 
 ### Adding members
 
-Chairperson / Secretary can open **Members → Add member**, enter name, email, optional phone, temporary password and role. Share those credentials with the member.
+Each account may create or join multiple chamas. A creator cannot create the same chama name twice, but can create another chama with a different name. The chama switcher only lists chamas that the signed-in account belongs to, and member profiles are loaded for the currently selected chama.
+
+Chairperson / Secretary can open **Members → Add member**, enter the member's name, optional email, phone number, temporary password and role. Members sign in with their phone number and password; an internal email is generated only when no email is provided because Supabase password authentication requires one.
+
+For this browser-based member creation flow, turn off **Confirm email** in Supabase Authentication settings. This lets the new member sign in immediately without needing an email inbox.
 
 > **Note:** Creating a user from the browser uses `signUp`, which may briefly switch the browser session to the new user. For production, move member creation to a Supabase Edge Function using the **service role** key so the admin stays logged in.
 
@@ -83,7 +95,7 @@ Chairperson / Secretary can open **Members → Add member**, enter name, email, 
 
 ## Next phases (suggested)
 
-- Wire contributions / proposals / ledger to Supabase tables  
+- Wire proposals / ledger to Supabase tables
 - Invite links instead of temporary passwords  
 - Edge Function for admin-safe member creation  
 - M-Pesa STK integration  

@@ -85,7 +85,12 @@ export type MemberRole =
   | "Active Member"
   | "New Applicant";
 
-export type ContributionMethod = "M-Pesa STK Push" | "Bank EFT / RTGS";
+export type ContributionMethod =
+  | "M-Pesa STK Push"
+  | "Airtel Money"
+  | "Bank EFT / RTGS"
+  | "PesaLink"
+  | "Other";
 
 export type ContributionStatus = "completed" | "pending" | "failed";
 
@@ -99,6 +104,9 @@ export interface Contribution {
   status: ContributionStatus;
   date: string; // ISO
   note?: string;
+  destination?: ChamaActivity;
+  paymentDetails?: string;
+  confirmedAt?: string;
 }
 
 export type VoteValue = "approve" | "reject" | "abstain";

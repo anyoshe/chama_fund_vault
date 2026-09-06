@@ -9,6 +9,7 @@ import ContributionModal from "@/components/ContributionModal";
 import LoansAndLedger from "@/components/LoansAndLedger";
 import Members from "@/pages/Members";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 import type {
   AuditEvent,
   Chama,
@@ -19,11 +20,9 @@ import type {
 } from "@/types/chama";
 import {
   chamas as seedChamas,
-  members as seedMembers,
   initialProposals,
   initialLedger,
   initialContributions,
-  memberById,
   fmtKsh,
 } from "@/data/mockChamaData";
 
@@ -52,7 +51,13 @@ function loadPersisted(): PersistedState | null {
 type Tab = "overview" | "voting" | "loans" | "members";
 
 export default function Dashboard() {
-  const { user, activeChamaId: authChamaId, setActiveChamaId: setAuthChamaId, logout } = useAuth();
+  const {
+    user,
+    activeChamaId: authChamaId,
+    setActiveChamaId: setAuthChamaId,
+    resetPassword,
+    logout,
+  } = useAuth();
 
   const realChamas: Chama[] = useMemo(() => {
     return (user?.memberships ?? [])
@@ -82,6 +87,88 @@ export default function Dashboard() {
   const [activeChamaId, setActiveChamaIdLocal] = useState(
     () => authChamaId ?? displayChamas[0]?.id ?? "",
   );
+  const [displayMembers, setDisplayMembers] = useState<Member[]>([]);
+
+  useEffect(() => {
+    if (!activeChamaId) {
+      setDisplayMembers([]);
+      return;
+    }
+    let cancelled = false;
+    const loadMembers = async () => {
+      const [{ data: memberRows, error: membersError }, { data: profiles }, { data: contributionRows, error: contributionsError }] = await Promise.all([
+        supabase.rpc("list_chama_members", { p_chama_id: activeChamaId }),
+        supabase.rpc("list_chama_profiles", { p_chama_id: activeChamaId }),
+        supabase
+          .from("contributions")
+          .select("id, chama_id, member_id, amount, destination, method, phone, payment_details, reference, status, created_at, confirmed_at")
+          .eq("chama_id", activeChamaId)
+          .order("created_at", { ascending: false }),
+      ]);
+      if (cancelled || membersError) {
+        if (membersError) console.error("loadDashboardMembers", membersError);
+        return;
+      }
+      const profileMap = new Map(
+        (profiles ?? []).map((profile) => [profile.id, profile]),
+      );
+      setDisplayMembers(
+        (memberRows ?? []).map((membership) => {
+          const profile = profileMap.get(membership.user_id);
+          return {
+            id: membership.user_id,
+            name: profile?.full_name ?? "Unknown member",
+            phone: profile?.phone ?? "",
+            role: membership.role as Member["role"],
+            avatarHue: profile?.avatar_hue ?? 150,
+            joinedAt: membership.joined_at,
+            monthlyContribution: Number(membership.monthly_contribution) || 0,
+            totalPaid: Number(membership.total_paid) || 0,
+            activeLoans: Number(membership.active_loans) || 0,
+            isCurrentUser: membership.user_id === user?.id,
+          };
+        }),
+      );
+      if (contributionsError) {
+        console.error("loadDashboardContributions", contributionsError);
+      } else {
+        const loadedContributions: Contribution[] = (contributionRows ?? []).map((row) => ({
+          id: row.id,
+          memberId: row.member_id,
+          chamaId: row.chama_id,
+          amount: Number(row.amount),
+          destination: row.destination as Contribution["destination"],
+          method: row.method as Contribution["method"],
+          paymentDetails: row.payment_details ?? row.phone ?? undefined,
+          reference: row.reference,
+          status: row.status as Contribution["status"],
+          date: row.confirmed_at ?? row.created_at,
+          confirmedAt: row.confirmed_at ?? undefined,
+        }));
+        setContributions((previous) => [
+          ...previous.filter((contribution) => contribution.chamaId !== activeChamaId),
+          ...loadedContributions,
+        ]);
+        setLedger((previous) => [
+          ...previous.filter((event) => event.chamaId !== activeChamaId || event.type !== "contribution"),
+          ...loadedContributions.map((saved) => ({
+            id: `e-${saved.id}`,
+            chamaId: saved.chamaId,
+            memberId: saved.memberId,
+            type: "contribution" as const,
+            description: `Contribution to ${saved.destination} via ${saved.method}${saved.paymentDetails ? ` (${saved.paymentDetails})` : ""}`,
+            amount: saved.amount,
+            timestamp: saved.date,
+            reference: saved.reference,
+          })),
+        ]);
+      }
+    };
+    void loadMembers();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeChamaId, user?.id]);
 
   useEffect(() => {
     if (authChamaId) setActiveChamaIdLocal(authChamaId);
@@ -93,8 +180,11 @@ export default function Dashboard() {
   };
 
   const [currentMemberId, setCurrentMemberId] = useState(
-    () => seedMembers.find((m) => m.isCurrentUser)?.id ?? seedMembers[0].id,
+    () => user?.id ?? "",
   );
+  useEffect(() => {
+    if (user?.id) setCurrentMemberId(user.id);
+  }, [user?.id]);
   const [tab, setTab] = useState<Tab>("overview");
   const [contribOpen, setContribOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -125,8 +215,8 @@ export default function Dashboard() {
     [activeChamaId, displayChamas],
   );
   const currentMember = useMemo(
-    () => memberById(currentMemberId, seedMembers),
-    [currentMemberId],
+    () => displayMembers.find((member) => member.id === currentMemberId) ?? displayMembers[0],
+    [currentMemberId, displayMembers],
   );
 
   const chamaLedger = useMemo(
@@ -162,27 +252,64 @@ export default function Dashboard() {
     return [event, ...list];
   };
 
-  const handleContribute = (contribution: Contribution) => {
-    setContributions((prev) => [contribution, ...prev]);
-    setLedger((prev) =>
-      pushAudit(prev, {
-        memberId: contribution.memberId,
-        type: "contribution",
-        description: `Contribution via ${contribution.method}`,
-        amount: contribution.amount,
-      }),
-    );
-    toast.success("Contribution settled to group account", {
-      description: `${fmtKsh(contribution.amount)} | ${contribution.method}`,
-      icon: <CheckCircle className="text-emerald-400" />,
+  const handleContribute = async (contribution: Contribution) => {
+    const { data, error } = await supabase.rpc("record_contribution", {
+      p_chama_id: contribution.chamaId,
+      p_amount: contribution.amount,
+      p_destination: contribution.destination ?? "general-savings",
+      p_method: contribution.method,
+      p_phone: contribution.method === "M-Pesa STK Push" || contribution.method === "Airtel Money"
+        ? contribution.paymentDetails
+        : null,
+      p_payment_details: contribution.method === "M-Pesa STK Push" || contribution.method === "Airtel Money"
+        ? null
+        : contribution.paymentDetails,
+      p_reference: contribution.reference,
     });
+    if (error) throw error;
+    if (!data) throw new Error("The payment was confirmed but no record was returned.");
+
+    const saved: Contribution = {
+      ...contribution,
+      id: data.id,
+      date: data.confirmed_at ?? data.created_at,
+      confirmedAt: data.confirmed_at ?? undefined,
+      status: data.status,
+    };
+    const { data: membership, error: membershipError } = await supabase
+      .from("chama_members")
+      .select("total_paid")
+      .eq("chama_id", saved.chamaId)
+      .eq("user_id", saved.memberId)
+      .maybeSingle();
+    if (membershipError) throw membershipError;
+    setContributions((prev) => [saved, ...prev]);
+    setDisplayMembers((prev) =>
+      prev.map((member) =>
+        member.id === saved.memberId
+          ? { ...member, totalPaid: membership ? Number(membership.total_paid) : member.totalPaid + saved.amount }
+          : member,
+      ),
+    );
+    setLedger((prev) =>
+      [{
+        id: `e-${saved.id}`,
+        chamaId: saved.chamaId,
+        memberId: saved.memberId,
+        type: "contribution",
+        description: `Contribution to ${saved.destination} via ${saved.method}${saved.paymentDetails ? ` (${saved.paymentDetails})` : ""}`,
+        amount: saved.amount,
+        timestamp: saved.date,
+        reference: saved.reference,
+      }, ...prev],
+    );
   };
 
   const handleCastVote = (proposalId: string, vote: VoteValue) => {
     const target = proposals.find((p) => p.id === proposalId);
     if (!target) return;
     const nextVotes = { ...target.votes, [currentMemberId]: vote };
-    const voterCount = seedMembers.filter((m) => m.role !== "New Applicant").length || 1;
+    const voterCount = displayMembers.filter((m) => m.role !== "New Applicant").length || 1;
     const required = Math.ceil(voterCount * target.quorumThreshold);
     const approvals = Object.values(nextVotes).filter((v) => v === "approve").length;
     const passed = target.status === "active" && approvals >= required;
@@ -284,21 +411,26 @@ export default function Dashboard() {
       </div>
     );
   }
+  if (displayMembers.length === 0) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-sm text-slate-400">
+        Loading members…
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <Navbar
         chamas={displayChamas}
         activeChamaId={activeChamaId}
-        members={seedMembers}
-        currentMemberId={currentMemberId}
         unreadNotifications={unreadNotifications}
         onSwitchChama={(id) => {
           setActiveChamaId(id);
           setTab("overview");
         }}
-        onSwitchMember={setCurrentMemberId}
         onOpenNotifications={() => setNotifOpen((v) => !v)}
+        onResetPassword={resetPassword}
         onLogout={logout}
         currentUserName={user?.profile?.full_name ?? user?.email}
       />
@@ -347,7 +479,8 @@ export default function Dashboard() {
             {tab === "overview" && (
               <ChamaOverview
                 chama={chama}
-                members={seedMembers}
+                members={displayMembers}
+                contributions={contributions.filter((contribution) => contribution.chamaId === activeChamaId)}
                 proposals={proposals}
                 currentMemberId={currentMemberId}
                 onContribute={() => setContribOpen(true)}
@@ -357,7 +490,7 @@ export default function Dashboard() {
             {tab === "voting" && (
               <GovernanceVoting
                 chamaId={activeChamaId}
-                members={seedMembers}
+                members={displayMembers}
                 proposals={proposals}
                 currentMemberId={currentMemberId}
                 onCastVote={handleCastVote}
@@ -366,7 +499,7 @@ export default function Dashboard() {
             {tab === "loans" && (
               <LoansAndLedger
                 chamaId={activeChamaId}
-                members={seedMembers}
+                members={displayMembers}
                 proposals={proposals}
                 ledger={chamaLedger}
                 onRepay={handleRepay}
@@ -414,7 +547,7 @@ export default function Dashboard() {
                   .filter((p) => p.chamaId === activeChamaId)
                   .slice(0, 8)
                   .map((p) => {
-                    const requester = memberById(p.requesterId, seedMembers);
+                    const requester = displayMembers.find((member) => member.id === p.requesterId);
                     return (
                       <div
                         key={p.id}
@@ -439,7 +572,7 @@ export default function Dashboard() {
                           </span>
                         </div>
                         <p className="mt-1 text-[11px] text-slate-500">
-                          {requester.name} | {fmtKsh(p.amount)}
+                          {requester?.name ?? "Member"} | {fmtKsh(p.amount)}
                         </p>
                       </div>
                     );

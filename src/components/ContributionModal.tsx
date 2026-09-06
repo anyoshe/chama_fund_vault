@@ -12,7 +12,7 @@ import {
 } from "@phosphor-icons/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import type { Chama, Contribution, ContributionMethod, Member } from "../types/chama";
+import { CHAMA_ACTIVITIES, type Chama, type ChamaActivity, type Contribution, type ContributionMethod, type Member } from "../types/chama";
 import { fmtKsh } from "../data/mockChamaData";
 
 interface ContributionModalProps {
@@ -20,10 +20,10 @@ interface ContributionModalProps {
   onClose: () => void;
   chama: Chama;
   currentMember: Member;
-  onSubmit: (contribution: Contribution) => void;
+  onSubmit: (contribution: Contribution) => Promise<void>;
 }
 
-type Step = "method" | "pay" | "processing" | "receipt";
+type Step = "method" | "pay" | "confirm" | "processing" | "receipt";
 
 export default function ContributionModal({
   open,
@@ -34,17 +34,23 @@ export default function ContributionModal({
 }: ContributionModalProps) {
   const [step, setStep] = useState<Step>("method");
   const [method, setMethod] = useState<ContributionMethod>("M-Pesa STK Push");
+  const [destination, setDestination] = useState<ChamaActivity>(
+    chama.constitution.activities?.[0] ?? "general-savings",
+  );
   const [phone, setPhone] = useState(currentMember.phone);
   const [amount, setAmount] = useState(chama.constitution.minMonthlyContribution);
   const [reference, setReference] = useState("");
+  const [paymentDetails, setPaymentDetails] = useState("");
 
   useEffect(() => {
     if (open) {
       setStep("method");
       setMethod("M-Pesa STK Push");
+      setDestination(chama.constitution.activities?.[0] ?? "general-savings");
       setPhone(currentMember.phone);
       setAmount(chama.constitution.minMonthlyContribution);
       setReference("");
+      setPaymentDetails("");
     }
   }, [open, currentMember.phone, chama.constitution.minMonthlyContribution]);
 
@@ -62,21 +68,30 @@ export default function ContributionModal({
     setReference(ref);
     setStep("processing");
     window.setTimeout(() => {
-      onSubmit({
+      void onSubmit({
         id: `c-${Date.now()}`,
         memberId: currentMember.id,
         chamaId: chama.id,
         amount,
         method,
+        destination,
+        paymentDetails,
         reference: ref,
         status: "completed",
         date: new Date().toISOString(),
+      }).then(() => {
+        toast.success("Contribution confirmed — funds settled to group account", {
+          description: `${CHAMA_ACTIVITIES.find((activity) => activity.value === destination)?.label ?? destination} · ${method} · ${fmtKsh(amount)} · Ref ${ref}`,
+          icon: <CheckCircle className="text-emerald-400" />,
+        });
+        setStep("receipt");
+      }).catch((error: unknown) => {
+        console.error("recordContribution", error);
+        toast.error("Contribution could not be recorded", {
+          description: error instanceof Error ? error.message : "Please try again.",
+        });
+        setStep("confirm");
       });
-      toast.success("Contribution confirmed — funds settled to group account", {
-        description: `${method} · ${fmtKsh(amount)} · Ref ${ref}`,
-        icon: <CheckCircle className="text-emerald-400" />,
-      });
-      setStep("receipt");
     }, 1800);
   };
 
@@ -128,8 +143,21 @@ export default function ContributionModal({
                     <span className="font-semibold text-emerald-300">
                       no member or treasurer ever touches cash
                     </span>
-                    . Choose your rail:
+                    . Choose the account to credit and your payment rail:
                   </p>
+                  <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                    Contributing to
+                    <select
+                      value={destination}
+                      onChange={(event) => setDestination(event.target.value as ChamaActivity)}
+                      className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none focus:border-emerald-500/60"
+                    >
+                      {(chama.constitution.activities ?? ["general-savings"]).map((activity) => {
+                        const option = CHAMA_ACTIVITIES.find((item) => item.value === activity);
+                        return <option key={activity} value={activity}>{option?.label ?? activity}</option>;
+                      })}
+                    </select>
+                  </label>
                   <div className="grid gap-2.5">
                     {(
                       [
@@ -142,12 +170,36 @@ export default function ContributionModal({
                           accent: "border-emerald-500/50 bg-emerald-500/10 hover:bg-emerald-500/15",
                         },
                         {
+                          id: "Airtel Money" as ContributionMethod,
+                          icon: <Phone size={20} weight="bold" className="text-red-400" />,
+                          name: "Airtel Money",
+                          desc: "Approve the payment in Airtel Money",
+                          tag: "Mobile money",
+                          accent: "border-red-500/40 bg-red-500/10 hover:bg-red-500/15",
+                        },
+                        {
                           id: "Bank EFT / RTGS" as ContributionMethod,
                           icon: <Bank size={20} weight="bold" className="text-sky-400" />,
                           name: "Bank EFT / RTGS",
                           desc: "Direct transfer to group business account",
                           tag: "Large sums",
                           accent: "border-sky-500/50 bg-sky-500/10 hover:bg-sky-500/15",
+                        },
+                        {
+                          id: "PesaLink" as ContributionMethod,
+                          icon: <Bank size={20} weight="bold" className="text-violet-400" />,
+                          name: "PesaLink",
+                          desc: "Pay from your bank using PesaLink",
+                          tag: "Bank transfer",
+                          accent: "border-violet-500/40 bg-violet-500/10 hover:bg-violet-500/15",
+                        },
+                        {
+                          id: "Other" as ContributionMethod,
+                          icon: <Receipt size={20} className="text-amber-400" />,
+                          name: "Other",
+                          desc: "Record another payment method",
+                          tag: "Manual record",
+                          accent: "border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/15",
                         },
                       ] as const
                     ).map((m) => (
@@ -211,10 +263,10 @@ export default function ContributionModal({
                   </div>
 
                   {/* Phone (STK only) */}
-                  {method === "M-Pesa STK Push" ? (
+                  {method === "M-Pesa STK Push" || method === "Airtel Money" ? (
                     <div>
                       <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                        <Phone size={12} /> M-Pesa number
+                        <Phone size={12} /> {method === "M-Pesa STK Push" ? "M-Pesa" : "Airtel"} number
                       </label>
                       <input
                         value={phone}
@@ -239,21 +291,41 @@ export default function ContributionModal({
                     instantly and hit the ledger — nobody handles cash.
                   </div>
 
+                  {(method === "Bank EFT / RTGS" || method === "PesaLink" || method === "Other") && (
+                    <input
+                      value={paymentDetails}
+                      onChange={(event) => setPaymentDetails(event.target.value)}
+                      placeholder={method === "Other" ? "Describe payment method/reference" : "Enter bank or transfer reference"}
+                      className="w-full rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none focus:border-emerald-500/60"
+                      required
+                    />
+                  )}
                   <button
-                    onClick={handlePay}
-                    disabled={amount < 100}
+                    onClick={() => setStep("confirm")}
+                    disabled={amount < 100 || ((method === "M-Pesa STK Push" || method === "Airtel Money") && phone.length < 9) || ((method !== "M-Pesa STK Push" && method !== "Airtel Money") && !paymentDetails.trim())}
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-emerald-500/25 transition hover:from-emerald-400 hover:to-teal-500 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {method === "M-Pesa STK Push" ? (
-                      <>
-                        <Phone size={17} weight="fill" /> Push STK to {stkDigits}
-                      </>
-                    ) : (
-                      <>
-                        <Bank size={17} weight="fill" /> Confirm EFT of {fmtKsh(amount)}
-                      </>
-                    )}
+                    Confirm payment
                   </button>
+                </div>
+              )}
+
+              {step === "confirm" && (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-300">Review payment</p>
+                    <div className="mt-3 space-y-2 text-sm">
+                      <p className="flex justify-between gap-4"><span className="text-slate-500">Account</span><span className="text-right text-slate-200">{CHAMA_ACTIVITIES.find((item) => item.value === destination)?.label ?? destination}</span></p>
+                      <p className="flex justify-between gap-4"><span className="text-slate-500">Amount</span><span className="font-mono text-slate-200">{fmtKsh(amount)}</span></p>
+                      <p className="flex justify-between gap-4"><span className="text-slate-500">Payment method</span><span className="text-right text-slate-200">{method}</span></p>
+                      <p className="flex justify-between gap-4"><span className="text-slate-500">Details</span><span className="text-right text-slate-200">{method === "M-Pesa STK Push" || method === "Airtel Money" ? phone : paymentDetails}</span></p>
+                    </div>
+                  </div>
+                  <p className="text-xs leading-relaxed text-slate-400">Confirm to initiate the payment and record the transaction in this chama's ledger.</p>
+                  <div className="flex gap-2">
+                    <button onClick={() => setStep("pay")} className="flex-1 rounded-xl border border-slate-700 py-3 text-sm font-semibold text-slate-300">Back</button>
+                    <button onClick={handlePay} className="flex-1 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3 text-sm font-bold text-white">Confirm & pay</button>
+                  </div>
                 </div>
               )}
 
@@ -305,6 +377,7 @@ export default function ContributionModal({
                     <div className="space-y-2 px-4 py-3.5 text-[11px]">
                       {[
                         ["Member", currentMember.name],
+                        ["Account", CHAMA_ACTIVITIES.find((item) => item.value === destination)?.label ?? destination],
                         ["Amount", fmtKsh(amount)],
                         ["Rail", method],
                         ["Reference", reference],

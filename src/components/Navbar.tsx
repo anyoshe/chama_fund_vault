@@ -3,26 +3,24 @@ import {
   Bell,
   CaretDown,
   Check,
-  CheckCircle,
-  Crown,
+  Eye,
+  EyeSlash,
   PiggyBank,
   SignOut,
   UserCircle,
   UsersFour,
 } from "@phosphor-icons/react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { Chama, Member } from "../types/chama";
+import type { Chama } from "../types/chama";
 import { fmtKsh } from "../data/mockChamaData";
 
 interface NavbarProps {
   chamas: Chama[];
   activeChamaId: string;
-  members: Member[];
-  currentMemberId: string;
   unreadNotifications: number;
   onSwitchChama: (id: string) => void;
-  onSwitchMember: (id: string) => void;
   onOpenNotifications: () => void;
+  onResetPassword: (currentPassword: string, newPassword: string) => Promise<{ error?: string }>;
   onLogout?: () => void;
   currentUserName?: string;
 }
@@ -30,19 +28,25 @@ interface NavbarProps {
 export default function Navbar({
   chamas,
   activeChamaId,
-  members,
-  currentMemberId,
   unreadNotifications,
   onSwitchChama,
-  onSwitchMember,
   onOpenNotifications,
+  onResetPassword,
   onLogout,
   currentUserName,
 }: NavbarProps) {
   const [chamaOpen, setChamaOpen] = useState(false);
-  const [memberOpen, setMemberOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
   const activeChama = chamas.find((c) => c.id === activeChamaId) ?? chamas[0];
-  const currentMember = members.find((m) => m.id === currentMemberId) ?? members[0];
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-xl">
@@ -67,7 +71,6 @@ export default function Navbar({
           <button
             onClick={() => {
               setChamaOpen((v) => !v);
-              setMemberOpen(false);
             }}
             className="flex items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/80 px-3 py-2 text-sm font-semibold text-slate-100 transition hover:border-emerald-500/50 hover:bg-slate-800/80"
           >
@@ -138,107 +141,153 @@ export default function Navbar({
             )}
           </button>
 
-          {/* Member switcher */}
           <div className="relative">
             <button
               onClick={() => {
-                setMemberOpen((v) => !v);
+                setAccountOpen((v) => !v);
                 setChamaOpen(false);
               }}
-              className="flex items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/80 py-1.5 pl-1.5 pr-2.5 transition hover:border-emerald-500/50"
+              className="flex h-10 items-center gap-2 rounded-xl border border-slate-700/70 bg-slate-900/80 px-2 transition hover:border-emerald-500/50"
+              aria-label="Open account menu"
+              aria-expanded={accountOpen}
             >
-              <div
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-xs font-bold text-white"
-                style={{
-                  background: `linear-gradient(135deg, hsl(${currentMember.avatarHue} 65% 42%), hsl(${(currentMember.avatarHue + 40) % 360} 70% 30%))`,
-                }}
-              >
-                {currentMember.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20 text-xs font-bold text-emerald-300">
+                {(currentUserName ?? "Member").split(" ").map((part) => part[0]).slice(0, 2).join("")}
               </div>
-              <div className="hidden text-left sm:block">
-                <p className="text-xs font-semibold leading-tight text-slate-100">{currentMember.name}</p>
-                <p className="text-[10px] leading-tight text-slate-400">{currentMember.role}</p>
-              </div>
-              <CaretDown size={13} className={`text-slate-400 transition-transform ${memberOpen ? "rotate-180" : ""}`} />
+              <span className="hidden max-w-40 truncate text-xs font-semibold text-slate-100 sm:block">
+                {currentUserName ?? "Member"}
+              </span>
+              <CaretDown size={13} className={`text-slate-400 transition-transform ${accountOpen ? "rotate-180" : ""}`} />
             </button>
             <AnimatePresence>
-              {memberOpen && (
+              {accountOpen && (
                 <motion.div
                   initial={{ opacity: 0, y: -6, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -6, scale: 0.98 }}
                   transition={{ duration: 0.16, ease: "easeOut" }}
-                  className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900 shadow-2xl shadow-black/50"
+                  className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900 shadow-2xl shadow-black/50"
                 >
-                  <div className="flex items-center justify-between border-b border-slate-800 px-4 py-2.5">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                      Simulate member
-                    </span>
-                    <span className="flex items-center gap-1 text-[10px] text-slate-500">
-                      <Crown size={12} className="text-amber-400" /> role-based voting
-                    </span>
-                  </div>
-                  <div className="max-h-72 overflow-y-auto">
-                    {members.map((m) => (
-                      <button
-                        key={m.id}
-                        onClick={() => {
-                          onSwitchMember(m.id);
-                          setMemberOpen(false);
-                        }}
-                        className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-slate-800/70 ${
-                          m.id === currentMemberId ? "bg-slate-800/50" : ""
-                        }`}
-                      >
-                        <div
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold text-white"
-                          style={{
-                            background: `linear-gradient(135deg, hsl(${m.avatarHue} 65% 42%), hsl(${(m.avatarHue + 40) % 360} 70% 30%))`,
-                          }}
-                        >
-                          {m.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-slate-100">
-                            {m.name}
-                            {m.isCurrentUser && <span className="ml-1.5 text-[10px] font-medium text-emerald-400">(you)</span>}
-                          </p>
-                          <p className="text-xs text-slate-400">
-                            {m.role} · {fmtKsh(m.totalPaid)} saved
-                          </p>
-                        </div>
-                        {m.role === "Treasurer" && <UserCircle size={15} className="text-amber-400" />}
-                        {m.id === currentMemberId && <Check size={15} weight="bold" className="text-emerald-400" />}
-                      </button>
-                    ))}
-                  </div>
-                  {currentUserName && (
-                    <div className="border-t border-slate-800 px-4 py-2 text-[11px] text-slate-400">
-                      Signed in as <span className="font-semibold text-slate-200">{currentUserName}</span>
+                  <div className="flex items-center gap-3 border-b border-slate-800 px-4 py-3">
+                    <UserCircle size={24} className="text-emerald-400" />
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Signed in as</p>
+                      <p className="truncate text-sm font-semibold text-slate-100">{currentUserName ?? "Member"}</p>
                     </div>
-                  )}
+                  </div>
+                  <button
+                    onClick={() => {
+                      setAccountOpen(false);
+                      setPasswordModalOpen(true);
+                    }}
+                    className="flex w-full items-center gap-2 border-b border-slate-800 px-4 py-3 text-left text-sm font-semibold text-slate-300 transition hover:bg-slate-800/70"
+                  >
+                    Reset password
+                  </button>
                   {onLogout && (
                     <button
                       onClick={() => {
-                        setMemberOpen(false);
+                        setAccountOpen(false);
                         onLogout();
                       }}
-                      className="flex w-full items-center gap-2 border-t border-slate-800 px-4 py-2.5 text-sm font-semibold text-red-400 transition hover:bg-red-500/10"
+                      className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold text-red-400 transition hover:bg-red-500/10"
                     >
-                      <SignOut size={16} />
+                      <SignOut size={17} />
                       Sign out
                     </button>
                   )}
-                  <div className="flex items-center gap-2 border-t border-slate-800 bg-slate-950/60 px-4 py-2.5 text-[11px] text-slate-500">
-                    <CheckCircle size={13} className="text-emerald-500" />
-                    Zero cash handled — all rails are STK Push / EFT to group accounts.
-                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
         </div>
       </div>
+      <AnimatePresence>
+        {passwordModalOpen && (
+          <motion.div
+            className="fixed inset-0 z-[60] flex min-h-screen items-center justify-center overflow-y-auto bg-slate-950/75 px-4 py-6 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.form
+              className="w-full max-w-md space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              onSubmit={async (event) => {
+                event.preventDefault();
+                setResetError(null);
+                if (newPassword !== confirmPassword) {
+                  setResetError("New passwords do not match.");
+                  return;
+                }
+                setResetting(true);
+                const result = await onResetPassword(currentPassword, newPassword);
+                setResetting(false);
+                if (result.error) {
+                  setResetError(result.error);
+                  return;
+                }
+                setCurrentPassword("");
+                setNewPassword("");
+                setConfirmPassword("");
+                setPasswordModalOpen(false);
+              }}
+            >
+              <div>
+                <h2 className="text-lg font-bold text-white">Reset password</h2>
+                <p className="mt-1 text-xs text-slate-400">Verify your current password before changing it.</p>
+              </div>
+              <PasswordField label="Current password" value={currentPassword} onChange={setCurrentPassword} visible={showCurrentPassword} onToggle={() => setShowCurrentPassword((value) => !value)} />
+              <PasswordField label="New password" value={newPassword} onChange={setNewPassword} visible={showNewPassword} onToggle={() => setShowNewPassword((value) => !value)} minLength={6} />
+              <PasswordField label="Confirm new password" value={confirmPassword} onChange={setConfirmPassword} visible={showConfirmPassword} onToggle={() => setShowConfirmPassword((value) => !value)} minLength={6} />
+              {resetError && <p className="text-sm text-red-400">{resetError}</p>}
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setPasswordModalOpen(false)} className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300">Cancel</button>
+                <button type="submit" disabled={resetting} className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-bold text-white disabled:opacity-60">{resetting ? "Saving..." : "Save password"}</button>
+              </div>
+            </motion.form>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </header>
+  );
+}
+
+function PasswordField({
+  label,
+  value,
+  onChange,
+  visible,
+  onToggle,
+  minLength,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  visible: boolean;
+  onToggle: () => void;
+  minLength?: number;
+}) {
+  return (
+    <div className="relative">
+      <input
+        type={visible ? "text" : "password"}
+        required
+        minLength={minLength}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={label}
+        className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 pr-10 text-sm text-slate-100 outline-none focus:border-emerald-500"
+      />
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={visible ? `Hide ${label}` : `Show ${label}`}
+        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-200"
+      >
+        {visible ? <EyeSlash size={17} /> : <Eye size={17} />}
+      </button>
+    </div>
   );
 }

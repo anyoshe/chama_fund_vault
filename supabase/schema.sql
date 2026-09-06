@@ -49,8 +49,50 @@ create table if not exists public.chama_members (
 -- Indexes
 create index if not exists idx_chama_members_user on public.chama_members (user_id);
 create index if not exists idx_chama_members_chama on public.chama_members (chama_id);
+create unique index if not exists idx_chamas_owner_name_unique
+  on public.chamas (created_by, lower(trim(name)));
 create index if not exists idx_profiles_phone on public.profiles (phone);
 create index if not exists idx_profiles_email on public.profiles (email);
+
+-- Contributions (immutable payment and reconciliation records)
+create table if not exists public.contributions (
+  id uuid primary key default gen_random_uuid(),
+  chama_id uuid not null references public.chamas (id) on delete cascade,
+  member_id uuid not null references auth.users (id) on delete restrict,
+  amount numeric not null check (amount > 0),
+  destination text not null,
+  method text not null,
+  phone text,
+  payment_details text,
+  reference text not null unique,
+  status text not null default 'completed' check (status in ('completed', 'pending', 'failed')),
+  created_at timestamptz not null default now(),
+  confirmed_at timestamptz,
+  created_by uuid not null default auth.uid() references auth.users (id)
+);
+create index if not exists idx_contributions_chama_date on public.contributions (chama_id, created_at desc);
+create index if not exists idx_contributions_member_date on public.contributions (member_id, created_at desc);
+
+create or replace function public.resolve_login_email(p_phone text)
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p.email
+  from public.profiles p
+  where regexp_replace(p.phone, '[\s\-()]', '', 'g') = case
+    when regexp_replace(trim(p_phone), '[\s\-()]', '', 'g') ~ '^0[17][0-9]{8}$'
+      then '+254' || substring(regexp_replace(trim(p_phone), '[\s\-()]', '', 'g') from 2)
+    when regexp_replace(trim(p_phone), '[\s\-()]', '', 'g') ~ '^254[17][0-9]{8}$'
+      then '+' || regexp_replace(trim(p_phone), '[\s\-()]', '', 'g')
+    else regexp_replace(trim(p_phone), '[\s\-()]', '', 'g')
+  end
+  limit 1;
+$$;
+
+grant execute on function public.resolve_login_email(text) to anon, authenticated;
 
 -- Auto-create profile on signup
 create or replace function public.handle_new_user()
@@ -100,6 +142,64 @@ as $$
       and m.status = 'active'
   );
 $$;
+
+create or replace function public.record_contribution(
+  p_chama_id uuid,
+  p_amount numeric,
+  p_destination text,
+  p_method text,
+  p_phone text,
+  p_payment_details text,
+  p_reference text
+)
+returns public.contributions
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row public.contributions;
+begin
+  if not public.is_chama_member(p_chama_id) then
+    raise exception 'You are not an active member of this chama';
+  end if;
+  if p_amount is null or p_amount <= 0 then
+    raise exception 'Contribution amount must be greater than zero';
+  end if;
+  if nullif(trim(p_destination), '') is null or nullif(trim(p_method), '') is null then
+    raise exception 'Contribution destination and payment method are required';
+  end if;
+  insert into public.contributions (
+    chama_id, member_id, amount, destination, method, phone,
+    payment_details, reference, status, confirmed_at
+  )
+  values (
+    p_chama_id, auth.uid(), p_amount, trim(p_destination), trim(p_method),
+    nullif(trim(p_phone), ''), nullif(trim(p_payment_details), ''),
+    trim(p_reference), 'completed', now()
+  )
+  on conflict (reference) do nothing
+  returning * into v_row;
+  if v_row.id is null then
+    select * into v_row from public.contributions where reference = trim(p_reference);
+    if v_row.chama_id <> p_chama_id or v_row.member_id <> auth.uid() then
+      raise exception 'Payment reference already belongs to another transaction';
+    end if;
+    return v_row;
+  end if;
+  update public.chama_members
+  set total_paid = total_paid + p_amount
+  where chama_id = p_chama_id and user_id = auth.uid() and status = 'active';
+  update public.chamas
+  set pool_balance = pool_balance + p_amount,
+      month_collected = month_collected + p_amount
+  where id = p_chama_id;
+  return v_row;
+end;
+$$;
+
+grant execute on function public.record_contribution(uuid, numeric, text, text, text, text, text)
+  to authenticated;
 
 create or replace function public.is_chama_officer(p_chama_id uuid)
 returns boolean
@@ -156,6 +256,10 @@ create policy "Profiles: insert own"
 create policy "Chamas: members can read"
   on public.chamas for select
   using (public.is_chama_member(id) or created_by = auth.uid());
+
+create policy "Contributions: members can read chama records"
+  on public.contributions for select
+  using (public.is_chama_member(chama_id));
 
 create policy "Chamas: authenticated can create"
   on public.chamas for insert

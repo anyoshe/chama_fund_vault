@@ -112,21 +112,50 @@ export default function Members() {
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeChamaId || !canManage) return;
-    if (!fullName.trim() || !email.trim() || !password) {
-      toast.error("Name, email and temporary password are required");
+    if (!fullName.trim() || !phone.trim() || !password) {
+      toast.error("Name, phone number and temporary password are required");
+      return;
+    }
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      toast.error("Enter a valid email address or leave email blank.");
+      return;
+    }
+    let normalizedPhone = phone.replace(/[\s\-()]/g, "");
+    if (normalizedPhone.startsWith("0") && normalizedPhone.length === 10) {
+      normalizedPhone = `+254${normalizedPhone.slice(1)}`;
+    } else if (!normalizedPhone.startsWith("+") && normalizedPhone.length === 12) {
+      normalizedPhone = `+${normalizedPhone}`;
+    }
+    if (!/^\+254[17]\d{8}$/.test(normalizedPhone)) {
+      toast.error("Enter a valid Kenyan phone number, e.g. +254 7XX XXX XXX");
       return;
     }
     setSubmitting(true);
 
-    // Create auth user via signUp (they get credentials immediately)
-    // Note: in production you'd use an invite edge function / admin API
+    const { data: existingProfile } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("phone", normalizedPhone)
+      .maybeSingle();
+    if (existingProfile) {
+      setSubmitting(false);
+      toast.error("That phone number already has an account.");
+      return;
+    }
+
+    const { data: adminSession } = await supabase.auth.getSession();
+    // Password auth requires an email internally. Members never need to know
+    // or use this generated address; they sign in with their phone number.
+    const authEmail =
+      email.trim().toLowerCase() ||
+      `member-${normalizedPhone.replace(/\D/g, "")}@accounts.chamavault.app`;
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email: email.trim().toLowerCase(),
+      email: authEmail,
       password,
       options: {
         data: {
           full_name: fullName.trim(),
-          phone: phone.trim() || null,
+          phone: normalizedPhone,
         },
       },
     });
@@ -139,13 +168,23 @@ export default function Members() {
 
     const newUserId = signUpData.user.id;
 
-    // Ensure profile
-    await supabase.from("profiles").upsert({
-      id: newUserId,
-      full_name: fullName.trim(),
-      email: email.trim().toLowerCase(),
-      phone: phone.trim() || null,
-      avatar_hue: Math.floor(Math.random() * 360),
+    if (!adminSession.session || !signUpData.session) {
+      if (adminSession.session) {
+        await supabase.auth.setSession({
+          access_token: adminSession.session.access_token,
+          refresh_token: adminSession.session.refresh_token,
+        });
+      }
+      setSubmitting(false);
+      toast.error("Disable Supabase email confirmation before adding members.");
+      return;
+    }
+
+    // signUp switches the browser session to the new member. Restore the
+    // chairperson before inserting the membership under the officer policy.
+    await supabase.auth.setSession({
+      access_token: adminSession.session.access_token,
+      refresh_token: adminSession.session.refresh_token,
     });
 
     // Add membership
@@ -166,7 +205,7 @@ export default function Members() {
       return;
     }
 
-    toast.success(`${fullName} added — they can log in with their email/phone + password`);
+    toast.success(`${fullName} added — they can log in with their phone number + password`);
     setShowAdd(false);
     setFullName("");
     setEmail("");
@@ -180,6 +219,16 @@ export default function Members() {
     return (
       <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-8 text-center text-slate-400">
         Select or create a chama first.
+      </div>
+    );
+  }
+  if (!canManage) {
+    return (
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-8 text-center">
+        <p className="text-sm font-semibold text-slate-200">Members directory restricted</p>
+        <p className="mt-2 text-sm text-slate-500">
+          Only the Chairperson or Secretary can view member profiles.
+        </p>
       </div>
     );
   }
@@ -224,17 +273,17 @@ export default function Members() {
             />
             <input
               className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 outline-none focus:border-emerald-500/60"
-              placeholder="Email"
+              placeholder="Email (optional)"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              required
             />
             <input
               className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 outline-none focus:border-emerald-500/60"
-              placeholder="Phone (optional) e.g. +2547…"
+              placeholder="Phone e.g. +254 7XX XXX XXX"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+              required
             />
             <input
               className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 outline-none focus:border-emerald-500/60"
@@ -288,7 +337,8 @@ export default function Members() {
             </button>
           </div>
           <p className="text-[11px] text-slate-500">
-            Share the email/phone and temporary password with the member so they can sign in.
+            Share the phone number and temporary password with the member so they can sign in.
+            Email is optional and is retained when provided.
             They should change the password after first login.
           </p>
         </motion.form>
@@ -342,7 +392,7 @@ export default function Members() {
                     </td>
                     <td className="hidden px-4 py-3 sm:table-cell">
                       <div className="space-y-0.5 text-xs text-slate-400">
-                        {m.profile?.email && (
+                        {m.profile?.email && !m.profile.email.endsWith("@accounts.chamavault.app") && (
                           <p className="flex items-center gap-1.5">
                             <Envelope size={12} /> {m.profile.email}
                           </p>

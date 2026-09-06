@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Bank,
   Calculator,
@@ -12,12 +12,13 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import { motion } from "framer-motion";
-import type { Chama, Member, Proposal } from "../types/chama";
+import { CHAMA_ACTIVITIES, type Chama, type ChamaActivity, type Contribution, type Member, type Proposal } from "../types/chama";
 import { fmtKsh } from "../data/mockChamaData";
 
 interface ChamaOverviewProps {
   chama: Chama;
   members: Member[];
+  contributions: Contribution[];
   proposals: Proposal[];
   currentMemberId: string;
   onContribute: () => void;
@@ -66,15 +67,25 @@ function MetricCard({
 export default function ChamaOverview({
   chama,
   members,
+  contributions,
   proposals,
   currentMemberId,
   onContribute,
   onProposeLoan,
 }: ChamaOverviewProps) {
   const [viewRule, setViewRule] = useState(false);
+  const activities: ChamaActivity[] = chama.constitution.activities ?? ["general-savings"];
+  const [selectedAccount, setSelectedAccount] = useState<ChamaActivity>(activities[0]);
+  useEffect(() => {
+    if (!activities.includes(selectedAccount)) setSelectedAccount(activities[0]);
+  }, [activities, selectedAccount]);
+  const accountContributions = contributions.filter(
+    (contribution) => contribution.status === "completed" && contribution.destination === selectedAccount,
+  );
+  const accountPool = accountContributions.reduce((sum, contribution) => sum + contribution.amount, 0);
   const pendingVotes = proposals.filter((p) => p.status === "active").length;
   const activeApproved = proposals.filter((p) => p.status === "approved").length;
-  const contributionRate = Math.min(100, Math.round((chama.monthCollected / chama.monthlyTarget) * 100));
+  const contributionRate = Math.min(100, Math.round((accountPool / chama.monthlyTarget) * 100));
 
   return (
     <section className="space-y-5">
@@ -134,7 +145,7 @@ export default function ChamaOverview({
               June contribution cycle
             </span>
             <span className="font-mono font-bold tabular-nums text-emerald-300">
-              {fmtKsh(chama.monthCollected)} / {fmtKsh(chama.monthlyTarget)}
+              {fmtKsh(accountPool)} / {fmtKsh(chama.monthlyTarget)}
             </span>
           </div>
           <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-800">
@@ -157,8 +168,8 @@ export default function ChamaOverview({
         <MetricCard
           icon={<PiggyBank size={19} weight="fill" />}
           label="Group Pool"
-          value={fmtKsh(chama.poolBalance)}
-          sub={`${fmtKsh(chama.monthlyTarget)} monthly target`}
+          value={fmtKsh(accountPool)}
+          sub={`${CHAMA_ACTIVITIES.find((item) => item.value === selectedAccount)?.label ?? selectedAccount} account`}
           accent="emerald"
         >
           <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
@@ -242,12 +253,32 @@ export default function ChamaOverview({
       {/* Member pot progress */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-white">Member savings standings</h3>
-          <span className="text-[11px] text-slate-500">{members.length} active accounts</span>
+          <div>
+            <h3 className="text-sm font-bold text-white">Member savings standings</h3>
+            <p className="mt-1 text-[11px] text-slate-500">Track contributions against each member&apos;s monthly target</p>
+          </div>
+          <select
+            value={selectedAccount}
+            onChange={(event) => setSelectedAccount(event.target.value as typeof selectedAccount)}
+            className="max-w-[9rem] rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-[11px] font-semibold text-slate-300 outline-none focus:border-emerald-500/60"
+          >
+            {activities.map((activity) => (
+              <option key={activity} value={activity}>
+                {CHAMA_ACTIVITIES.find((item) => item.value === activity)?.label ?? activity}
+              </option>
+            ))}
+          </select>
         </div>
+        <p className="mt-3 text-[11px] text-slate-500">
+          Account pool: <span className="font-mono font-semibold text-emerald-300">{fmtKsh(accountPool)}</span>
+        </p>
         <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
           {members.map((m) => {
-            const pct = Math.min(100, Math.round((m.totalPaid / (45 * m.monthlyContribution)) * 100));
+            const memberPaid = accountContributions
+              .filter((contribution) => contribution.memberId === m.id)
+              .reduce((sum, contribution) => sum + contribution.amount, 0);
+            const target = m.monthlyContribution || chama.constitution.minMonthlyContribution;
+            const pct = target > 0 ? Math.min(100, Math.round((memberPaid / target) * 100)) : 0;
             const isCurrent = m.id === currentMemberId;
             return (
               <div
@@ -271,7 +302,7 @@ export default function ChamaOverview({
                       {isCurrent && <span className="ml-1 text-[10px] font-medium text-emerald-400">(you)</span>}
                     </p>
                     <span className="font-mono text-[11px] font-bold tabular-nums text-slate-300">
-                      {fmtKsh(m.totalPaid)}
+                      {fmtKsh(memberPaid)}
                     </span>
                   </div>
                   <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
