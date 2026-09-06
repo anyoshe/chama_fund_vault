@@ -112,43 +112,94 @@ export default function Members() {
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeChamaId || !canManage) return;
-    if (!fullName.trim() || !phone.trim() || !password) {
-      toast.error("Name, phone number and temporary password are required");
+
+    const hasEmail = Boolean(email.trim());
+    const hasPhone = Boolean(phone.trim());
+    if (!fullName.trim()) {
+      toast.error("Name is required");
       return;
     }
-    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      toast.error("Enter a valid email address or leave email blank.");
+    if (!hasEmail && !hasPhone) {
+      toast.error("Provide a phone number and/or email so we can find or create the member.");
       return;
     }
-    let normalizedPhone = phone.replace(/[\s\-()]/g, "");
-    if (normalizedPhone.startsWith("0") && normalizedPhone.length === 10) {
-      normalizedPhone = `+254${normalizedPhone.slice(1)}`;
-    } else if (!normalizedPhone.startsWith("+") && normalizedPhone.length === 12) {
-      normalizedPhone = `+${normalizedPhone}`;
-    }
-    if (!/^\+254[17]\d{8}$/.test(normalizedPhone)) {
-      toast.error("Enter a valid Kenyan phone number, e.g. +254 7XX XXX XXX");
+    if (hasEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      toast.error("Enter a valid email address.");
       return;
     }
+
+    let normalizedPhone: string | null = null;
+    if (hasPhone) {
+      normalizedPhone = phone.replace(/[\s\-()]/g, "");
+      if (normalizedPhone.startsWith("0") && normalizedPhone.length === 10) {
+        normalizedPhone = `+254${normalizedPhone.slice(1)}`;
+      } else if (!normalizedPhone.startsWith("+") && normalizedPhone.length === 12) {
+        normalizedPhone = `+${normalizedPhone}`;
+      }
+      if (!/^\+254[17]\d{8}$/.test(normalizedPhone)) {
+        toast.error("Enter a valid Kenyan phone number, e.g. +254 7XX XXX XXX");
+        return;
+      }
+    }
+
     setSubmitting(true);
 
-    const { data: existingProfile } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("phone", normalizedPhone)
-      .maybeSingle();
-    if (existingProfile) {
+    // 1) If this person already exists in the app, only add membership (multi-chama)
+    const { data: existingUserId, error: resolveError } = await supabase.rpc(
+      "resolve_profile_id",
+      {
+        p_phone: normalizedPhone,
+        p_email: email.trim().toLowerCase() || null,
+      },
+    );
+
+    if (resolveError) {
+      console.error(resolveError);
+      // Fall through to create path if RPC missing; otherwise show error
+      if (!/could not find|does not exist|42883/i.test(resolveError.message)) {
+        setSubmitting(false);
+        toast.error(resolveError.message);
+        return;
+      }
+    }
+
+    if (existingUserId) {
+      const { error: addError } = await supabase.rpc("add_member_to_chama", {
+        p_chama_id: activeChamaId,
+        p_user_id: existingUserId,
+        p_role: role,
+        p_monthly_contribution: monthly,
+      });
       setSubmitting(false);
-      toast.error("That phone number already has an account.");
+      if (addError) {
+        toast.error(addError.message);
+        return;
+      }
+      toast.success(
+        `${fullName} already had an account — added to this chama. They keep the same login.`,
+      );
+      setShowAdd(false);
+      setFullName("");
+      setEmail("");
+      setPhone("");
+      setPassword("");
+      setRole("Active Member");
+      loadMembers();
+      return;
+    }
+
+    // 2) Brand-new person → need a temporary password to create Auth user
+    if (!password || password.length < 6) {
+      setSubmitting(false);
+      toast.error("New members need a temporary password (at least 6 characters).");
       return;
     }
 
     const { data: adminSession } = await supabase.auth.getSession();
-    // Password auth requires an email internally. Members never need to know
-    // or use this generated address; they sign in with their phone number.
     const authEmail =
       email.trim().toLowerCase() ||
-      `member-${normalizedPhone.replace(/\D/g, "")}@accounts.chamavault.app`;
+      `member-${(normalizedPhone ?? "user").replace(/\D/g, "")}@accounts.chamavault.app`;
+
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email: authEmail,
       password,
@@ -162,7 +213,14 @@ export default function Members() {
 
     if (signUpError || !signUpData.user) {
       setSubmitting(false);
-      toast.error(signUpError?.message ?? "Failed to create user account");
+      const msg = signUpError?.message ?? "Failed to create user account";
+      if (/already|registered|exists/i.test(msg)) {
+        toast.error(
+          "This person already has an account. Enter the same phone/email they use to log in (password not required).",
+        );
+      } else {
+        toast.error(msg);
+      }
       return;
     }
 
@@ -180,32 +238,51 @@ export default function Members() {
       return;
     }
 
-    // signUp switches the browser session to the new member. Restore the
-    // chairperson before inserting the membership under the officer policy.
     await supabase.auth.setSession({
       access_token: adminSession.session.access_token,
       refresh_token: adminSession.session.refresh_token,
     });
 
-    // Add membership
-    const { error: memError } = await supabase.from("chama_members").insert({
-      chama_id: activeChamaId,
-      user_id: newUserId,
-      role,
-      monthly_contribution: monthly,
-      total_paid: 0,
-      active_loans: 0,
-      status: "active",
+    const { error: memError } = await supabase.rpc("add_member_to_chama", {
+      p_chama_id: activeChamaId,
+      p_user_id: newUserId,
+      p_role: role,
+      p_monthly_contribution: monthly,
     });
 
-    setSubmitting(false);
-
-    if (memError) {
+    // Fallback if RPC not deployed yet
+    if (memError && /could not find|does not exist|42883/i.test(memError.message)) {
+      const { error: insertError } = await supabase.from("chama_members").insert({
+        chama_id: activeChamaId,
+        user_id: newUserId,
+        role,
+        monthly_contribution: monthly,
+        total_paid: 0,
+        active_loans: 0,
+        status: "active",
+      });
+      setSubmitting(false);
+      if (insertError) {
+        toast.error(insertError.message);
+        return;
+      }
+    } else if (memError) {
+      setSubmitting(false);
       toast.error(memError.message);
       return;
+    } else {
+      setSubmitting(false);
     }
 
-    toast.success(`${fullName} added — they can log in with their phone number + password`);
+    const loginHint = [
+      normalizedPhone ? `phone ${normalizedPhone}` : null,
+      hasEmail ? `email ${email.trim().toLowerCase()}` : null,
+    ]
+      .filter(Boolean)
+      .join(" or ");
+    toast.success(
+      `${fullName} added — they can log in with ${loginHint || "their credentials"} + password`,
+    );
     setShowAdd(false);
     setFullName("");
     setEmail("");
@@ -273,25 +350,23 @@ export default function Members() {
             />
             <input
               className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 outline-none focus:border-emerald-500/60"
-              placeholder="Email (optional)"
+              placeholder="Email (optional if phone given)"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
             <input
               className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 outline-none focus:border-emerald-500/60"
-              placeholder="Phone e.g. +254 7XX XXX XXX"
+              placeholder="Phone (optional if email given)"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              required
             />
             <input
               className="rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 outline-none focus:border-emerald-500/60"
-              placeholder="Temporary password"
+              placeholder="Temp password (new members only)"
               type="text"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              required
               minLength={6}
             />
             <select
@@ -337,7 +412,7 @@ export default function Members() {
             </button>
           </div>
           <p className="text-[11px] text-slate-500">
-            Share the phone number and temporary password with the member so they can sign in.
+            Existing users: enter their phone or email only (no password). New users: phone/email + temporary password.
             Email is optional and is retained when provided.
             They should change the password after first login.
           </p>
