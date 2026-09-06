@@ -381,7 +381,7 @@ export default function Dashboard() {
             })),
           );
         }
-        toast.success("Quorum reached — paid from loan fund kit", {
+        toast.success("Quorum reached — paid from loaning pool", {
           description: `${target.title} | ${fmtKsh(target.amount)}`,
           icon: <ShieldCheck className="text-emerald-400" />,
         });
@@ -446,7 +446,7 @@ export default function Dashboard() {
         );
       }
     }
-    toast.success("Repayment recorded — credited to member-loans (loan fund) kit");
+    toast.success("Repayment recorded — returned to the loaning pool (liquidity kits)");
   };
 
   const handleProposeLoan = async () => {
@@ -490,7 +490,7 @@ export default function Dashboard() {
     }
     if (amount > fund) {
       toast.error(
-        `Loan fund only has ${fmtKsh(fund)}. Top up the member-loans kit or request a smaller amount.`,
+        `Loaning pool only has ${fmtKsh(fund)}. Add to table banking, share capital, general savings or member-loans — or request less.`,
       );
       return;
     }

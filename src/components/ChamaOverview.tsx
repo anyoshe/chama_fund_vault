@@ -92,6 +92,15 @@ export default function ChamaOverview({
       ? Number(kitForAccount.balance) || 0
       : accountContributions.reduce((sum, contribution) => sum + contribution.amount, 0);
   const loanFund = kits.find((k) => k.is_loan_fund || k.kit_code === "member-loans");
+  const liquidityCodes = new Set(["table-banking", "share-capital", "general-savings", "member-loans"]);
+  const loaningPoolTotal = kits
+    .filter((k) => liquidityCodes.has(k.kit_code))
+    .reduce((sum, k) => sum + (Number(k.balance) || 0), 0);
+  const loaningPoolRate = Math.min(
+    100,
+    Math.round((loaningPoolTotal / Math.max(loaningPoolTotal, chama.monthlyTarget || 1, 1)) * 100),
+  );
+
   // Share-like pots only — aligns with kit_counts_toward_loan in SQL
   const shareCodes = new Set(["table-banking", "share-capital", "general-savings"]);
   const memberShareBalance = contributions
@@ -159,27 +168,30 @@ export default function ChamaOverview({
           </div>
         </div>
 
-        {/* Cycle tracker */}
+        {/* Loaning pool tracker */}
         <div className="relative mt-5">
           <div className="flex items-center justify-between text-xs">
             <span className="font-semibold uppercase tracking-[0.14em] text-slate-400">
-              June contribution cycle
+              Current month loaning pool
             </span>
             <span className="font-mono font-bold tabular-nums text-emerald-300">
-              {fmtKsh(accountPool)} / {fmtKsh(chama.monthlyTarget)}
+              {fmtKsh(loaningPoolTotal)}
             </span>
           </div>
           <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-800">
             <motion.div
               initial={{ width: 0 }}
-              animate={{ width: `${contributionRate}%` }}
+              animate={{
+                width: `${Math.min(100, loaningPoolTotal > 0 ? 100 : 0)}%`,
+              }}
               transition={{ duration: 0.9, ease: "easeOut" }}
               className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400"
             />
           </div>
           <p className="mt-1.5 text-[11px] text-slate-500">
-            Next payout: <span className="font-semibold text-slate-300">{chama.nextPayout.recipientName}</span> ·{" "}
-            {fmtKsh(chama.nextPayout.amount)} on {chama.nextPayout.dueDate}
+            Pooled from table banking, share capital, general savings and member-loans.
+            Loans draw from this pool by % share of each kit. Your personal contributions stay
+            intact for interest.
           </p>
         </div>
       </div>
@@ -299,7 +311,7 @@ export default function ChamaOverview({
               {fmtKsh(maxLoanFromShares)}
             </span>{" "}
             ({chama.constitution.maxLoanMultiple}× your shares of {fmtKsh(memberShareBalance)}).
-            Loan payouts come from the{" "}
+            Loans draw from the loaning pool (table banking + share capital + general savings + member-loans). Liquidity shown as{" "}
             <span className="font-semibold text-slate-300">
               {loanFund ? loanFund.label : "member loans"}
             </span>{" "}
