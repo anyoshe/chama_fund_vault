@@ -10,7 +10,7 @@ import {
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import type { AuthUser, ChamaMembership, Profile } from "@/types/auth";
-import type { ChamaActivity, ChamaKind, MemberRole } from "@/types/chama";
+import type { ChamaActivity, ChamaKind } from "@/types/chama";
 
 interface RegisterChamaPayload {
   // Admin account
@@ -84,56 +84,33 @@ interface PendingChama {
 }
 
 async function createChamaForUser(
-  userId: string,
+  _userId: string,
   payload: {
     chamaName: string;
     tagline: string;
     activities: ChamaActivity[];
     minMonthlyContribution: number;
+    fullName?: string;
+    phone?: string | null;
   },
 ) {
   const kind = deriveKind(payload.activities);
-  const { data: chama, error: chamaError } = await supabase
-    .from("chamas")
-    .insert({
-      name: payload.chamaName.trim(),
-      tagline: payload.tagline.trim() || `${payload.chamaName.trim()} savings group`,
-      kind,
-      pool_balance: 0,
-      monthly_target: payload.minMonthlyContribution,
-      month_collected: 0,
-      constitution: {
-        minMonthlyContribution: payload.minMonthlyContribution,
-        lateFineRate: 5,
-        quorumPercent: 60,
-        maxLoanMultiple: 3,
-        payoutCycle: "1st Monday",
-        activities: payload.activities,
-      },
-      currency: "KES",
-      created_by: userId,
-    })
-    .select()
-    .single();
-
-  if (chamaError || !chama) {
-    return { error: chamaError?.message ?? "Failed to create chama." };
-  }
-
-  const { error: memberError } = await supabase.from("chama_members").insert({
-    chama_id: chama.id,
-    user_id: userId,
-    role: "Chairperson" as MemberRole,
-    monthly_contribution: payload.minMonthlyContribution,
-    total_paid: 0,
-    active_loans: 0,
-    status: "active",
+  // Security-definer RPC avoids client-side RLS failures on chamas insert
+  const { data: chamaId, error } = await supabase.rpc("create_chama_with_founder", {
+    p_name: payload.chamaName.trim(),
+    p_tagline: payload.tagline.trim() || `${payload.chamaName.trim()} savings group`,
+    p_kind: kind,
+    p_min_contribution: payload.minMonthlyContribution,
+    p_activities: payload.activities,
+    p_full_name: payload.fullName ?? null,
+    p_phone: payload.phone ?? null,
   });
 
-  if (memberError) {
-    return { error: memberError.message };
+  if (error || !chamaId) {
+    console.error("create_chama_with_founder", error);
+    return { error: error?.message ?? "Failed to create chama." };
   }
-  return { chamaId: chama.id as string };
+  return { chamaId: chamaId as string };
 }
 
 async function fetchProfile(userId: string): Promise<Profile | null> {
@@ -155,11 +132,29 @@ async function fetchMemberships(userId: string): Promise<ChamaMembership[]> {
     .select("*, chama:chamas(*)")
     .eq("user_id", userId)
     .eq("status", "active");
-  if (error) {
-    console.error("fetchMemberships", error);
+
+  if (!error && data) {
+    return data as ChamaMembership[];
+  }
+  console.error("fetchMemberships join", error);
+
+  // Fallback: two-step fetch if embed fails
+  const { data: rows, error: e2 } = await supabase
+    .from("chama_members")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("status", "active");
+  if (e2 || !rows?.length) {
+    console.error("fetchMemberships plain", e2);
     return [];
   }
-  return (data ?? []) as ChamaMembership[];
+  const ids = rows.map((r) => r.chama_id);
+  const { data: chamas } = await supabase.from("chamas").select("*").in("id", ids);
+  const map = new Map((chamas ?? []).map((c) => [c.id, c]));
+  return rows.map((r) => ({
+    ...r,
+    chama: map.get(r.chama_id) ?? undefined,
+  })) as ChamaMembership[];
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -200,7 +195,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           avatar_hue: Math.floor(Math.random() * 360),
         });
         if (existing.length === 0) {
-          await createChamaForUser(authUser.id, pending);
+          await createChamaForUser(authUser.id, {
+            ...pending,
+            fullName: pending.fullName,
+            phone: pending.phone,
+          });
         }
         localStorage.removeItem(PENDING_CHAMA_KEY);
       } else {
@@ -410,6 +409,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tagline,
       activities,
       minMonthlyContribution,
+      fullName: fullName.trim(),
+      phone: normalizedPhone,
     });
     if (created.error) {
       return { error: created.error };

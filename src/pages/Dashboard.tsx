@@ -18,7 +18,6 @@ import type {
   VoteValue,
 } from "@/types/chama";
 import {
-  chamas as seedChamas,
   members as seedMembers,
   initialProposals,
   initialLedger,
