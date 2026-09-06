@@ -59,6 +59,27 @@ function isPhoneLike(value: string): boolean {
   return /^\+?\d{9,15}$/.test(cleaned);
 }
 
+function formatErr(err: unknown, fallback = "Something went wrong."): string {
+  if (!err) return fallback;
+  if (typeof err === "string") {
+    const t = err.trim();
+    return t && t !== "{}" ? t : fallback;
+  }
+  if (typeof err === "object" && err !== null) {
+    const o = err as Record<string, unknown>;
+    if (typeof o.message === "string" && o.message.trim() && o.message !== "{}") {
+      return o.message;
+    }
+    if (typeof o.error_description === "string") return o.error_description;
+    if (typeof o.details === "string") return o.details;
+    try {
+      const s = JSON.stringify(err);
+      if (s && s !== "{}" && s !== "null") return s;
+    } catch { /* ignore */ }
+  }
+  return fallback;
+}
+
 function normalizePhone(phone: string): string {
   let p = phone.replace(/[\s\-()]/g, "");
   if (p.startsWith("0") && p.length === 10) {
@@ -99,12 +120,15 @@ async function createChamaForUser(
   const normalizedName = payload.chamaName.trim();
 
   // Prefer existing membership/chama for this user with same name (idempotent)
+  // Rule: one user may own/join many chamas, but not two with the same name
   const existing = await fetchMemberships(userId);
   const match = existing.find(
     (m) => m.chama && m.chama.name.toLowerCase() === normalizedName.toLowerCase(),
   );
   if (match?.chama_id) {
-    return { chamaId: match.chama_id };
+    return {
+      error: `You already have a chama named "${normalizedName}". Choose a different name.`,
+    };
   }
 
   // Phase A stability: security-definer RPC avoids RLS 401 on chamas insert
@@ -120,6 +144,7 @@ async function createChamaForUser(
 
   if (error || !chamaId) {
     console.error("create_chama_with_founder", error);
+    const rpcMsg = formatErr(error, "");
     // Fallback: direct insert (works only if RLS allows)
     const { data: chama, error: chamaError } = await supabase
       .from("chamas")
@@ -145,7 +170,12 @@ async function createChamaForUser(
       .single();
 
     if (chamaError || !chama) {
-      return { error: error?.message ?? chamaError?.message ?? "Failed to create chama." };
+      return {
+        error: formatErr(
+          chamaError ?? error,
+          rpcMsg || "Failed to create chama. Run phase_a_stable.sql in Supabase if this persists.",
+        ),
+      };
     }
 
     const { error: memberError } = await supabase.from("chama_members").insert({
@@ -385,12 +415,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (signUpError) {
-      return { error: signUpError.message };
+      const msg = formatErr(signUpError);
+      if (/already|registered|exists/i.test(msg)) {
+        return {
+          error: "This email is already registered. Sign in, then create another chama with a new name from the app.",
+        };
+      }
+      return { error: msg };
     }
 
     const newUser = signUpData.user;
     if (!newUser) {
       return { error: "Could not create account. Please try again." };
+    }
+
+    // Supabase sometimes returns a user without error when email already exists
+    if (Array.isArray(newUser.identities) && newUser.identities.length === 0) {
+      return {
+        error: "This email is already registered. Sign in instead, or use a different email.",
+      };
     }
 
     // 2–4. Profile + chama (or defer if email confirmation required)
@@ -436,7 +479,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       phone: normalizedPhone,
     });
     if (created.error) {
-      return { error: created.error };
+      return { error: formatErr(created.error, "Failed to create chama.") };
     }
 
     await hydrateUser(newUser);

@@ -79,13 +79,18 @@ export default function RegisterChama() {
     setSubmitting(false);
 
     if (result.error) {
-      setError(result.error);
+      const msg =
+        typeof result.error === "string" && result.error.trim() && result.error !== "{}"
+          ? result.error
+          : "Could not complete registration. Check the details and try again.";
+      setError(msg);
       return;
     }
     if (result.needsEmailConfirmation) {
       setCheckEmail(email.trim());
       return;
     }
+    // Session ready — go to dashboard (real chama should load)
     navigate("/app", { replace: true });
   };
 

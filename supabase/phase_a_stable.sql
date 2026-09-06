@@ -257,3 +257,10 @@ grant execute on function public.list_chama_profiles(uuid) to authenticated;
 
 
 -- After this succeeds, also run contribution_persistence.sql (your local feature).
+
+-- ============================================================
+-- Extra: same founder cannot create two chamas with the same name
+-- (case-insensitive). Different users MAY share a name.
+-- ============================================================
+create unique index if not exists chamas_created_by_name_unique
+  on public.chamas (created_by, lower(name));
