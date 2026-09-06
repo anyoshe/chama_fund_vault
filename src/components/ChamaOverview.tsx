@@ -12,7 +12,7 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react";
 import { motion } from "framer-motion";
-import { CHAMA_ACTIVITIES, type Chama, type ChamaActivity, type Contribution, type Member, type Proposal } from "../types/chama";
+import { CHAMA_ACTIVITIES, type Chama, type ChamaActivity, type ChamaKit, type Contribution, type Member, type Proposal } from "../types/chama";
 import { fmtKsh } from "../data/mockChamaData";
 
 interface ChamaOverviewProps {
@@ -20,6 +20,7 @@ interface ChamaOverviewProps {
   members: Member[];
   contributions: Contribution[];
   proposals: Proposal[];
+  kits?: ChamaKit[];
   currentMemberId: string;
   onContribute: () => void;
   onProposeLoan: () => void;
@@ -69,12 +70,15 @@ export default function ChamaOverview({
   members,
   contributions,
   proposals,
+  kits = [],
   currentMemberId,
   onContribute,
   onProposeLoan,
 }: ChamaOverviewProps) {
   const [viewRule, setViewRule] = useState(false);
-  const activities: ChamaActivity[] = chama.constitution.activities ?? ["general-savings"];
+  const activities: ChamaActivity[] = chama.constitution?.activities?.length
+    ? (chama.constitution.activities as ChamaActivity[])
+    : ["general-savings"];
   const [selectedAccount, setSelectedAccount] = useState<ChamaActivity>(activities[0]);
   useEffect(() => {
     if (!activities.includes(selectedAccount)) setSelectedAccount(activities[0]);
@@ -102,7 +106,7 @@ export default function ChamaOverview({
     memberShareBalance * (chama.constitution.maxLoanMultiple || 3);
   const pendingVotes = proposals.filter((p) => p.status === "active").length;
   const activeApproved = proposals.filter((p) => p.status === "approved").length;
-  const contributionRate = Math.min(100, Math.round((accountPool / chama.monthlyTarget) * 100));
+  const contributionRate = Math.min(100, Math.round((accountPool / (chama.monthlyTarget || 1)) * 100));
 
   return (
     <section className="space-y-5">
