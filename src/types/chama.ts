@@ -184,6 +184,10 @@ export interface Chama {
     maxLoanMultiple: number; // e.g. 3x own savings
     payoutCycle: string; // e.g. "1st Monday"
     activities?: ChamaActivity[];
+    /** Flat % of principal charged each month while loan is outstanding */
+    loanInterestMonthlyPercent?: number;
+    /** Optional named rates chair can offer (e.g. welfare 5, standard 10) */
+    loanInterestOptions?: { label: string; monthlyPercent: number }[];
   };
   nextPayout: {
     recipientName: string;

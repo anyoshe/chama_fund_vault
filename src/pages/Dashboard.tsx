@@ -28,7 +28,7 @@ import {
 
 const LS_KEY = "chamavault-state-v1";
 
-/** 10% of principal per month flat, for each month of the term */
+/** Flat % of principal per month, for each month of the term */
 function buildFlatMonthlySchedule(principal: number, months: number, monthlyRatePct = 10) {
   const monthlyInterest = principal * (monthlyRatePct / 100);
   const totalInterest = monthlyInterest * months;
@@ -542,8 +542,29 @@ export default function Dashboard() {
       return;
     }
 
+    const defaultRate = chama?.constitution?.loanInterestMonthlyPercent ?? 10;
+    const rateOptions = chama?.constitution?.loanInterestOptions?.length
+      ? chama.constitution.loanInterestOptions
+      : [{ label: "Standard", monthlyPercent: defaultRate }];
+
+    let monthlyRate = defaultRate;
+    if (rateOptions.length === 1) {
+      monthlyRate = rateOptions[0].monthlyPercent;
+    } else {
+      const menu = rateOptions
+        .map((o, i) => `${i + 1}. ${o.label} (${o.monthlyPercent}% / month flat)`)
+        .join("\n");
+      const pick = window.prompt(
+        `Choose interest rate for this loan:\n${menu}\n\nEnter number 1-${rateOptions.length}`,
+        "1",
+      );
+      if (pick == null) return;
+      const idx = Math.max(1, Math.min(rateOptions.length, Math.floor(Number(pick) || 1))) - 1;
+      monthlyRate = rateOptions[idx].monthlyPercent;
+    }
+
     const termRaw = window.prompt(
-      "How many monthly installments? (1, 2, 3, 6, 9, or 12)\nInterest: 10% of principal per month flat.",
+      `How many monthly installments? (1–24)\nInterest: ${monthlyRate}% of principal per month flat.`,
       "3",
     );
     if (termRaw == null) return;
@@ -553,7 +574,7 @@ export default function Dashboard() {
       return;
     }
 
-    const plan = buildFlatMonthlySchedule(amount, months, 10);
+    const plan = buildFlatMonthlySchedule(amount, months, monthlyRate);
 
     const { data: limitRows, error: limitError } = await supabase.rpc("get_member_loan_limit", {
       p_chama_id: activeChamaId,
@@ -596,7 +617,7 @@ export default function Dashboard() {
       type: "loan",
       requesterId: user.id,
       title,
-      reason: `Principal ${fmtKsh(amount)}. ${months} months × 10% flat = ${fmtKsh(plan.monthlyInterest)}/mo interest. Total repay ${fmtKsh(plan.totalRepay)} (${fmtKsh(plan.installmentAmount)} × ${months}). Shares ${fmtKsh(shares)}.`,
+      reason: `Principal ${fmtKsh(amount)}. ${months} months × ${monthlyRate}% flat = ${fmtKsh(plan.monthlyInterest)}/mo interest. Total repay ${fmtKsh(plan.totalRepay)} (${fmtKsh(plan.installmentAmount)} × ${months}). Shares ${fmtKsh(shares)}.`,
       amount,
       status: "active",
       quorumThreshold,
@@ -615,7 +636,7 @@ export default function Dashboard() {
       pushAudit(prev, {
         memberId: user.id,
         type: "loan-disbursed",
-        description: `Proposed ${title} · ${months} installments · 10%/mo flat`,
+        description: `Proposed ${title} · ${months} installments · ${monthlyRate}%/mo flat`,
         amount: 0,
       }),
     );
@@ -746,11 +767,31 @@ export default function Dashboard() {
             {tab === "loans" && (
               <LoansAndLedger
                 chamaId={activeChamaId}
+                chama={chama}
                 members={displayMembers}
                 proposals={proposals}
                 ledger={chamaLedger}
                 onRepay={handleRepay}
                 onReschedule={handleReschedule}
+                onSaveLoanRates={async (next) => {
+                  if (!activeChamaId || !chama) return;
+                  const constitution = {
+                    ...chama.constitution,
+                    loanInterestMonthlyPercent: next.defaultMonthlyPercent,
+                    loanInterestOptions: next.options,
+                  };
+                  const { error } = await supabase
+                    .from("chamas")
+                    .update({ constitution })
+                    .eq("id", activeChamaId);
+                  if (error) {
+                    toast.error(error.message);
+                    return;
+                  }
+                  toast.success("Loan interest rates saved for this chama");
+                  // refresh memberships so constitution updates in UI
+                  window.location.reload();
+                }}
               />
             )}
             {tab === "members" && <Members />}

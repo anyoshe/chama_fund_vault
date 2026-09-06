@@ -23,6 +23,7 @@ import { fmtKsh, fmtDate, memberById } from "../data/mockChamaData";
 
 interface LoansAndLedgerProps {
   chamaId: string;
+  chama?: Chama;
   members: Member[];
   proposals: Proposal[];
   ledger: AuditEvent[];
@@ -32,15 +33,21 @@ interface LoansAndLedgerProps {
     repayment: LoanRepaymentPlan,
     meta: { mode: "early" | "extend"; settleAmount?: number },
   ) => void;
+  onSaveLoanRates?: (next: {
+    defaultMonthlyPercent: number;
+    options: { label: string; monthlyPercent: number }[];
+  }) => void | Promise<void>;
 }
 
 export default function LoansAndLedger({
   chamaId,
+  chama,
   members,
   proposals,
   ledger,
   onRepay,
   onReschedule,
+  onSaveLoanRates,
 }: LoansAndLedgerProps) {
   const [tab, setTab] = useState<"loans" | "ledger">("loans");
   const [query, setQuery] = useState("");
@@ -134,15 +141,24 @@ export default function LoansAndLedger({
             transition={{ duration: 0.2, ease: "easeOut" }}
             className="space-y-4"
           >
+            <LoanRatesChairPanel
+              chama={chama}
+              members={members}
+              onSaveLoanRates={onSaveLoanRates}
+            />
             <div className="rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-950/40 to-slate-900 p-4">
               <div className="flex items-center gap-2 text-sm font-bold text-white">
                 <TrendUpIcon size={18} className="text-violet-400" />
                 Loan terms (set when you propose)
               </div>
               <p className="mt-1 text-xs text-slate-400">
-                Interest is <span className="font-semibold text-violet-200">10% of principal per month (flat)</span>.
-                Example: Ksh 20,000 → Ksh 2,000 interest each month of the term. Choose installments when proposing;
-                the schedule is saved on the loan for repayment tracking below.
+                Interest is <span className="font-semibold text-violet-200">
+                  {chama?.constitution?.loanInterestMonthlyPercent ?? 10}% of principal per month (flat)
+                </span> by default
+                {chama?.constitution?.loanInterestOptions?.length
+                  ? ", or another rate the chair configured"
+                  : ""}.
+                Example at 10%: Ksh 20,000 → Ksh 2,000 interest each month of the term.
               </p>
             </div>
 
@@ -291,6 +307,142 @@ export default function LoansAndLedger({
         )}
       </AnimatePresence>
     </section>
+  );
+}
+
+
+
+function LoanRatesChairPanel({
+  chama,
+  members,
+  onSaveLoanRates,
+}: {
+  chama?: Chama;
+  members: Member[];
+  onSaveLoanRates?: (next: {
+    defaultMonthlyPercent: number;
+    options: { label: string; monthlyPercent: number }[];
+  }) => void | Promise<void>;
+}) {
+  const me = members.find((m) => m.isCurrentUser);
+  const isChair = me?.role === "Chairperson";
+  const [defaultRate, setDefaultRate] = useState(
+    chama?.constitution?.loanInterestMonthlyPercent ?? 10,
+  );
+  const [options, setOptions] = useState<{ label: string; monthlyPercent: number }[]>(
+    () =>
+      chama?.constitution?.loanInterestOptions?.length
+        ? [...chama.constitution.loanInterestOptions]
+        : [
+            { label: "Standard", monthlyPercent: chama?.constitution?.loanInterestMonthlyPercent ?? 10 },
+            { label: "Welfare", monthlyPercent: 5 },
+          ],
+  );
+  const [saving, setSaving] = useState(false);
+
+  if (!isChair || !onSaveLoanRates) {
+    return null;
+  }
+
+  const addOption = () => {
+    setOptions((prev) => [...prev, { label: "New rate", monthlyPercent: 10 }]);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await onSaveLoanRates({
+        defaultMonthlyPercent: defaultRate,
+        options: options.filter((o) => o.label.trim() && o.monthlyPercent >= 0),
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-amber-500/30 bg-amber-950/20 p-4">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-bold text-white">Loan interest rates (Chairperson)</p>
+          <p className="mt-0.5 text-[11px] text-slate-400">
+            Set the default monthly flat rate and optional named rates members can pick when proposing a loan.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <label className="block">
+          <span className="text-[11px] font-semibold text-slate-500">Default % per month (flat on principal)</span>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={0.5}
+            value={defaultRate}
+            onChange={(e) => setDefaultRate(Number(e.target.value) || 0)}
+            className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-semibold text-white"
+          />
+        </label>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Rate options</p>
+        {options.map((opt, idx) => (
+          <div key={idx} className="flex flex-wrap items-center gap-2">
+            <input
+              value={opt.label}
+              onChange={(e) =>
+                setOptions((prev) =>
+                  prev.map((o, i) => (i === idx ? { ...o, label: e.target.value } : o)),
+                )
+              }
+              placeholder="Label e.g. Welfare"
+              className="min-w-[8rem] flex-1 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-white"
+            />
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={0.5}
+              value={opt.monthlyPercent}
+              onChange={(e) =>
+                setOptions((prev) =>
+                  prev.map((o, i) =>
+                    i === idx ? { ...o, monthlyPercent: Number(e.target.value) || 0 } : o,
+                  ),
+                )
+              }
+              className="w-24 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm font-mono text-white"
+            />
+            <span className="text-[11px] text-slate-500">% / month</span>
+            <button
+              type="button"
+              onClick={() => setOptions((prev) => prev.filter((_, i) => i !== idx))}
+              className="text-[11px] font-bold text-rose-400 hover:text-rose-300"
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={addOption}
+          className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300"
+        >
+          + Add rate option
+        </button>
+      </div>
+
+      <button
+        type="button"
+        disabled={saving}
+        onClick={() => void save()}
+        className="mt-3 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-amber-400 disabled:opacity-60"
+      >
+        {saving ? "Saving…" : "Save rates for this chama"}
+      </button>
+    </div>
   );
 }
 
@@ -465,7 +617,7 @@ function LoanCard({
             Change repayment
           </p>
           <p className="text-[11px] text-slate-400">
-            Rate: <span className="text-slate-200">10% of principal / month flat</span> (
+            Rate: <span className="text-slate-200">{plan.interestRate ?? 10}% of principal / month flat</span> (
             {fmtKsh(monthlyInterest)}/mo on {fmtKsh(proposal.amount)}). Paying early drops future interest.
           </p>
 
