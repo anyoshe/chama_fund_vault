@@ -135,7 +135,7 @@ grant execute on function public.ensure_chama_kits(uuid) to authenticated;
 create or replace function public.list_chama_kits(p_chama_id uuid)
 returns setof public.chama_kits
 language plpgsql
-stable
+volatile
 security definer
 set search_path = public
 as $$
@@ -145,6 +145,7 @@ begin
   ) then
     raise exception 'Not allowed';
   end if;
+  -- volatile so ensure_chama_kits INSERT is allowed
   perform public.ensure_chama_kits(p_chama_id);
   return query
     select k.* from public.chama_kits k

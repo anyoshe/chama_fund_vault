@@ -10,7 +10,7 @@ returns table (
   active_loans int
 )
 language plpgsql
-stable
+volatile
 security definer
 set search_path = public
 as $$
@@ -27,8 +27,7 @@ begin
     raise exception 'Not allowed';
   end if;
 
-  perform public.ensure_chama_kits(p_chama_id);
-
+  -- Do not INSERT here (would fail in read-only contexts). Kits should already exist.
   select coalesce(sum(b.balance), 0) into v_shares
   from public.member_kit_balances b
   join public.chama_kits k on k.chama_id = b.chama_id and k.kit_code = b.kit_code
