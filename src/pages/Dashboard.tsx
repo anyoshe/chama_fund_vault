@@ -28,6 +28,37 @@ import {
 
 const LS_KEY = "chamavault-state-v1";
 
+/** 10% of principal per month flat, for each month of the term */
+function buildFlatMonthlySchedule(principal: number, months: number, monthlyRatePct = 10) {
+  const monthlyInterest = principal * (monthlyRatePct / 100);
+  const totalInterest = monthlyInterest * months;
+  const totalRepay = principal + totalInterest;
+  const installment = months > 0 ? totalRepay / months : totalRepay;
+  const principalPart = months > 0 ? principal / months : principal;
+  const interestPart = months > 0 ? totalInterest / months : totalInterest;
+  const start = new Date();
+  const schedule = Array.from({ length: months }, (_, i) => {
+    const due = new Date(start);
+    due.setMonth(due.getMonth() + i + 1);
+    return {
+      dueDate: due.toISOString().slice(0, 10),
+      amount: Math.round(installment * 100) / 100,
+      paid: false,
+    };
+  });
+  return {
+    interestRate: monthlyRatePct,
+    interestModel: "flat" as const,
+    installments: months,
+    monthlyInterest: Math.round(monthlyInterest * 100) / 100,
+    totalInterest: Math.round(totalInterest * 100) / 100,
+    totalRepay: Math.round(totalRepay * 100) / 100,
+    installmentAmount: Math.round(installment * 100) / 100,
+    schedule,
+  };
+}
+
+
 interface PersistedState {
   contributions: Contribution[];
   proposals: Proposal[];
@@ -463,6 +494,19 @@ export default function Dashboard() {
       return;
     }
 
+    const termRaw = window.prompt(
+      "How many monthly installments? (1, 2, 3, 6, 9, or 12)\nInterest: 10% of principal per month flat.",
+      "3",
+    );
+    if (termRaw == null) return;
+    const months = Math.max(1, Math.min(24, Math.floor(Number(termRaw) || 0)));
+    if (!months) {
+      toast.error("Enter a valid number of installments.");
+      return;
+    }
+
+    const plan = buildFlatMonthlySchedule(amount, months, 10);
+
     const { data: limitRows, error: limitError } = await supabase.rpc("get_member_loan_limit", {
       p_chama_id: activeChamaId,
       p_user_id: user.id,
@@ -504,12 +548,18 @@ export default function Dashboard() {
       type: "loan",
       requesterId: user.id,
       title,
-      reason: `Borrower shares ${fmtKsh(shares)}. Limit ${fmtKsh(maxLoan)}. Paid from loan fund only.`,
+      reason: `Principal ${fmtKsh(amount)}. ${months} months × 10% flat = ${fmtKsh(plan.monthlyInterest)}/mo interest. Total repay ${fmtKsh(plan.totalRepay)} (${fmtKsh(plan.installmentAmount)} × ${months}). Shares ${fmtKsh(shares)}.`,
       amount,
       status: "active",
       quorumThreshold,
       votes: {},
       requestedAt: new Date().toISOString(),
+      repayment: {
+        interestRate: plan.interestRate,
+        interestModel: plan.interestModel,
+        installments: plan.installments,
+        schedule: plan.schedule,
+      },
     };
 
     setProposals((prev) => [newProposal, ...prev]);
@@ -517,13 +567,13 @@ export default function Dashboard() {
       pushAudit(prev, {
         memberId: user.id,
         type: "loan-disbursed",
-        description: `Proposed ${title}`,
+        description: `Proposed ${title} · ${months} installments · 10%/mo flat`,
         amount: 0,
       }),
     );
     setTab("voting");
-    toast.success("Loan request posted to Voting Board", {
-      description: `Needs quorum. If approved, ${fmtKsh(amount)} leaves the loan fund kit only.`,
+    toast.success("Loan request posted with repayment plan", {
+      description: `${fmtKsh(plan.installmentAmount)} × ${months} mo · total ${fmtKsh(plan.totalRepay)} (incl. ${fmtKsh(plan.totalInterest)} interest)`,
     });
   };
 

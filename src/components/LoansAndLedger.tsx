@@ -21,87 +21,6 @@ import { toast } from "sonner";
 import type { AuditEvent, AuditType, Chama, LoanRepaymentPlan, Member, Proposal } from "../types/chama";
 import { fmtKsh, fmtDate, memberById } from "../data/mockChamaData";
 
-const PAYMENT_TERMS = [1, 2, 3, 6, 9, 12, 18, 24] as const;
-const INTEREST_PRESETS = [5, 8, 10, 12, 15, 18, 20] as const;
-
-function buildSchedule(
-  principal: number,
-  annualRatePct: number,
-  model: "flat" | "reducing-balance",
-  installments: number,
-): { schedule: { n: number; amount: number; principal: number; interest: number }[]; totalInterest: number; totalRepay: number; installmentAmount: number } {
-  if (principal <= 0 || installments <= 0) {
-    return { schedule: [], totalInterest: 0, totalRepay: 0, installmentAmount: 0 };
-  }
-
-  const schedule: { n: number; amount: number; principal: number; interest: number }[] = [];
-
-  if (model === "flat") {
-    // Flat: interest on full principal for the whole term (annual rate × years)
-    const years = installments / 12;
-    const totalInterest = principal * (annualRatePct / 100) * (years || 1 / 12);
-    const totalRepay = principal + totalInterest;
-    const installmentAmount = totalRepay / installments;
-    const principalPart = principal / installments;
-    const interestPart = totalInterest / installments;
-    for (let n = 1; n <= installments; n++) {
-      schedule.push({
-        n,
-        amount: round2(installmentAmount),
-        principal: round2(principalPart),
-        interest: round2(interestPart),
-      });
-    }
-    return {
-      schedule,
-      totalInterest: round2(totalInterest),
-      totalRepay: round2(totalRepay),
-      installmentAmount: round2(installmentAmount),
-    };
-  }
-
-  // Reducing balance (amortization)
-  const r = annualRatePct / 100 / 12;
-  let installmentAmount: number;
-  if (r === 0) {
-    installmentAmount = principal / installments;
-  } else {
-    const pow = Math.pow(1 + r, installments);
-    installmentAmount = (principal * r * pow) / (pow - 1);
-  }
-
-  let balance = principal;
-  let totalInterest = 0;
-  for (let n = 1; n <= installments; n++) {
-    const interest = balance * r;
-    let principalPart = installmentAmount - interest;
-    if (n === installments) {
-      principalPart = balance;
-      installmentAmount = principalPart + interest;
-    }
-    balance = Math.max(0, balance - principalPart);
-    totalInterest += interest;
-    schedule.push({
-      n,
-      amount: round2(principalPart + interest),
-      principal: round2(principalPart),
-      interest: round2(interest),
-    });
-  }
-
-  return {
-    schedule,
-    totalInterest: round2(totalInterest),
-    totalRepay: round2(principal + totalInterest),
-    installmentAmount: round2(schedule[0]?.amount ?? 0),
-  };
-}
-
-function round2(n: number) {
-  return Math.round(n * 100) / 100;
-}
-
-
 interface LoansAndLedgerProps {
   chamaId: string;
   members: Member[];
@@ -209,7 +128,17 @@ export default function LoansAndLedger({
             transition={{ duration: 0.2, ease: "easeOut" }}
             className="space-y-4"
           >
-            <LoanCalculator />
+            <div className="rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-950/40 to-slate-900 p-4">
+              <div className="flex items-center gap-2 text-sm font-bold text-white">
+                <TrendUpIcon size={18} className="text-violet-400" />
+                Loan terms (set when you propose)
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                Interest is <span className="font-semibold text-violet-200">10% of principal per month (flat)</span>.
+                Example: Ksh 20,000 → Ksh 2,000 interest each month of the term. Choose installments when proposing;
+                the schedule is saved on the loan for repayment tracking below.
+              </p>
+            </div>
 
             {loans.length === 0 ? (
               <div className="flex flex-col items-center rounded-2xl border border-dashed border-slate-800 bg-slate-900/50 py-12 text-center">
@@ -399,6 +328,9 @@ function LoanCard({
             <span className="font-mono text-[10px] text-slate-500">#{proposal.id.slice(1)}</span>
           </div>
           <h3 className="mt-2 text-sm font-bold leading-snug text-white">{proposal.title}</h3>
+          {proposal.reason && (
+            <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{proposal.reason}</p>
+          )}
         </div>
         <span className="shrink-0 font-mono text-lg font-bold tabular-nums text-emerald-300">{fmtKsh(proposal.amount)}</span>
       </div>
@@ -430,7 +362,7 @@ function LoanCard({
               Repayment {paidCount}/{totalInstallments}
             </span>
             <span className="font-mono font-bold text-slate-300">
-              {fmtKsh(remaining)} outstanding · {plan.interestRate}% {plan.interestModel}
+              {fmtKsh(remaining)} outstanding · {plan.interestRate}% of principal / month ({plan.interestModel})
             </span>
           </div>
           <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-800">
@@ -501,162 +433,6 @@ function LoanCard({
 }
 
 /* ---------- Filter select ---------- */
-
-
-function LoanCalculator() {
-  const [principal, setPrincipal] = useState(10000);
-  const [rate, setRate] = useState(12);
-  const [model, setModel] = useState<"flat" | "reducing-balance">("reducing-balance");
-  const [months, setMonths] = useState(6);
-
-  const result = useMemo(
-    () => buildSchedule(principal, rate, model, months),
-    [principal, rate, model, months],
-  );
-
-  return (
-    <div className="rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-950/40 to-slate-900 p-4">
-      <div className="flex items-center gap-2 text-sm font-bold text-white">
-        <TrendUpIcon size={18} className="text-violet-400" />
-        Loan Repayment Calculator
-      </div>
-      <p className="mt-1 text-xs text-slate-400">
-        Choose amount, interest rate, method and how many payments. Schedule updates instantly.
-      </p>
-
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Amount (KES)</span>
-          <input
-            type="number"
-            min={100}
-            step={100}
-            value={principal}
-            onChange={(e) => setPrincipal(Math.max(0, Number(e.target.value) || 0))}
-            className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-violet-500/60"
-          />
-        </label>
-
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Interest (% p.a.)</span>
-          <input
-            type="number"
-            min={0}
-            max={100}
-            step={0.5}
-            value={rate}
-            onChange={(e) => setRate(Math.max(0, Number(e.target.value) || 0))}
-            className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-violet-500/60"
-          />
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {INTEREST_PRESETS.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setRate(p)}
-                className={`rounded-lg px-2 py-0.5 text-[10px] font-bold transition ${
-                  rate === p
-                    ? "bg-violet-500 text-white"
-                    : "border border-slate-700 bg-slate-900 text-slate-400 hover:border-violet-500/40"
-                }`}
-              >
-                {p}%
-              </button>
-            ))}
-          </div>
-        </label>
-
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Interest method</span>
-          <select
-            value={model}
-            onChange={(e) => setModel(e.target.value as "flat" | "reducing-balance")}
-            className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-violet-500/60"
-          >
-            <option value="reducing-balance">Reducing balance</option>
-            <option value="flat">Flat rate</option>
-          </select>
-          <p className="mt-1 text-[10px] text-slate-500">
-            {model === "flat"
-              ? "Interest on full amount for the whole term, split evenly."
-              : "Interest each month on the remaining balance (amortized)."}
-          </p>
-        </label>
-
-        <label className="block">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Payment times</span>
-          <select
-            value={months}
-            onChange={(e) => setMonths(Number(e.target.value))}
-            className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2.5 text-sm font-semibold text-white outline-none focus:border-violet-500/60"
-          >
-            {PAYMENT_TERMS.map((m) => (
-              <option key={m} value={m}>
-                {m} {m === 1 ? "payment" : "payments"} ({m} mo)
-              </option>
-            ))}
-          </select>
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {PAYMENT_TERMS.map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setMonths(m)}
-                className={`rounded-lg px-2 py-0.5 text-[10px] font-bold transition ${
-                  months === m
-                    ? "bg-emerald-500 text-white"
-                    : "border border-slate-700 bg-slate-900 text-slate-400 hover:border-emerald-500/40"
-                }`}
-              >
-                {m}
-              </button>
-            ))}
-          </div>
-        </label>
-      </div>
-
-      <div className="mt-4 grid grid-cols-3 gap-2">
-        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-          <p className="text-[10px] font-semibold uppercase text-slate-500">Each payment</p>
-          <p className="mt-1 font-mono text-sm font-bold text-emerald-300">{fmtKsh(result.installmentAmount)}</p>
-        </div>
-        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-          <p className="text-[10px] font-semibold uppercase text-slate-500">Total interest</p>
-          <p className="mt-1 font-mono text-sm font-bold text-amber-300">{fmtKsh(result.totalInterest)}</p>
-        </div>
-        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-          <p className="text-[10px] font-semibold uppercase text-slate-500">Total to repay</p>
-          <p className="mt-1 font-mono text-sm font-bold text-white">{fmtKsh(result.totalRepay)}</p>
-        </div>
-      </div>
-
-      {result.schedule.length > 0 && (
-        <div className="mt-3 max-h-48 overflow-y-auto rounded-xl border border-slate-800">
-          <table className="w-full text-left text-[11px]">
-            <thead className="sticky top-0 bg-slate-900 text-slate-500">
-              <tr>
-                <th className="px-3 py-2 font-semibold">#</th>
-                <th className="px-3 py-2 font-semibold">Payment</th>
-                <th className="px-3 py-2 font-semibold">Principal</th>
-                <th className="px-3 py-2 font-semibold">Interest</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.schedule.map((row) => (
-                <tr key={row.n} className="border-t border-slate-800/80 text-slate-300">
-                  <td className="px-3 py-1.5 font-mono">{row.n}</td>
-                  <td className="px-3 py-1.5 font-mono font-semibold text-emerald-300">{fmtKsh(row.amount)}</td>
-                  <td className="px-3 py-1.5 font-mono">{fmtKsh(row.principal)}</td>
-                  <td className="px-3 py-1.5 font-mono text-amber-200/90">{fmtKsh(row.interest)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
 
 
 function FilterSelect({
