@@ -82,7 +82,24 @@ export default function ChamaOverview({
   const accountContributions = contributions.filter(
     (contribution) => contribution.status === "completed" && contribution.destination === selectedAccount,
   );
-  const accountPool = accountContributions.reduce((sum, contribution) => sum + contribution.amount, 0);
+  const kitForAccount = kits.find((k) => k.kit_code === selectedAccount);
+  const accountPool =
+    kitForAccount != null
+      ? Number(kitForAccount.balance) || 0
+      : accountContributions.reduce((sum, contribution) => sum + contribution.amount, 0);
+  const loanFund = kits.find((k) => k.is_loan_fund || k.kit_code === "member-loans");
+  // Share-like pots only — aligns with kit_counts_toward_loan in SQL
+  const shareCodes = new Set(["table-banking", "share-capital", "general-savings"]);
+  const memberShareBalance = contributions
+    .filter(
+      (c) =>
+        c.status === "completed" &&
+        c.memberId === currentMemberId &&
+        shareCodes.has(c.destination as string),
+    )
+    .reduce((sum, c) => sum + c.amount, 0);
+  const maxLoanFromShares =
+    memberShareBalance * (chama.constitution.maxLoanMultiple || 3);
   const pendingVotes = proposals.filter((p) => p.status === "active").length;
   const activeApproved = proposals.filter((p) => p.status === "approved").length;
   const contributionRate = Math.min(100, Math.round((accountPool / chama.monthlyTarget) * 100));
@@ -207,6 +224,51 @@ export default function ChamaOverview({
         />
       </div>
 
+      {/* Kit balances (separate pots) */}
+      {kits.length > 0 && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+          <h3 className="text-sm font-bold text-white">Kits (separate pots)</h3>
+          <p className="mt-1 text-[11px] text-slate-500">
+            Money stays in the kit you contribute to. Loan fund is separate from shares.
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {kits.map((kit) => (
+              <button
+                key={kit.kit_code}
+                type="button"
+                onClick={() => {
+                  if (activities.includes(kit.kit_code as ChamaActivity)) {
+                    setSelectedAccount(kit.kit_code as ChamaActivity);
+                  }
+                }}
+                className={`rounded-xl border px-3 py-2.5 text-left transition ${
+                  selectedAccount === kit.kit_code
+                    ? "border-emerald-500/50 bg-emerald-500/10"
+                    : "border-slate-800 bg-slate-950/50 hover:border-slate-600"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-slate-200">{kit.label}</p>
+                  {kit.is_loan_fund && (
+                    <span className="rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-bold text-violet-300">
+                      Loan
+                    </span>
+                  )}
+                  {kit.counts_toward_loan_limit && (
+                    <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">
+                      Shares
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 font-mono text-sm font-bold text-emerald-300">
+                  {fmtKsh(Number(kit.balance) || 0)}
+                </p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Constitution rule + loan calc teaser */}
       <div className="grid gap-3 lg:grid-cols-2">
         <button
@@ -226,11 +288,19 @@ export default function ChamaOverview({
             <Calculator size={18} className="text-violet-400" /> Loan Eligibility
           </div>
           <p className="mt-2 text-xs text-slate-400">
-            Borrow up to{" "}
+            Your loan limit is based on{" "}
+            <span className="font-semibold text-slate-300">your shares</span> (table banking, share
+            capital, general savings), not the whole group pot. You can borrow up to{" "}
             <span className="font-mono font-bold text-slate-200">
-              {fmtKsh(chama.constitution.maxLoanMultiple * chama.monthlyTarget)}
+              {fmtKsh(maxLoanFromShares)}
             </span>{" "}
-            ({chama.constitution.maxLoanMultiple}× group monthly pot) with guarantor votes.
+            ({chama.constitution.maxLoanMultiple}× your shares of {fmtKsh(memberShareBalance)}).
+            Loan payouts come from the{" "}
+            <span className="font-semibold text-slate-300">
+              {loanFund ? loanFund.label : "member loans"}
+            </span>{" "}
+            kit
+            {loanFund ? ` (${fmtKsh(Number(loanFund.balance) || 0)} available)` : ""}.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {[

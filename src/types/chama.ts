@@ -85,6 +85,16 @@ export type MemberRole =
   | "Active Member"
   | "New Applicant";
 
+export interface ChamaKit {
+  id: string;
+  chama_id: string;
+  kit_code: string;
+  label: string;
+  balance: number;
+  is_loan_fund: boolean;
+  counts_toward_loan_limit: boolean;
+}
+
 export type ContributionMethod =
   | "M-Pesa STK Push"
   | "Airtel Money"

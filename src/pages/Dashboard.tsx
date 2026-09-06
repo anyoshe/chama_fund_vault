@@ -10,7 +10,7 @@ import LoansAndLedger from "@/components/LoansAndLedger";
 import Members from "@/pages/Members";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import type {
+import type { ChamaKit,
   AuditEvent,
   Chama,
   Contribution,
@@ -88,15 +88,17 @@ export default function Dashboard() {
     () => authChamaId ?? displayChamas[0]?.id ?? "",
   );
   const [displayMembers, setDisplayMembers] = useState<Member[]>([]);
+  const [kits, setKits] = useState<ChamaKit[]>([]);
 
   useEffect(() => {
     if (!activeChamaId) {
       setDisplayMembers([]);
+      setKits([]);
       return;
     }
     let cancelled = false;
     const loadMembers = async () => {
-      const [{ data: memberRows, error: membersError }, { data: profiles }, { data: contributionRows, error: contributionsError }] = await Promise.all([
+      const [{ data: memberRows, error: membersError }, { data: profiles }, { data: contributionRows, error: contributionsError }, { data: kitRows, error: kitsError }] = await Promise.all([
         supabase.rpc("list_chama_members", { p_chama_id: activeChamaId }),
         supabase.rpc("list_chama_profiles", { p_chama_id: activeChamaId }),
         supabase
@@ -104,7 +106,19 @@ export default function Dashboard() {
           .select("id, chama_id, member_id, amount, destination, method, phone, payment_details, reference, status, created_at, confirmed_at")
           .eq("chama_id", activeChamaId)
           .order("created_at", { ascending: false }),
+        supabase.rpc("list_chama_kits", { p_chama_id: activeChamaId }),
       ]);
+      if (kitsError) {
+        console.error("loadDashboardKits", kitsError);
+        setKits([]);
+      } else {
+        setKits(
+          (kitRows ?? []).map((k) => ({
+            ...k,
+            balance: Number(k.balance) || 0,
+          })) as ChamaKit[],
+        );
+      }
       if (cancelled || membersError) {
         if (membersError) console.error("loadDashboardMembers", membersError);
         return;
@@ -482,6 +496,7 @@ export default function Dashboard() {
                 members={displayMembers}
                 contributions={contributions.filter((contribution) => contribution.chamaId === activeChamaId)}
                 proposals={proposals}
+                kits={kits}
                 currentMemberId={currentMemberId}
                 onContribute={() => setContribOpen(true)}
                 onProposeLoan={handleProposeLoan}
