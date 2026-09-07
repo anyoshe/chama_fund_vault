@@ -114,6 +114,16 @@ begin
   if not public.is_chama_member(p_chama_id) then
     raise exception 'Not a member of this chama';
   end if;
+  if not exists (
+    select 1
+    from public.chama_members
+    where chama_id = p_chama_id
+      and user_id = auth.uid()
+      and role = 'Treasurer'
+      and status = 'active'
+  ) then
+    raise exception 'Only the official treasurer can disburse loans';
+  end if;
   if p_amount is null or p_amount <= 0 then
     raise exception 'Amount must be positive';
   end if;

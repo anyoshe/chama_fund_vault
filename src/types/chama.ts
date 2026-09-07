@@ -137,7 +137,17 @@ export interface Proposal {
   quorumThreshold: number; // 0..1 fraction needed to execute
   guarantorIds?: string[];
   disbursedAt?: string;
+  disbursement?: DisbursementDetails;
   repayment?: LoanRepaymentPlan;
+}
+
+export interface DisbursementDetails {
+  applicantConfirmed: boolean;
+  method: "mobile-money" | "bank-transfer";
+  destination: string;
+  reference?: string;
+  confirmedBy: string;
+  confirmedAt: string;
 }
 
 export interface LoanRepaymentPlan {

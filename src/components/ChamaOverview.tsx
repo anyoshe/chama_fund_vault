@@ -113,8 +113,39 @@ export default function ChamaOverview({
     .reduce((sum, c) => sum + c.amount, 0);
   const maxLoanFromShares =
     memberShareBalance * (chama.constitution.maxLoanMultiple || 3);
-  const pendingVotes = proposals.filter((p) => p.status === "active").length;
-  const activeApproved = proposals.filter((p) => p.status === "approved").length;
+  const quorumVoterCount = members.filter((member) => member.role !== "New Applicant").length || 1;
+  const pendingVotes = proposals
+    .filter((proposal) => proposal.type === "loan" && proposal.status === "active")
+    .reduce((remaining, proposal) => {
+      const required = Math.ceil(quorumVoterCount * proposal.quorumThreshold);
+      return remaining + Math.max(0, required - Object.keys(proposal.votes).length);
+    }, 0);
+  const chamaProposals = proposals.filter((proposal) => proposal.chamaId === chama.id);
+  const approvedLoans = chamaProposals.filter((proposal) => {
+    if (proposal.type !== "loan" || proposal.status !== "approved") return false;
+    const required = Math.ceil(quorumVoterCount * proposal.quorumThreshold);
+    return Object.values(proposal.votes).filter((vote) => vote === "approve").length >= required;
+  });
+  const approvedBorrowers = approvedLoans
+    .map((proposal) => members.find((member) => member.id === proposal.requesterId)?.name ?? "Unknown member")
+    .join(", ");
+  const totalDisbursed = chamaProposals
+    .filter((proposal) => proposal.status === "disbursed" || proposal.status === "settled")
+    .reduce((sum, proposal) => sum + proposal.amount, 0);
+  const expectedInterest = chamaProposals
+    .filter((proposal) => proposal.status === "disbursed" || proposal.status === "settled")
+    .reduce(
+      (sum, proposal) =>
+        sum +
+        (proposal.repayment?.schedule.reduce((scheduleTotal, payment) => scheduleTotal + payment.amount, 0) ?? 0) -
+        proposal.amount,
+      0,
+    );
+  const lastCollectionDate = chamaProposals
+    .filter((proposal) => proposal.status === "disbursed" || proposal.status === "settled")
+    .flatMap((proposal) => proposal.repayment?.schedule.map((payment) => payment.dueDate) ?? [])
+    .sort()
+    .at(-1);
   const contributionRate = Math.min(100, Math.round((accountPool / (chama.monthlyTarget || 1)) * 100));
 
   return (
@@ -227,15 +258,15 @@ export default function ChamaOverview({
         <MetricCard
           icon={<Receipt size={19} />}
           label="Approved Up Next"
-          value={String(activeApproved)}
-          sub="awaiting disbursement"
+          value={String(approvedLoans.length)}
+          sub={approvedBorrowers ? `awaiting disbursement · ${approvedBorrowers}` : "awaiting disbursement"}
           accent="sky"
         />
         <MetricCard
           icon={<Bank size={19} />}
           label="Total Disbursed"
-          value={fmtKsh(840000)}
-          sub="loans + payouts, zero cash"
+          value={fmtKsh(totalDisbursed)}
+          sub={`${fmtKsh(Math.max(0, expectedInterest))} interest expected${lastCollectionDate ? ` · through ${lastCollectionDate}` : ""}`}
           accent="violet"
         />
       </div>

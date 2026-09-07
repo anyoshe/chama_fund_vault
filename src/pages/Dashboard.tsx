@@ -20,7 +20,6 @@ import type { ChamaKit,
 } from "@/types/chama";
 import {
   chamas as seedChamas,
-  initialProposals,
   initialLedger,
   initialContributions,
   fmtKsh,
@@ -239,7 +238,7 @@ export default function Dashboard() {
   });
   const [proposals, setProposals] = useState<Proposal[]>(() => {
     const s = loadPersisted();
-    return s ? s.proposals : initialProposals;
+    return s ? s.proposals.filter((proposal) => !/^p-\d+$/.test(proposal.id)) : [];
   });
   const [ledger, setLedger] = useState<AuditEvent[]>(() => {
     const s = loadPersisted();
@@ -260,7 +259,7 @@ export default function Dashboard() {
     [activeChamaId, displayChamas],
   );
   const currentMember = useMemo(
-    () => displayMembers.find((member) => member.id === currentMemberId) ?? displayMembers[0],
+    () => displayMembers.find((member) => member.id === currentMemberId),
     [currentMemberId, displayMembers],
   );
 
@@ -362,8 +361,7 @@ export default function Dashboard() {
     setProposals((prev) =>
       prev.map((p) => {
         if (p.id !== proposalId) return p;
-        const updated: Proposal = { ...p, votes: nextVotes, status: passed ? "approved" : p.status };
-        return passed ? { ...updated, disbursedAt: new Date().toISOString() } : updated;
+        return { ...p, votes: nextVotes, status: passed ? "approved" : p.status };
       }),
     );
     setLedger((prev) =>
@@ -374,51 +372,96 @@ export default function Dashboard() {
         amount: 0,
       }),
     );
-    if (passed) {
-      void (async () => {
-        const { data, error } = await supabase.rpc("disburse_from_loan_fund", {
-          p_chama_id: activeChamaId,
-          p_amount: target.amount,
-          p_borrower_id: target.requesterId,
-          p_reference: `DISB-${target.id}`,
-        });
-        if (error) {
-          console.error(error);
-          toast.error(error.message || "Approved, but loan fund could not disburse.");
-          setProposals((prev) =>
-            prev.map((p) => (p.id === proposalId ? { ...p, status: "approved" as const } : p)),
-          );
-          return;
-        }
-        setProposals((prev) =>
-          prev.map((p) =>
-            p.id === proposalId
-              ? {
-                  ...p,
-                  status: "disbursed" as const,
-                  disbursedAt: new Date().toISOString(),
-                }
-              : p,
-          ),
-        );
-        const { data: kitRows } = await supabase.rpc("list_chama_kits", {
-          p_chama_id: activeChamaId,
-        });
-        if (kitRows) {
-          setKits(
-            kitRows.map((k: ChamaKit) => ({
-              ...k,
-              balance: Number(k.balance) || 0,
-            })),
-          );
-        }
-        toast.success("Quorum reached — paid from loaning pool", {
-          description: `${target.title} | ${fmtKsh(target.amount)}`,
-          icon: <ShieldCheck className="text-emerald-400" />,
-        });
-        void data;
-      })();
+    if (passed) toast.success("Quorum reached — awaiting treasurer disbursement", { description: target.title });
+  };
+
+  const handleDisburse = async (proposalId: string) => {
+    const target = proposals.find((proposal) => proposal.id === proposalId);
+    const isOfficialTreasurer =
+      Boolean(user?.id) &&
+      currentMember?.id === user.id &&
+      currentMember.role === "Treasurer";
+    if (!target || target.status !== "approved" || !isOfficialTreasurer) {
+      toast.error("Only the official treasurer can disburse an approved loan.");
+      return;
     }
+    const applicant = displayMembers.find((member) => member.id === target.requesterId);
+    const applicantName = applicant?.name ?? "the applicant";
+    const applicantConfirmed = window.confirm(
+      `Confirm applicant\n\nIs ${applicantName} the rightful applicant for ${fmtKsh(target.amount)}?`,
+    );
+    if (!applicantConfirmed) {
+      toast("Disbursement cancelled", { description: "Applicant confirmation is required." });
+      return;
+    }
+    const methodInput = window.prompt(
+      "Select payment method:\n1. Mobile money\n2. Bank transfer",
+      "1",
+    );
+    if (methodInput == null) return;
+    const method = methodInput.trim() === "2" ? "bank-transfer" : methodInput.trim() === "1" ? "mobile-money" : null;
+    if (!method) {
+      toast.error("Choose 1 for mobile money or 2 for bank transfer.");
+      return;
+    }
+    const destination = window.prompt(
+      method === "mobile-money"
+        ? `Enter ${applicantName}'s mobile money number:`
+        : `Enter ${applicantName}'s bank account or IBAN:`,
+      applicant?.phone ?? "",
+    )?.trim();
+    if (!destination) {
+      toast.error("A payment destination is required.");
+      return;
+    }
+    const transferReference = window.prompt(
+      "Enter the transfer reference/confirmation number (optional):",
+      `DISB-${target.id}`,
+    )?.trim();
+    if (transferReference == null) return;
+    const confirmedAt = new Date().toISOString();
+    const { error } = await supabase.rpc("disburse_from_loan_fund", {
+      p_chama_id: activeChamaId,
+      p_amount: target.amount,
+      p_borrower_id: target.requesterId,
+      p_reference: `DISB-${target.id}`,
+    });
+    if (error) {
+      toast.error(error.message || "Loan could not be disbursed.");
+      return;
+    }
+    setProposals((prev) =>
+      prev.map((proposal) =>
+        proposal.id === proposalId
+          ? {
+              ...proposal,
+              status: "disbursed" as const,
+              disbursedAt: confirmedAt,
+              disbursement: {
+                applicantConfirmed: true,
+                method,
+                destination,
+                reference: transferReference || undefined,
+                confirmedBy: currentMemberId,
+                confirmedAt,
+              },
+            }
+          : proposal,
+      ),
+    );
+    const { data: kitRows } = await supabase.rpc("list_chama_kits", { p_chama_id: activeChamaId });
+    if (kitRows) {
+      setKits(kitRows.map((kit: ChamaKit) => ({ ...kit, balance: Number(kit.balance) || 0 })));
+    }
+    setLedger((prev) =>
+      pushAudit(prev, {
+        memberId: target.requesterId,
+        type: "loan-disbursed",
+        description: `Loan disbursed to ${applicantName} via ${method === "mobile-money" ? "mobile money" : "bank transfer"} (${destination})${transferReference ? ` · Ref ${transferReference}` : ""}`,
+        amount: target.amount,
+      }),
+    );
+    toast.success("Loan disbursed from the loaning pool", { description: `${target.title} · ${fmtKsh(target.amount)}` });
   };
 
   const handleRepay = async (proposalId: string) => {
@@ -773,6 +816,8 @@ export default function Dashboard() {
                 ledger={chamaLedger}
                 onRepay={handleRepay}
                 onReschedule={handleReschedule}
+                canDisburse={Boolean(user?.id && currentMember?.id === user.id && currentMember.role === "Treasurer")}
+                onDisburse={handleDisburse}
                 onSaveLoanRates={async (next) => {
                   if (!activeChamaId || !chama) return;
                   const constitution = {

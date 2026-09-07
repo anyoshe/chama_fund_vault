@@ -33,6 +33,8 @@ interface LoansAndLedgerProps {
     repayment: LoanRepaymentPlan,
     meta: { mode: "early" | "extend"; settleAmount?: number },
   ) => void;
+  canDisburse: boolean;
+  onDisburse: (proposalId: string) => void | Promise<void>;
   onSaveLoanRates?: (next: {
     defaultMonthlyPercent: number;
     options: { label: string; monthlyPercent: number }[];
@@ -47,6 +49,8 @@ export default function LoansAndLedger({
   ledger,
   onRepay,
   onReschedule,
+  canDisburse,
+  onDisburse,
   onSaveLoanRates,
 }: LoansAndLedgerProps) {
   const [tab, setTab] = useState<"loans" | "ledger">("loans");
@@ -171,7 +175,7 @@ export default function LoansAndLedger({
             ) : (
               <div className="grid gap-3 lg:grid-cols-2">
                 {loans.map((p) => (
-                  <LoanCard key={p.id} proposal={p} members={members} defaultOpen={p.status === "approved" || p.status === "disbursed"} onRepay={onRepay} onReschedule={onReschedule} />
+                  <LoanCard key={p.id} proposal={p} members={members} defaultOpen={p.status === "approved" || p.status === "disbursed"} onRepay={onRepay} onReschedule={onReschedule} canDisburse={canDisburse} onDisburse={onDisburse} />
                 ))}
               </div>
             )}
@@ -480,6 +484,8 @@ function LoanCard({
   defaultOpen,
   onRepay,
   onReschedule,
+  canDisburse,
+  onDisburse,
 }: {
   proposal: Proposal;
   members: Member[];
@@ -490,6 +496,8 @@ function LoanCard({
     repayment: LoanRepaymentPlan,
     meta: { mode: "early" | "extend"; settleAmount?: number },
   ) => void;
+  canDisburse: boolean;
+  onDisburse: (proposalId: string) => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(true);
   const requester = memberById(proposal.requesterId, members);
@@ -671,6 +679,21 @@ function LoanCard({
       )}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
+        {proposal.status === "approved" && (
+          <button
+            type="button"
+            disabled={!canDisburse}
+            onClick={() => void onDisburse(proposal.id)}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold shadow-md ${
+              canDisburse
+                ? "bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-sky-500/20"
+                : "cursor-not-allowed border border-slate-700 bg-slate-800 text-slate-500 shadow-none"
+            }`}
+            title={canDisburse ? "Only the official Treasurer can disburse this loan" : "Treasurer-only action"}
+          >
+            <Check size={15} weight="bold" /> {canDisburse ? "Disburse loan" : "Treasurer disbursement only"}
+          </button>
+        )}
         {(proposal.status === "approved" ||
           proposal.status === "disbursed" ||
           proposal.status === "active") &&
