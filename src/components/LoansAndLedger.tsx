@@ -1053,9 +1053,3 @@ function TypePill({ type }: { type: AuditType }) {
     </span>
   );
 }
-'''
-
-print("Need to write complete clean file")
-p.write_text(t)
-print("done intermediate")
-PY
