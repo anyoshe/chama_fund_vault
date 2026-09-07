@@ -8,9 +8,11 @@ import {
   FunnelSimple,
   HandCoins,
   MagnifyingGlass,
+  PencilSimple,
   Receipt,
   TrendUpIcon,
   Wallet,
+  X,
 } from "@phosphor-icons/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -624,13 +626,6 @@ function LoanRatesChairPanel({
   );
 }
 
-
-const PAY_METHODS = [
-  { id: "M-Pesa STK Push", label: "M-Pesa" },
-  { id: "Airtel Money", label: "Airtel Money" },
-  { id: "Bank EFT / RTGS", label: "Bank transfer" },
-  { id: "PesaLink", label: "PesaLink" },
-] as const;
 
 function OfficialLoanSummary({
   proposal,
