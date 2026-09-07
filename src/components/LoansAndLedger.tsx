@@ -624,16 +624,6 @@ function LoanRatesChairPanel({
   );
 }
 
-function outstandingOf(p: Proposal): number {
-  if (p.status === "settled") return 0;
-  if (p.repayment?.schedule?.length) {
-    return p.repayment.schedule
-      .filter((s) => !s.paid)
-      .reduce((a, s) => a + s.amount, 0);
-  }
-  return p.amount;
-}
-
 
 const PAY_METHODS = [
   { id: "M-Pesa STK Push", label: "M-Pesa" },
