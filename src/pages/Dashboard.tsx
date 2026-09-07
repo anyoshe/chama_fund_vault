@@ -439,13 +439,15 @@ export default function Dashboard() {
     )?.trim();
     if (transferReference == null) return;
     const confirmedAt = new Date().toISOString();
-        const interestTotal =
-      target.repayment?.schedule?.reduce((s, x) => s + x.amount, 0) != null
-        ? Math.max(
-            0,
-            (target.repayment.schedule.reduce((s, x) => s + x.amount, 0) || 0) - target.amount,
-          )
-        : 0;
+
+    const scheduleTotal =
+      target.repayment?.schedule?.reduce((s, x) => s + x.amount, 0) ?? 0;
+    const interestTotal = Math.max(0, scheduleTotal - target.amount);
+
+    if (!activeChamaId) {
+      toast.error("No active chama");
+      return;
+    }
 
     const { data: disbData, error } = await supabase.rpc("disburse_from_loan_fund", {
       p_chama_id: activeChamaId,
@@ -459,6 +461,7 @@ export default function Dashboard() {
       toast.error(error.message || "Loan could not be disbursed.");
       return;
     }
+
     const loanRef =
       (disbData as { loan_ref?: string; reference?: string } | null)?.loan_ref ||
       (disbData as { reference?: string } | null)?.reference ||
@@ -468,19 +471,6 @@ export default function Dashboard() {
         | Record<string, number>
         | undefined) || {};
 
-    setProposals((prev) =>
-      prev.map((p) =>
-        p.id === proposalId
-          ? {
-              ...p,
-              status: "disbursed" as const,
-              disbursedAt: confirmedAt,
-              disbursement: {
-
-    if (error) {
-      toast.error(error.message || "Loan could not be disbursed.");
-      return;
-    }
     setProposals((prev) =>
       prev.map((proposal) =>
         proposal.id === proposalId
@@ -502,19 +492,32 @@ export default function Dashboard() {
           : proposal,
       ),
     );
-    const { data: kitRows } = await supabase.rpc("list_chama_kits", { p_chama_id: activeChamaId });
+
+    const { data: kitRows } = await supabase.rpc("list_chama_kits", {
+      p_chama_id: activeChamaId,
+    });
     if (kitRows) {
-      setKits(kitRows.map((kit: ChamaKit) => ({ ...kit, balance: Number(kit.balance) || 0 })));
+      setKits(
+        kitRows.map((kit: ChamaKit) => ({
+          ...kit,
+          balance: Number(kit.balance) || 0,
+        })),
+      );
     }
+
     setLedger((prev) =>
       pushAudit(prev, {
         memberId: target.requesterId,
         type: "loan-disbursed",
-        description: `Loan disbursed to ${applicantName} via ${method === "mobile-money" ? "mobile money" : "bank transfer"} (${destination})${transferReference ? ` · Ref ${transferReference}` : ""}`,
+        description: `Loan disbursed to ${applicantName} via ${
+          method === "mobile-money" ? "mobile money" : "bank transfer"
+        } (${destination})${transferReference ? ` · Ref ${transferReference}` : ""}`,
         amount: target.amount,
       }),
     );
-    toast.success("Loan disbursed from the loaning pool", { description: `${target.title} · ${fmtKsh(target.amount)}` });
+    toast.success("Loan disbursed from the loaning pool", {
+      description: `${target.title} · ${fmtKsh(target.amount)}`,
+    });
   };
 
   const handleRepay = async (proposalId: string) => {
