@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowUpRight,
   Check,
@@ -88,6 +88,7 @@ export default function LoansAndLedger({
   onSaveLoanRates,
 }: LoansAndLedgerProps) {
   const [tab, setTab] = useState<"loans" | "ledger">("loans");
+  const [repayFocusId, setRepayFocusId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<AuditType | "all">("all");
   const [memberFilter, setMemberFilter] = useState<string>("all");
@@ -257,9 +258,13 @@ export default function LoansAndLedger({
                     toast.message("No open loan balance to repay");
                     return;
                   }
-                  document
-                    .getElementById(`loan-row-${openLoan.id}`)
-                    ?.scrollIntoView({ behavior: "smooth" });
+                  setTab("loans");
+                  setRepayFocusId(openLoan.id);
+                  requestAnimationFrame(() => {
+                    document
+                      .getElementById(`loan-row-${openLoan.id}`)
+                      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  });
                 }}
                 className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-left transition hover:bg-emerald-500/20"
               >
@@ -341,6 +346,10 @@ export default function LoansAndLedger({
                       onReschedule={onReschedule}
                       canDisburse={canDisburse}
                       onDisburse={onDisburse}
+                      forceOpen={repayFocusId === p.id}
+                      onOpened={() => {
+                        if (repayFocusId === p.id) setRepayFocusId(null);
+                      }}
                     />
                   ))}
                 </div>
@@ -717,6 +726,8 @@ function MemberLoanRow({
   canDisburse,
   onDisburse,
   onPartialRepay,
+  forceOpen,
+  onOpened,
 }: {
   proposal: Proposal;
   balance: number;
@@ -726,8 +737,18 @@ function MemberLoanRow({
   canDisburse: boolean;
   onDisburse: (id: string) => void | Promise<void>;
   onPartialRepay?: LoansAndLedgerProps["onPartialRepay"];
+  forceOpen?: boolean;
+  onOpened?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (forceOpen) {
+      setOpen(true);
+      onOpened?.();
+    }
+  }, [forceOpen, onOpened]);
+
   return (
     <div id={`loan-row-${proposal.id}`} className="py-3">
       <button
