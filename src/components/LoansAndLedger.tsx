@@ -1,25 +1,35 @@
 import { useMemo, useState } from "react";
 import {
   ArrowUpRight,
-  ArrowsCounterClockwise,
   Check,
   CheckCircle,
-  ClockCounterClockwise,
   Download,
   FileCsv,
   FunnelSimple,
   HandCoins,
   MagnifyingGlass,
-  PencilSimple,
   Receipt,
   TrendUpIcon,
   Wallet,
-  X,
 } from "@phosphor-icons/react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import type { AuditEvent, AuditType, Chama, LoanRepaymentPlan, Member, Proposal } from "../types/chama";
+import type {
+  AuditEvent,
+  AuditType,
+  Chama,
+  LoanRepaymentPlan,
+  Member,
+  Proposal,
+} from "../types/chama";
 import { fmtKsh, fmtDate, memberById } from "../data/mockChamaData";
+
+const PAY_METHODS = [
+  { id: "M-Pesa STK Push", label: "M-Pesa" },
+  { id: "Airtel Money", label: "Airtel Money" },
+  { id: "Bank EFT / RTGS", label: "Bank transfer" },
+  { id: "PesaLink", label: "PesaLink" },
+] as const;
 
 interface LoansAndLedgerProps {
   chamaId: string;
@@ -49,6 +59,16 @@ interface LoansAndLedgerProps {
   }) => void | Promise<void>;
 }
 
+function outstandingOf(p: Proposal): number {
+  if (p.status === "settled") return 0;
+  if (p.repayment?.schedule?.length) {
+    return p.repayment.schedule
+      .filter((s) => !s.paid)
+      .reduce((a, s) => a + s.amount, 0);
+  }
+  return p.amount;
+}
+
 export default function LoansAndLedger({
   chamaId,
   chama,
@@ -70,6 +90,12 @@ export default function LoansAndLedger({
   const [typeFilter, setTypeFilter] = useState<AuditType | "all">("all");
   const [memberFilter, setMemberFilter] = useState<string>("all");
 
+  const me = members.find((m) => m.isCurrentUser);
+  const isOfficial =
+    me?.role === "Chairperson" ||
+    me?.role === "Treasurer" ||
+    me?.role === "Secretary";
+
   const loans = useMemo(
     () =>
       proposals.filter(
@@ -81,20 +107,10 @@ export default function LoansAndLedger({
     [proposals, chamaId],
   );
 
-  const me = members.find((m) => m.isCurrentUser);
-  const isOfficial =
-    me?.role === "Chairperson" ||
-    me?.role === "Treasurer" ||
-    me?.role === "Secretary";
-
   const myLoans = useMemo(
     () => loans.filter((p) => p.requesterId === me?.id && p.type === "loan"),
     [loans, me?.id],
   );
-
-  const outstandingOf = (p: Proposal) =>
-    p.repayment?.schedule?.filter((s) => !s.paid).reduce((a, s) => a + s.amount, 0) ??
-    (p.status === "settled" ? 0 : p.amount);
 
   const myOutstanding = myLoans
     .filter((p) => p.status === "disbursed" || p.status === "approved")
@@ -127,46 +143,62 @@ export default function LoansAndLedger({
         e.type,
         `"${e.description}"`,
         e.amount,
-      ].join(",")
+      ].join(","),
     );
-    const csvText = [header, ...rows].join(String.fromCharCode(10));
-    const blob = new Blob([csvText], { type: "text/csv" });
+    const csvText = [header, ...rows].join("\n");
+    const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = "chamavault-ledger.csv";
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("Ledger exported", { description: `${filteredLedger.length} entries → chamavault-ledger.csv` });
+    toast.success("Ledger exported");
   };
 
-  const tabs: { id: "loans" | "ledger"; label: string; badge: number; icon: React.ReactNode }[] = [
-    { id: "loans", label: "Loans & Repayments", badge: loans.length, icon: <HandCoins size={15} /> },
-    { id: "ledger", label: "Audit Ledger", badge: filteredLedger.length, icon: <Receipt size={15} /> },
+  const tabs: {
+    id: "loans" | "ledger";
+    label: string;
+    badge: number;
+    icon: React.ReactNode;
+  }[] = [
+    {
+      id: "loans",
+      label: "Loans & Repayments",
+      badge: isOfficial ? loans.length : myLoans.length,
+      icon: <HandCoins size={15} />,
+    },
+    {
+      id: "ledger",
+      label: "Audit Ledger",
+      badge: filteredLedger.length,
+      icon: <Receipt size={15} />,
+    },
   ];
 
   return (
     <section className="space-y-4">
-      {/* Tabs */}
       <div className="flex gap-1.5 rounded-2xl border border-slate-800 bg-slate-900/70 p-1.5">
-        {tabs.map((t) => (
+        {tabs.map((tabItem) => (
           <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
+            key={tabItem.id}
+            onClick={() => setTab(tabItem.id)}
             className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition ${
-              tab === t.id
+              tab === tabItem.id
                 ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/20"
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >
-            {t.icon}
-            {t.label}
+            {tabItem.icon}
+            {tabItem.label}
             <span
               className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                tab === t.id ? "bg-white/20 text-white" : "bg-slate-800 text-slate-400"
+                tab === tabItem.id
+                  ? "bg-white/20 text-white"
+                  : "bg-slate-800 text-slate-400"
               }`}
             >
-              {t.badge}
+              {tabItem.badge}
             </span>
           </button>
         ))}
@@ -182,56 +214,56 @@ export default function LoansAndLedger({
             transition={{ duration: 0.2, ease: "easeOut" }}
             className="space-y-4"
           >
-            <LoanRatesChairPanel
-              chama={chama}
-              members={members}
-              onSaveLoanRates={onSaveLoanRates}
-            />
-            <div className="rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-950/40 to-slate-900 p-4">
-              <div className="flex items-center gap-2 text-sm font-bold text-white">
-                <TrendUpIcon size={18} className="text-violet-400" />
-                Loan terms (set when you propose)
-              </div>
-              <p className="mt-1 text-xs text-slate-400">
-                Interest is <span className="font-semibold text-violet-200">
-                  {chama?.constitution?.loanInterestMonthlyPercent ?? 10}% of principal per month (flat)
-                </span> by default
-                {chama?.constitution?.loanInterestOptions?.length
-                  ? ", or another rate the chair configured"
-                  : ""}.
-                Example at 10%: Ksh 20,000 → Ksh 2,000 interest each month of the term.
-              </p>
-            </div>
+            {isOfficial && (
+              <LoanRatesChairPanel
+                chama={chama}
+                members={members}
+                onSaveLoanRates={onSaveLoanRates}
+              />
+            )}
 
-            {/* Member bank strip */}
+            {/* Bank-style actions */}
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
-                <p className="text-[10px] font-semibold uppercase text-slate-500">Loan balance</p>
-                <p className="mt-1 font-mono text-sm font-bold text-amber-300">{fmtKsh(myOutstanding)}</p>
+                <p className="text-[10px] font-semibold uppercase text-slate-500">
+                  Loan balance
+                </p>
+                <p className="mt-1 font-mono text-sm font-bold text-amber-300">
+                  {fmtKsh(myOutstanding)}
+                </p>
               </div>
               <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
-                <p className="text-[10px] font-semibold uppercase text-slate-500">Loan limit</p>
-                <p className="mt-1 font-mono text-sm font-bold text-emerald-300">{fmtKsh(loanLimit)}</p>
-                <p className="text-[10px] text-slate-500">Shares {fmtKsh(shareBalance)}</p>
+                <p className="text-[10px] font-semibold uppercase text-slate-500">
+                  Loan limit
+                </p>
+                <p className="mt-1 font-mono text-sm font-bold text-emerald-300">
+                  {fmtKsh(loanLimit)}
+                </p>
+                <p className="text-[10px] text-slate-500">
+                  Shares {fmtKsh(shareBalance)}
+                </p>
               </div>
               <button
                 type="button"
                 onClick={() => {
-                  const open = myLoans.find(
+                  const openLoan = myLoans.find(
                     (p) =>
                       (p.status === "disbursed" || p.status === "approved") &&
                       outstandingOf(p) > 0,
                   );
-                  if (!open) {
+                  if (!openLoan) {
                     toast.message("No open loan balance to repay");
                     return;
                   }
-                  document.getElementById(`loan-row-${open.id}`)?.scrollIntoView({ behavior: "smooth" });
-                  toast.message("Open your loan → Repay");
+                  document
+                    .getElementById(`loan-row-${openLoan.id}`)
+                    ?.scrollIntoView({ behavior: "smooth" });
                 }}
                 className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-left transition hover:bg-emerald-500/20"
               >
-                <p className="text-[10px] font-semibold uppercase text-emerald-400">Repay loan</p>
+                <p className="text-[10px] font-semibold uppercase text-emerald-400">
+                  Repay loan
+                </p>
                 <p className="mt-1 text-xs font-bold text-white">Pay balance</p>
               </button>
               <button
@@ -239,24 +271,29 @@ export default function LoansAndLedger({
                 onClick={() => onBorrow?.()}
                 className="rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-left transition hover:bg-sky-500/20"
               >
-                <p className="text-[10px] font-semibold uppercase text-sky-400">Borrow</p>
+                <p className="text-[10px] font-semibold uppercase text-sky-400">
+                  Borrow
+                </p>
                 <p className="mt-1 text-xs font-bold text-white">Request loan</p>
               </button>
             </div>
 
-            {/* Officials: all members summary */}
             {isOfficial && (
               <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
                 <p className="text-sm font-bold text-white">All loans (officials)</p>
-                <p className="mt-0.5 text-[11px] text-slate-500">Summary only — open See more for full detail</p>
+                <p className="mt-0.5 text-[11px] text-slate-500">
+                  View-only summary. Members manage their own repayments.
+                </p>
                 {loans.filter((p) => p.type === "loan").length === 0 ? (
                   <p className="mt-3 text-xs text-slate-500">No loans yet.</p>
                 ) : (
-                  <div className="mt-3 divide-y divide-slate-800">
+                  <div className="mt-3 space-y-2">
                     {loans
                       .filter((p) => p.type === "loan")
                       .map((p) => {
-                        const who = members.find((m) => m.id === p.requesterId)?.name ?? "Member";
+                        const who =
+                          members.find((m) => m.id === p.requesterId)?.name ??
+                          "Member";
                         const bal = outstandingOf(p);
                         return (
                           <OfficialLoanSummary
@@ -269,7 +306,7 @@ export default function LoansAndLedger({
                             onReschedule={onReschedule}
                             canDisburse={canDisburse}
                             onDisburse={onDisburse}
-                            onPartialRepay={onPartialRepay}
+                            onPartialRepay={undefined}
                           />
                         );
                       })}
@@ -278,18 +315,19 @@ export default function LoansAndLedger({
               </div>
             )}
 
-            {/* Member: own loans only */}
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
               <p className="text-sm font-bold text-white">
                 {isOfficial ? "My loans" : "Your loans"}
               </p>
               <p className="mt-0.5 text-[11px] text-slate-500">
-                Only your own facilities. Expand to repay.
+                Expand to view schedule and repay.
               </p>
               {myLoans.length === 0 ? (
-                <p className="mt-3 text-xs text-slate-500">You have no loan applications.</p>
+                <p className="mt-3 text-xs text-slate-500">
+                  You have no loan applications.
+                </p>
               ) : (
-                <div className="mt-3 divide-y divide-slate-800">
+                <div className="mt-3 space-y-2">
                   {myLoans.map((p) => (
                     <MemberLoanRow
                       key={p.id}
@@ -316,7 +354,6 @@ export default function LoansAndLedger({
             transition={{ duration: 0.2, ease: "easeOut" }}
             className="space-y-4"
           >
-            {/* Filters */}
             <div className="flex flex-col gap-2.5 rounded-2xl border border-slate-800 bg-slate-900/70 p-3 sm:flex-row sm:items-center">
               <div className="flex flex-1 items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2">
                 <MagnifyingGlass size={15} className="text-slate-500" />
@@ -327,7 +364,11 @@ export default function LoansAndLedger({
                   className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-600"
                 />
                 {query && (
-                  <button onClick={() => setQuery("")} className="text-slate-500 hover:text-white" aria-label="Clear">
+                  <button
+                    onClick={() => setQuery("")}
+                    className="text-slate-500 hover:text-white"
+                    aria-label="Clear"
+                  >
                     <X size={14} />
                   </button>
                 )}
@@ -352,87 +393,74 @@ export default function LoansAndLedger({
                   onChange={setMemberFilter}
                   options={[
                     ["all", "All members"],
-                    ...members.map((m) => [m.id, m.name.split(" ")[0]] as [string, string]),
+                    ...members.map(
+                      (m) => [m.id, m.name.split(" ")[0]] as [string, string],
+                    ),
                   ]}
                   icon={<PencilSimple size={14} />}
                 />
               </div>
             </div>
 
-            {/* Ledger table */}
             <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70">
               <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-                <div className="flex items-center gap-2 text-sm font-bold text-white">
-                  <ClockCounterClockwise size={16} className="text-emerald-400" />
-                  Immutable Audit Trail
-                  <span className="hidden rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-400 sm:inline">
-                    tamper-evident references
-                  </span>
-                </div>
+                <p className="text-sm font-bold text-white">Audit ledger</p>
                 <button
+                  type="button"
                   onClick={exportCsv}
-                  className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-950/60 px-2.5 py-1.5 text-[11px] font-bold text-slate-300 transition hover:border-emerald-500/50 hover:text-emerald-300"
+                  className="flex items-center gap-1.5 rounded-lg border border-slate-700 px-2.5 py-1.5 text-[11px] font-bold text-slate-300 hover:border-slate-500"
                 >
-                  <FileCsv size={13} className="text-emerald-400" /> CSV
-                  <Download size={12} />
+                  <FileCsv size={14} /> Export
                 </button>
               </div>
-
-              {filteredLedger.length === 0 ? (
-                <div className="flex flex-col items-center py-12 text-center">
-                  <Receipt size={28} className="text-slate-600" />
-                  <p className="mt-2 text-sm font-semibold text-slate-300">No ledger entries match</p>
-                  <p className="text-xs text-slate-500">Try clearing the search or filters.</p>
-                </div>
-              ) : (
-                <div className="max-h-[520px] overflow-y-auto">
+              <div className="max-h-96 overflow-y-auto">
+                {filteredLedger.length === 0 ? (
+                  <p className="p-6 text-center text-sm text-slate-500">
+                    No ledger entries yet.
+                  </p>
+                ) : (
                   <table className="w-full text-left text-xs">
-                    <thead className="sticky top-0 z-10 bg-slate-900 text-[10px] uppercase tracking-[0.12em] text-slate-500">
+                    <thead className="sticky top-0 bg-slate-900 text-slate-500">
                       <tr>
-                        <th className="px-4 py-2.5 font-semibold">Ref</th>
-                        <th className="px-3 py-2.5 font-semibold">Date</th>
-                        <th className="px-3 py-2.5 font-semibold">Member</th>
-                        <th className="hidden px-3 py-2.5 font-semibold sm:table-cell">Event</th>
-                        <th className="px-3 py-2.5 text-right font-semibold">Amount</th>
+                        <th className="px-4 py-2 font-semibold">Date</th>
+                        <th className="px-4 py-2 font-semibold">Member</th>
+                        <th className="px-4 py-2 font-semibold">Type</th>
+                        <th className="px-4 py-2 font-semibold">Description</th>
+                        <th className="px-4 py-2 font-semibold text-right">
+                          Amount
+                        </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800/70">
-                      {filteredLedger.map((e) => {
-                        const m = memberById(e.memberId, members);
-                        return (
-                          <tr key={e.id} className="transition hover:bg-slate-800/40">
-                            <td className="px-4 py-3 font-mono text-[10px] text-slate-500">{e.reference}</td>
-                            <td className="px-3 py-3 whitespace-nowrap text-slate-400">{fmtDate(e.timestamp)}</td>
-                            <td className="px-3 py-3">
-                              <span className="flex items-center gap-1.5">
-                                <span
-                                  className="flex h-5 w-5 items-center justify-center rounded text-[8px] font-bold text-white"
-                                  style={{
-                                    background: `linear-gradient(135deg, hsl(${m.avatarHue} 65% 42%), hsl(${(m.avatarHue + 40) % 360} 70% 30%))`,
-                                  }}
-                                >
-                                  {m.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
-                                </span>
-                                <span className="hidden font-medium text-slate-300 sm:inline">{m.name.split(" ")[0]}</span>
-                              </span>
-                            </td>
-                            <td className="hidden px-3 py-3 sm:table-cell">
-                              <div className="flex items-center gap-2">
-                                <TypePill type={e.type} />
-                                <span className="text-slate-400">{e.description}</span>
-                              </div>
-                            </td>
-                            <td className="px-3 py-3 text-right font-mono font-bold tabular-nums text-slate-200">
-                              {e.type === "withdrawal" || e.type === "loan-disbursed" ? "−" : "+"}
-                              {fmtKsh(e.amount)}
-                            </td>
-                          </tr>
-                        );
-                      })}
+                    <tbody>
+                      {filteredLedger.map((e) => (
+                        <tr
+                          key={e.id}
+                          className="border-t border-slate-800/80 text-slate-300"
+                        >
+                          <td className="px-4 py-2 whitespace-nowrap">
+                            {fmtDate(e.timestamp)}
+                          </td>
+                          <td className="px-4 py-2">
+                            {memberById(e.memberId, members).name}
+                          </td>
+                          <td className="px-4 py-2">
+                            <TypePill type={e.type} />
+                          </td>
+                          <td className="px-4 py-2 max-w-xs truncate">
+                            {e.description}
+                          </td>
+                          <td className="px-4 py-2 text-right font-mono">
+                            {e.type === "withdrawal" || e.type === "loan-disbursed"
+                              ? "−"
+                              : "+"}
+                            {fmtKsh(e.amount)}
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </motion.div>
         )}
@@ -440,8 +468,6 @@ export default function LoansAndLedger({
     </section>
   );
 }
-
-
 
 function LoanRatesChairPanel({
   chama,
@@ -460,14 +486,19 @@ function LoanRatesChairPanel({
   const [defaultRate, setDefaultRate] = useState(
     chama?.constitution?.loanInterestMonthlyPercent ?? 10,
   );
-  const [options, setOptions] = useState<{ label: string; monthlyPercent: number }[]>(
-    () =>
-      chama?.constitution?.loanInterestOptions?.length
-        ? [...chama.constitution.loanInterestOptions]
-        : [
-            { label: "Standard", monthlyPercent: chama?.constitution?.loanInterestMonthlyPercent ?? 10 },
-            { label: "Welfare", monthlyPercent: 5 },
-          ],
+  const [options, setOptions] = useState<
+    { label: string; monthlyPercent: number }[]
+  >(() =>
+    chama?.constitution?.loanInterestOptions?.length
+      ? [...chama.constitution.loanInterestOptions]
+      : [
+          {
+            label: "Standard",
+            monthlyPercent:
+              chama?.constitution?.loanInterestMonthlyPercent ?? 10,
+          },
+          { label: "Welfare", monthlyPercent: 5 },
+        ],
   );
   const [saving, setSaving] = useState(false);
 
@@ -495,16 +526,21 @@ function LoanRatesChairPanel({
     <div className="rounded-2xl border border-amber-500/30 bg-amber-950/20 p-4">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="text-sm font-bold text-white">Loan interest rates (Chairperson)</p>
+          <p className="text-sm font-bold text-white">
+            Loan interest rates (Chairperson)
+          </p>
           <p className="mt-0.5 text-[11px] text-slate-400">
-            Set the default monthly flat rate and optional named rates members can pick when proposing a loan.
+            Set the default monthly flat rate and optional named rates members
+            can pick when proposing a loan.
           </p>
         </div>
       </div>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="text-[11px] font-semibold text-slate-500">Default % per month (flat on principal)</span>
+          <span className="text-[11px] font-semibold text-slate-500">
+            Default % per month (flat on principal)
+          </span>
           <input
             type="number"
             min={0}
@@ -518,14 +554,18 @@ function LoanRatesChairPanel({
       </div>
 
       <div className="mt-3 space-y-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Rate options</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          Rate options
+        </p>
         {options.map((opt, idx) => (
           <div key={idx} className="flex flex-wrap items-center gap-2">
             <input
               value={opt.label}
               onChange={(e) =>
                 setOptions((prev) =>
-                  prev.map((o, i) => (i === idx ? { ...o, label: e.target.value } : o)),
+                  prev.map((o, i) =>
+                    i === idx ? { ...o, label: e.target.value } : o,
+                  ),
                 )
               }
               placeholder="Label e.g. Welfare"
@@ -540,7 +580,9 @@ function LoanRatesChairPanel({
               onChange={(e) =>
                 setOptions((prev) =>
                   prev.map((o, i) =>
-                    i === idx ? { ...o, monthlyPercent: Number(e.target.value) || 0 } : o,
+                    i === idx
+                      ? { ...o, monthlyPercent: Number(e.target.value) || 0 }
+                      : o,
                   ),
                 )
               }
@@ -558,7 +600,12 @@ function LoanRatesChairPanel({
         ))}
         <button
           type="button"
-          onClick={addOption}
+          onClick={() =>
+            setOptions((prev) => [
+              ...prev,
+              { label: "New rate", monthlyPercent: 10 },
+            ])
+          }
           className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300"
         >
           + Add rate option
@@ -577,6 +624,15 @@ function LoanRatesChairPanel({
   );
 }
 
+function outstandingOf(p: Proposal): number {
+  if (p.status === "settled") return 0;
+  if (p.repayment?.schedule?.length) {
+    return p.repayment.schedule
+      .filter((s) => !s.paid)
+      .reduce((a, s) => a + s.amount, 0);
+  }
+  return p.amount;
+}
 
 
 const PAY_METHODS = [
@@ -602,10 +658,18 @@ function OfficialLoanSummary({
   balance: number;
   members: Member[];
   onRepay: (id: string) => void;
-  onReschedule: LoansAndLedgerProps["onReschedule"];
+  onReschedule: (
+    proposalId: string,
+    repayment: LoanRepaymentPlan,
+    meta: { mode: "early" | "extend"; settleAmount?: number },
+  ) => void;
   canDisburse: boolean;
   onDisburse: (id: string) => void | Promise<void>;
-  onPartialRepay?: LoansAndLedgerProps["onPartialRepay"];
+  onPartialRepay?: (
+    proposalId: string,
+    amount: number,
+    method: string,
+  ) => void | Promise<void>;
 }) {
   const [more, setMore] = useState(false);
   return (
@@ -614,7 +678,8 @@ function OfficialLoanSummary({
         <div>
           <p className="text-sm font-semibold text-white">{memberName}</p>
           <p className="text-[11px] text-slate-500">
-            {proposal.status} · {fmtKsh(proposal.amount)} principal · balance {fmtKsh(balance)}
+            {proposal.status} · {fmtKsh(proposal.amount)} principal · balance{" "}
+            {fmtKsh(balance)}
           </p>
         </div>
         <button
@@ -627,7 +692,9 @@ function OfficialLoanSummary({
       </div>
       {more && (
         <div className="mt-3 space-y-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-          <p className="text-[11px] text-slate-400">{proposal.reason || proposal.title}</p>
+          <p className="text-[11px] text-slate-400">
+            {proposal.reason || proposal.title}
+          </p>
           {proposal.repayment?.schedule?.map((s, i) => (
             <div key={i} className="flex justify-between text-[11px]">
               <span className="text-slate-500">
@@ -689,17 +756,21 @@ function MemberLoanRow({
             {proposal.status} · balance {fmtKsh(balance)}
           </p>
         </div>
-        <span className="text-[11px] font-bold text-emerald-400">{open ? "Close" : "View"}</span>
+        <span className="text-[11px] font-bold text-emerald-400">
+          {open ? "Close" : "View"}
+        </span>
       </button>
       {open && (
         <div className="mt-3 space-y-3">
-          {(proposal.status === "disbursed" || proposal.status === "approved") && balance > 0 && onPartialRepay && (
-            <RepayPanel
-              proposalId={proposal.id}
-              fullBalance={balance}
-              onPartialRepay={onPartialRepay}
-            />
-          )}
+          {(proposal.status === "disbursed" || proposal.status === "approved") &&
+            balance > 0 &&
+            onPartialRepay && (
+              <RepayPanel
+                proposalId={proposal.id}
+                fullBalance={balance}
+                onPartialRepay={onPartialRepay}
+              />
+            )}
           <LoanCard
             proposal={proposal}
             members={members}
@@ -722,7 +793,11 @@ function RepayPanel({
 }: {
   proposalId: string;
   fullBalance: number;
-  onPartialRepay: NonNullable<LoansAndLedgerProps["onPartialRepay"]>;
+  onPartialRepay: (
+    proposalId: string,
+    amount: number,
+    method: string,
+  ) => void | Promise<void>;
 }) {
   const [amount, setAmount] = useState(fullBalance);
   const [method, setMethod] = useState<string>(PAY_METHODS[0].id);
@@ -750,9 +825,13 @@ function RepayPanel({
     <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
       <p className="text-xs font-bold text-emerald-300">Repay loan</p>
       <p className="mt-1 text-[11px] text-slate-400">
-        Full balance <span className="font-mono text-white">{fmtKsh(fullBalance)}</span> — edit what you pay now
+        Full balance{" "}
+        <span className="font-mono text-white">{fmtKsh(fullBalance)}</span> — edit
+        what you pay now
       </p>
-      <label className="mt-2 block text-[10px] font-semibold uppercase text-slate-500">Amount (KES)</label>
+      <label className="mt-2 block text-[10px] font-semibold uppercase text-slate-500">
+        Amount (KES)
+      </label>
       <input
         type="number"
         min={1}
@@ -764,9 +843,13 @@ function RepayPanel({
       />
       <p className="mt-1 text-[11px] text-slate-500">
         After payment, balance will be{" "}
-        <span className="font-mono font-semibold text-amber-300">{fmtKsh(remaining)}</span>
+        <span className="font-mono font-semibold text-amber-300">
+          {fmtKsh(remaining)}
+        </span>
       </p>
-      <label className="mt-2 block text-[10px] font-semibold uppercase text-slate-500">Pay via</label>
+      <label className="mt-2 block text-[10px] font-semibold uppercase text-slate-500">
+        Pay via
+      </label>
       <select
         value={method}
         onChange={(e) => setMethod(e.target.value)}
@@ -778,7 +861,9 @@ function RepayPanel({
           </option>
         ))}
       </select>
-      <p className="mt-1 text-[10px] text-slate-600">Payment APIs will connect here later — method is recorded now.</p>
+      <p className="mt-1 text-[10px] text-slate-600">
+        Payment APIs will connect here later — method is recorded now.
+      </p>
       <button
         type="button"
         disabled={busy}
@@ -792,11 +877,8 @@ function RepayPanel({
 }
 
 
-/* ---------- Loan card ---------- */
-
 function ensurePlan(proposal: Proposal): LoanRepaymentPlan {
   if (proposal.repayment?.schedule?.length) return proposal.repayment;
-  // Default: 3 months @ 10% of principal per month flat
   const months = 3;
   const monthlyInterest = proposal.amount * 0.1;
   const totalInterest = monthlyInterest * months;
@@ -840,80 +922,15 @@ function LoanCard({
   canDisburse: boolean;
   onDisburse: (proposalId: string) => void | Promise<void>;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(defaultOpen);
   const requester = memberById(proposal.requesterId, members);
   const plan = ensurePlan(proposal);
   const paidCount = plan.schedule.filter((s) => s.paid).length;
   const totalInstallments = plan.schedule.length;
   const unpaidCount = totalInstallments - paidCount;
-  const remaining = plan.schedule.filter((s) => !s.paid).reduce((a, s) => a + s.amount, 0);
-  const monthlyRate = (plan.interestRate ?? 10) / 100;
-  const monthlyInterest = proposal.amount * monthlyRate;
-  const unpaidPrincipal =
-    totalInstallments > 0 ? proposal.amount * (unpaidCount / totalInstallments) : proposal.amount;
-
-  const [extendMonths, setExtendMonths] = useState(Math.max(unpaidCount, 3) || 3);
-
-  const previewExtend = (() => {
-    const months = extendMonths;
-    const totalInterest = monthlyInterest * months;
-    const totalRepay = unpaidPrincipal + totalInterest;
-    const installment = months > 0 ? totalRepay / months : 0;
-    return {
-      months,
-      totalInterest: Math.round(totalInterest * 100) / 100,
-      totalRepay: Math.round(totalRepay * 100) / 100,
-      installment: Math.round(installment * 100) / 100,
-    };
-  })();
-
-  const earlyAmount = Math.round(unpaidPrincipal * 100) / 100;
-  const waivedInterest = Math.round(Math.max(0, remaining - earlyAmount) * 100) / 100;
-
-  const handlePayEarly = () => {
-    if (unpaidCount <= 0) return;
-    const ok = window.confirm(
-      `Pay early / settle?\n\nRemaining principal: ${fmtKsh(earlyAmount)}\nInterest waived: ${fmtKsh(waivedInterest)}\n\nConfirm settlement.`,
-    );
-    if (!ok) return;
-    onReschedule(
-      proposal.id,
-      { ...plan, schedule: plan.schedule.map((s) => ({ ...s, paid: true })) },
-      { mode: "early", settleAmount: earlyAmount },
-    );
-  };
-
-  const handleApplyExtend = () => {
-    if (unpaidCount <= 0) return;
-    const months = Math.max(1, Math.min(24, extendMonths));
-    const totalInterest = monthlyInterest * months;
-    const totalRepay = unpaidPrincipal + totalInterest;
-    const installment = totalRepay / months;
-    const startDate = new Date();
-    const paidPart = plan.schedule.filter((s) => s.paid);
-    const newUnpaid = Array.from({ length: months }, (_, i) => {
-      const due = new Date(startDate);
-      due.setMonth(due.getMonth() + i + 1);
-      return {
-        dueDate: due.toISOString().slice(0, 10),
-        amount: Math.round(installment * 100) / 100,
-        paid: false,
-      };
-    });
-    onReschedule(
-      proposal.id,
-      {
-        interestRate: plan.interestRate ?? 10,
-        interestModel: "flat",
-        installments: paidPart.length + months,
-        schedule: [...paidPart, ...newUnpaid],
-      },
-      { mode: "extend" },
-    );
-    toast.success(`Schedule updated: ${months} × ${fmtKsh(installment)}`);
-  };
-
-  const canManage = proposal.status !== "settled" && proposal.status !== "rejected" && unpaidCount > 0;
+  const remaining = plan.schedule
+    .filter((s) => !s.paid)
+    .reduce((a, s) => a + s.amount, 0);
 
   const statusChip =
     proposal.status === "approved"
@@ -925,176 +942,83 @@ function LoanCard({
           : "border-slate-600 bg-slate-800/60 text-slate-300";
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-lg shadow-black/20 sm:p-5">
+    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${statusChip}`}>
-              {proposal.status}
-            </span>
-            <span className="font-mono text-[10px] text-slate-500">#{proposal.id.slice(-6)}</span>
-          </div>
-          <h3 className="mt-2 text-sm font-bold leading-snug text-white">{proposal.title}</h3>
+          <span
+            className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${statusChip}`}
+          >
+            {proposal.status}
+          </span>
+          <h3 className="mt-2 text-sm font-bold text-white">{proposal.title}</h3>
           {proposal.reason && (
-            <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{proposal.reason}</p>
+            <p className="mt-1 text-[11px] text-slate-500">{proposal.reason}</p>
           )}
         </div>
-        <span className="shrink-0 font-mono text-lg font-bold tabular-nums text-emerald-300">
+        <span className="font-mono text-lg font-bold text-emerald-300">
           {fmtKsh(proposal.amount)}
         </span>
       </div>
 
-      <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
-        <span className="font-semibold text-slate-300">{requester.name}</span>
-        <span className="text-slate-600">·</span>
-        <span>
-          {paidCount}/{totalInstallments} paid · {fmtKsh(remaining)} left
-        </span>
+      <div className="mt-3 text-xs text-slate-400">
+        {requester.name}
+        {proposal.disbursedAt && (
+          <span> · Disbursed {fmtDate(proposal.disbursedAt)}</span>
+        )}
       </div>
 
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800">
+      <div className="mt-3 flex items-center justify-between text-[11px]">
+        <span className="font-semibold uppercase tracking-[0.12em] text-slate-500">
+          Repayment {paidCount}/{totalInstallments}
+        </span>
+        <span className="font-mono font-bold text-slate-300">
+          {fmtKsh(remaining)} left · {plan.interestRate}% / mo
+        </span>
+      </div>
+      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-800">
         <div
           className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400"
-          style={{ width: `${totalInstallments ? (paidCount / totalInstallments) * 100 : 0}%` }}
+          style={{
+            width: `${totalInstallments ? (paidCount / totalInstallments) * 100 : 0}%`,
+          }}
         />
       </div>
 
-      {/* Always-visible repayment tools */}
-      {canManage && (
-        <div className="mt-4 space-y-3 rounded-xl border border-violet-500/25 bg-violet-950/20 p-3">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-violet-200">
-            Change repayment
-          </p>
-          <p className="text-[11px] text-slate-400">
-            Rate: <span className="text-slate-200">{plan.interestRate ?? 10}% of principal / month flat</span> (
-            {fmtKsh(monthlyInterest)}/mo on {fmtKsh(proposal.amount)}). Paying early drops future interest.
-          </p>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
-              <p className="text-[11px] font-semibold text-emerald-300">Pay early</p>
-              <p className="mt-1 text-[11px] text-slate-400">
-                Settle principal now: <span className="font-mono font-bold text-white">{fmtKsh(earlyAmount)}</span>
-              </p>
-              <p className="text-[10px] text-slate-500">Interest waived: {fmtKsh(waivedInterest)}</p>
-              <button
-                type="button"
-                onClick={handlePayEarly}
-                className="mt-2 w-full rounded-lg bg-emerald-500 py-2 text-xs font-bold text-white hover:bg-emerald-400"
-              >
-                Confirm early settlement
-              </button>
-            </div>
-
-            <div className="rounded-xl border border-violet-500/30 bg-violet-500/5 p-3">
-              <p className="text-[11px] font-semibold text-violet-200">Extend / recalculate</p>
-              <label className="mt-1 block text-[10px] text-slate-500">Remaining installments</label>
-              <select
-                value={extendMonths}
-                onChange={(e) => setExtendMonths(Number(e.target.value))}
-                className="mt-0.5 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm font-semibold text-white"
-              >
-                {[1, 2, 3, 6, 9, 12, 18, 24].map((m) => (
-                  <option key={m} value={m}>
-                    {m} month{m > 1 ? "s" : ""}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1.5 text-[10px] text-slate-400">
-                New payment: <span className="font-mono font-bold text-white">{fmtKsh(previewExtend.installment)}</span>
-                {" · "}
-                Total: <span className="font-mono text-emerald-300">{fmtKsh(previewExtend.totalRepay)}</span>
-                {" · "}
-                Interest: <span className="font-mono text-amber-200">{fmtKsh(previewExtend.totalInterest)}</span>
-              </p>
-              <button
-                type="button"
-                onClick={handleApplyExtend}
-                className="mt-2 w-full rounded-lg bg-violet-500 py-2 text-xs font-bold text-white hover:bg-violet-400"
-              >
-                Apply new schedule
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        {proposal.status === "approved" && (
-          <button
-            type="button"
-            disabled={!canDisburse}
-            onClick={() => void onDisburse(proposal.id)}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold shadow-md ${
-              canDisburse
-                ? "bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-sky-500/20"
-                : "cursor-not-allowed border border-slate-700 bg-slate-800 text-slate-500 shadow-none"
-            }`}
-            title={canDisburse ? "Only the official Treasurer can disburse this loan" : "Treasurer-only action"}
-          >
-            <Check size={15} weight="bold" /> {canDisburse ? "Disburse loan" : "Treasurer disbursement only"}
-          </button>
-        )}
-        {(proposal.status === "approved" ||
-          proposal.status === "disbursed" ||
-          proposal.status === "active") &&
-          unpaidCount > 0 && (
-            <button
-              type="button"
-              onClick={() => onRepay(proposal.id)}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-500/20"
-            >
-              <ArrowsCounterClockwise size={15} /> Mark next installment paid
-            </button>
-          )}
-        {proposal.status === "settled" && (
-          <span className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 py-2.5 text-xs font-bold text-emerald-300">
-            <CheckCircle size={15} weight="fill" /> Fully settled
-          </span>
-        )}
+      {proposal.status === "approved" && onDisburse && (
         <button
           type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="rounded-xl border border-slate-700 px-3 py-2.5 text-[11px] font-bold text-slate-400 hover:text-white"
+          disabled={!canDisburse}
+          onClick={() => void onDisburse(proposal.id)}
+          className={`mt-3 w-full rounded-xl py-2.5 text-xs font-bold ${
+            canDisburse
+              ? "bg-sky-500 text-white"
+              : "cursor-not-allowed bg-slate-800 text-slate-500"
+          }`}
         >
-          {open ? "Hide schedule" : "Show schedule"}
+          {canDisburse ? "Disburse loan" : "Treasurer only"}
         </button>
-      </div>
+      )}
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
+      <div className="mt-3 space-y-1.5 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+        {plan.schedule.map((s, i) => (
+          <div
+            key={`${s.dueDate}-${i}`}
+            className="flex items-center justify-between text-[11px]"
           >
-            <div className="mt-3 space-y-1.5 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-              {plan.schedule.map((s, i) => (
-                <div key={`${s.dueDate}-${i}`} className="flex items-center justify-between text-[11px]">
-                  <span className="flex items-center gap-1.5 text-slate-400">
-                    {s.paid ? (
-                      <Check size={12} weight="bold" className="text-emerald-400" />
-                    ) : (
-                      <ArrowUpRight size={12} className="text-slate-600" />
-                    )}
-                    Installment {i + 1} · {fmtDate(s.dueDate)}
-                  </span>
-                  <span className={`font-mono font-bold ${s.paid ? "text-emerald-400" : "text-slate-300"}`}>
-                    {fmtKsh(s.amount)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <span className="text-slate-400">
+              {s.paid ? "✓" : "○"} #{i + 1} · {fmtDate(s.dueDate)}
+            </span>
+            <span
+              className={`font-mono font-bold ${s.paid ? "text-emerald-400" : "text-slate-300"}`}
+            >
+              {fmtKsh(s.amount)}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
-
-/* ---------- Filter select ---------- */
-
 
 function FilterSelect({
   value,
@@ -1109,54 +1033,44 @@ function FilterSelect({
 }) {
   return (
     <div className="relative">
-      <div className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-950/60 px-2.5 py-2 text-[11px] font-semibold text-slate-300">
+      <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500">
         {icon}
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="appearance-none bg-transparent pr-4 text-[11px] font-semibold text-slate-300 outline-none"
-        >
-          {options.map(([v, label]) => (
-            <option key={v} value={v} className="bg-slate-900 text-slate-200">
-              {label}
-            </option>
-          ))}
-        </select>
-        <CaretDownMini />
-      </div>
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="appearance-none rounded-xl border border-slate-700 bg-slate-950/80 py-2 pl-8 pr-8 text-xs font-semibold text-slate-200 outline-none focus:border-emerald-500/60"
+      >
+        {options.map(([v, label]) => (
+          <option key={v} value={v}>
+            {label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
 
-/* ---------- Type pill ---------- */
-
 function TypePill({ type }: { type: AuditType }) {
-  const map: Record<AuditType, { label: string; cls: string }> = {
-    contribution: { label: "Contribution", cls: "bg-emerald-500/10 text-emerald-300" },
-    "loan-disbursed": { label: "Disbursement", cls: "bg-sky-500/10 text-sky-300" },
-    repayment: { label: "Repayment", cls: "bg-teal-500/10 text-teal-300" },
-    withdrawal: { label: "Withdrawal", cls: "bg-amber-400/10 text-amber-300" },
-    vote: { label: "Vote", cls: "bg-violet-500/10 text-violet-300" },
-    penalty: { label: "Penalty", cls: "bg-rose-500/10 text-rose-300" },
+  const styles: Record<string, string> = {
+    contribution: "bg-emerald-500/10 text-emerald-300",
+    "loan-disbursed": "bg-sky-500/10 text-sky-300",
+    repayment: "bg-teal-500/10 text-teal-300",
+    withdrawal: "bg-amber-500/10 text-amber-300",
+    vote: "bg-violet-500/10 text-violet-300",
+    penalty: "bg-rose-500/10 text-rose-300",
   };
-  const t = map[type];
-  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${t.cls}`}>{t.label}</span>;
-}
-
-function CaretDownMini({ open }: { open?: boolean }) {
   return (
-    <svg
-      width="11"
-      height="11"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={`shrink-0 text-slate-500 transition-transform ${open ? "rotate-180" : ""}`}
+    <span
+      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${styles[type] ?? "bg-slate-800 text-slate-400"}`}
     >
-      <path d="m6 9 6 6 6-6" />
-    </svg>
+      {type}
+    </span>
   );
 }
+'''
+
+print("Need to write complete clean file")
+p.write_text(t)
+print("done intermediate")
+PY
