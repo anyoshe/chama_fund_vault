@@ -626,22 +626,29 @@ function OfficialLoanSummary({
         </button>
       </div>
       {more && (
-        <div className="mt-3">
-          <LoanCard
-            proposal={proposal}
-            members={members}
-            defaultOpen
-            onRepay={onRepay}
-            onReschedule={onReschedule}
-            canDisburse={canDisburse}
-            onDisburse={onDisburse}
-          />
-          {onPartialRepay && balance > 0 && proposal.status === "disbursed" && (
-            <RepayPanel
-              proposalId={proposal.id}
-              fullBalance={balance}
-              onPartialRepay={onPartialRepay}
-            />
+        <div className="mt-3 space-y-2 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+          <p className="text-[11px] text-slate-400">{proposal.reason || proposal.title}</p>
+          {proposal.repayment?.schedule?.map((s, i) => (
+            <div key={i} className="flex justify-between text-[11px]">
+              <span className="text-slate-500">
+                {s.paid ? "✓" : "○"} #{i + 1} · {fmtDate(s.dueDate)}
+              </span>
+              <span className="font-mono text-slate-300">{fmtKsh(s.amount)}</span>
+            </div>
+          ))}
+          {proposal.status === "approved" && onDisburse && (
+            <button
+              type="button"
+              disabled={!canDisburse}
+              onClick={() => void onDisburse(proposal.id)}
+              className={`mt-2 w-full rounded-lg py-2 text-xs font-bold ${
+                canDisburse
+                  ? "bg-sky-500 text-white"
+                  : "cursor-not-allowed bg-slate-800 text-slate-500"
+              }`}
+            >
+              {canDisburse ? "Disburse loan" : "Treasurer only"}
+            </button>
           )}
         </div>
       )}
