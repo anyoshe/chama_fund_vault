@@ -148,6 +148,10 @@ export interface DisbursementDetails {
   reference?: string;
   confirmedBy: string;
   confirmedAt: string;
+  /** Frozen kit mix used to fund this loan (for principal restore) */
+  fundingAllocations?: Record<string, number>;
+  /** Loan book reference in Supabase */
+  loanRef?: string;
 }
 
 export interface LoanRepaymentPlan {
@@ -198,6 +202,13 @@ export interface Chama {
     loanInterestMonthlyPercent?: number;
     /** Optional named rates chair can offer (e.g. welfare 5, standard 10) */
     loanInterestOptions?: { label: string; monthlyPercent: number }[];
+    /** % of loan interest retained in group-reserve kit (default 20) */
+    interestReservePercent?: number;
+    /**
+     * How remaining interest is split among members:
+     * share-capital | four-kits | table-banking | member-loans
+     */
+    interestSplitBasis?: "share-capital" | "four-kits" | "table-banking" | "member-loans";
   };
   nextPayout: {
     recipientName: string;

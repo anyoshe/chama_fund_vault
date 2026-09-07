@@ -439,12 +439,44 @@ export default function Dashboard() {
     )?.trim();
     if (transferReference == null) return;
     const confirmedAt = new Date().toISOString();
-    const { error } = await supabase.rpc("disburse_from_loan_fund", {
+        const interestTotal =
+      target.repayment?.schedule?.reduce((s, x) => s + x.amount, 0) != null
+        ? Math.max(
+            0,
+            (target.repayment.schedule.reduce((s, x) => s + x.amount, 0) || 0) - target.amount,
+          )
+        : 0;
+
+    const { data: disbData, error } = await supabase.rpc("disburse_from_loan_fund", {
       p_chama_id: activeChamaId,
       p_amount: target.amount,
       p_borrower_id: target.requesterId,
       p_reference: `DISB-${target.id}`,
+      p_interest_total: interestTotal,
     });
+    if (error) {
+      console.error(error);
+      toast.error(error.message || "Loan could not be disbursed.");
+      return;
+    }
+    const loanRef =
+      (disbData as { loan_ref?: string; reference?: string } | null)?.loan_ref ||
+      (disbData as { reference?: string } | null)?.reference ||
+      `DISB-${target.id}`;
+    const fundingAllocations =
+      ((disbData as { allocations?: Record<string, number> } | null)?.allocations as
+        | Record<string, number>
+        | undefined) || {};
+
+    setProposals((prev) =>
+      prev.map((p) =>
+        p.id === proposalId
+          ? {
+              ...p,
+              status: "disbursed" as const,
+              disbursedAt: confirmedAt,
+              disbursement: {
+
     if (error) {
       toast.error(error.message || "Loan could not be disbursed.");
       return;
@@ -463,6 +495,8 @@ export default function Dashboard() {
                 reference: transferReference || undefined,
                 confirmedBy: currentMemberId,
                 confirmedAt,
+                loanRef,
+                fundingAllocations,
               },
             }
           : proposal,
@@ -629,14 +663,37 @@ export default function Dashboard() {
       ),
     );
     if (activeChamaId) {
-      const { error } = await supabase.rpc("credit_loan_fund", {
+      const loanRef =
+        target.disbursement?.loanRef ||
+        target.disbursement?.reference ||
+        `DISB-${proposalId}`;
+      const { data: repayData, error } = await supabase.rpc("repay_loan", {
         p_chama_id: activeChamaId,
+        p_loan_ref: loanRef,
         p_amount: amount,
         p_reference: `PAY-${proposalId}-${Date.now()}`,
       });
       if (error) {
-        toast.error(error.message);
-        return;
+        // Fallback for loans disbursed before loan_books existed
+        const { error: fb } = await supabase.rpc("credit_loan_fund", {
+          p_chama_id: activeChamaId,
+          p_amount: amount,
+          p_reference: `PAY-${proposalId}-${Date.now()}`,
+        });
+        if (fb) {
+          toast.error(error.message || fb.message);
+          return;
+        }
+      } else if (repayData) {
+        const rd = repayData as {
+          principal_applied?: number;
+          interest_applied?: number;
+          reserve_amount?: number;
+          member_interest_pool?: number;
+        };
+        toast.message(
+          `Principal ${fmtKsh(Number(rd.principal_applied || 0))} restored · Interest ${fmtKsh(Number(rd.interest_applied || 0))} (reserve ${fmtKsh(Number(rd.reserve_amount || 0))})`,
+        );
       }
       const { data: kitRows } = await supabase.rpc("list_chama_kits", {
         p_chama_id: activeChamaId,
@@ -922,6 +979,14 @@ export default function Dashboard() {
                     ...chama.constitution,
                     loanInterestMonthlyPercent: next.defaultMonthlyPercent,
                     loanInterestOptions: next.options,
+                    interestReservePercent:
+                      next.interestReservePercent ??
+                      chama.constitution.interestReservePercent ??
+                      20,
+                    interestSplitBasis:
+                      next.interestSplitBasis ??
+                      chama.constitution.interestSplitBasis ??
+                      "share-capital",
                   };
                   const { error } = await supabase
                     .from("chamas")

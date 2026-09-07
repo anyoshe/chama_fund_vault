@@ -58,6 +58,8 @@ interface LoansAndLedgerProps {
   onSaveLoanRates?: (next: {
     defaultMonthlyPercent: number;
     options: { label: string; monthlyPercent: number }[];
+    interestReservePercent?: number;
+    interestSplitBasis?: "share-capital" | "four-kits" | "table-banking" | "member-loans";
   }) => void | Promise<void>;
 }
 
@@ -490,6 +492,8 @@ function LoanRatesChairPanel({
   onSaveLoanRates?: (next: {
     defaultMonthlyPercent: number;
     options: { label: string; monthlyPercent: number }[];
+    interestReservePercent?: number;
+    interestSplitBasis?: "share-capital" | "four-kits" | "table-banking" | "member-loans";
   }) => void | Promise<void>;
 }) {
   const me = members.find((m) => m.isCurrentUser);
@@ -497,6 +501,12 @@ function LoanRatesChairPanel({
   const [defaultRate, setDefaultRate] = useState(
     chama?.constitution?.loanInterestMonthlyPercent ?? 10,
   );
+  const [reservePct, setReservePct] = useState(
+    chama?.constitution?.interestReservePercent ?? 20,
+  );
+  const [splitBasis, setSplitBasis] = useState<
+    "share-capital" | "four-kits" | "table-banking" | "member-loans"
+  >(chama?.constitution?.interestSplitBasis ?? "share-capital");
   const [options, setOptions] = useState<
     { label: string; monthlyPercent: number }[]
   >(() =>
@@ -527,6 +537,8 @@ function LoanRatesChairPanel({
       await onSaveLoanRates({
         defaultMonthlyPercent: defaultRate,
         options: options.filter((o) => o.label.trim() && o.monthlyPercent >= 0),
+        interestReservePercent: reservePct,
+        interestSplitBasis: splitBasis,
       });
     } finally {
       setSaving(false);
@@ -562,6 +574,50 @@ function LoanRatesChairPanel({
             className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-semibold text-white"
           />
         </label>
+        <label className="block">
+          <span className="text-[11px] font-semibold text-slate-500">
+            Interest reserve % → Chama reserve account
+          </span>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={1}
+            value={reservePct}
+            onChange={(e) => setReservePct(Number(e.target.value) || 0)}
+            className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-semibold text-white"
+          />
+        </label>
+      </div>
+
+      <div className="mt-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          Interest split basis (remaining after reserve)
+        </p>
+        <div className="mt-2 space-y-1.5">
+          {(
+            [
+              ["share-capital", "Share capital (encourage shareholding)"],
+              ["four-kits", "All four loan pots combined"],
+              ["table-banking", "Table banking only"],
+              ["member-loans", "Member-loans kit only"],
+            ] as const
+          ).map(([value, label]) => (
+            <label
+              key={value}
+              className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-xs text-slate-300"
+            >
+              <input
+                type="radio"
+                name="interestSplitBasis"
+                checked={splitBasis === value}
+                onChange={() => setSplitBasis(value)}
+                className="accent-emerald-500"
+              />
+              {label}
+            </label>
+          ))}
+        </div>
       </div>
 
       <div className="mt-3 space-y-2">
