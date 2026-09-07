@@ -35,6 +35,14 @@ interface LoansAndLedgerProps {
   ) => void;
   canDisburse: boolean;
   onDisburse: (proposalId: string) => void | Promise<void>;
+  onBorrow?: () => void;
+  onPartialRepay?: (
+    proposalId: string,
+    amount: number,
+    method: string,
+  ) => void | Promise<void>;
+  loanLimit?: number;
+  shareBalance?: number;
   onSaveLoanRates?: (next: {
     defaultMonthlyPercent: number;
     options: { label: string; monthlyPercent: number }[];
@@ -51,6 +59,10 @@ export default function LoansAndLedger({
   onReschedule,
   canDisburse,
   onDisburse,
+  onBorrow,
+  onPartialRepay,
+  loanLimit = 0,
+  shareBalance = 0,
   onSaveLoanRates,
 }: LoansAndLedgerProps) {
   const [tab, setTab] = useState<"loans" | "ledger">("loans");
@@ -59,9 +71,34 @@ export default function LoansAndLedger({
   const [memberFilter, setMemberFilter] = useState<string>("all");
 
   const loans = useMemo(
-    () => proposals.filter((p) => p.chamaId === chamaId && (p.type === "loan" || p.type === "withdrawal") && p.status !== "rejected"),
-    [proposals, chamaId]
+    () =>
+      proposals.filter(
+        (p) =>
+          p.chamaId === chamaId &&
+          (p.type === "loan" || p.type === "withdrawal") &&
+          p.status !== "rejected",
+      ),
+    [proposals, chamaId],
   );
+
+  const me = members.find((m) => m.isCurrentUser);
+  const isOfficial =
+    me?.role === "Chairperson" ||
+    me?.role === "Treasurer" ||
+    me?.role === "Secretary";
+
+  const myLoans = useMemo(
+    () => loans.filter((p) => p.requesterId === me?.id && p.type === "loan"),
+    [loans, me?.id],
+  );
+
+  const outstandingOf = (p: Proposal) =>
+    p.repayment?.schedule?.filter((s) => !s.paid).reduce((a, s) => a + s.amount, 0) ??
+    (p.status === "settled" ? 0 : p.amount);
+
+  const myOutstanding = myLoans
+    .filter((p) => p.status === "disbursed" || p.status === "approved")
+    .reduce((s, p) => s + outstandingOf(p), 0);
 
   const filteredLedger = useMemo(() => {
     return ledger
@@ -166,19 +203,109 @@ export default function LoansAndLedger({
               </p>
             </div>
 
-            {loans.length === 0 ? (
-              <div className="flex flex-col items-center rounded-2xl border border-dashed border-slate-800 bg-slate-900/50 py-12 text-center">
-                <Wallet size={30} className="text-slate-600" />
-                <p className="mt-3 text-sm font-semibold text-slate-300">No active loans</p>
-                <p className="mt-1 text-xs text-slate-500">Propose a loan from the overview to start your funding vote.</p>
+            {/* Member bank strip */}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+                <p className="text-[10px] font-semibold uppercase text-slate-500">Loan balance</p>
+                <p className="mt-1 font-mono text-sm font-bold text-amber-300">{fmtKsh(myOutstanding)}</p>
               </div>
-            ) : (
-              <div className="grid gap-3 lg:grid-cols-2">
-                {loans.map((p) => (
-                  <LoanCard key={p.id} proposal={p} members={members} defaultOpen={p.status === "approved" || p.status === "disbursed"} onRepay={onRepay} onReschedule={onReschedule} canDisburse={canDisburse} onDisburse={onDisburse} />
-                ))}
+              <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+                <p className="text-[10px] font-semibold uppercase text-slate-500">Loan limit</p>
+                <p className="mt-1 font-mono text-sm font-bold text-emerald-300">{fmtKsh(loanLimit)}</p>
+                <p className="text-[10px] text-slate-500">Shares {fmtKsh(shareBalance)}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const open = myLoans.find(
+                    (p) =>
+                      (p.status === "disbursed" || p.status === "approved") &&
+                      outstandingOf(p) > 0,
+                  );
+                  if (!open) {
+                    toast.message("No open loan balance to repay");
+                    return;
+                  }
+                  document.getElementById(`loan-row-${open.id}`)?.scrollIntoView({ behavior: "smooth" });
+                  toast.message("Open your loan → Repay");
+                }}
+                className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-left transition hover:bg-emerald-500/20"
+              >
+                <p className="text-[10px] font-semibold uppercase text-emerald-400">Repay loan</p>
+                <p className="mt-1 text-xs font-bold text-white">Pay balance</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => onBorrow?.()}
+                className="rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-left transition hover:bg-sky-500/20"
+              >
+                <p className="text-[10px] font-semibold uppercase text-sky-400">Borrow</p>
+                <p className="mt-1 text-xs font-bold text-white">Request loan</p>
+              </button>
+            </div>
+
+            {/* Officials: all members summary */}
+            {isOfficial && (
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                <p className="text-sm font-bold text-white">All loans (officials)</p>
+                <p className="mt-0.5 text-[11px] text-slate-500">Summary only — open See more for full detail</p>
+                {loans.filter((p) => p.type === "loan").length === 0 ? (
+                  <p className="mt-3 text-xs text-slate-500">No loans yet.</p>
+                ) : (
+                  <div className="mt-3 divide-y divide-slate-800">
+                    {loans
+                      .filter((p) => p.type === "loan")
+                      .map((p) => {
+                        const who = members.find((m) => m.id === p.requesterId)?.name ?? "Member";
+                        const bal = outstandingOf(p);
+                        return (
+                          <OfficialLoanSummary
+                            key={p.id}
+                            proposal={p}
+                            memberName={who}
+                            balance={bal}
+                            members={members}
+                            onRepay={onRepay}
+                            onReschedule={onReschedule}
+                            canDisburse={canDisburse}
+                            onDisburse={onDisburse}
+                            onPartialRepay={onPartialRepay}
+                          />
+                        );
+                      })}
+                  </div>
+                )}
               </div>
             )}
+
+            {/* Member: own loans only */}
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+              <p className="text-sm font-bold text-white">
+                {isOfficial ? "My loans" : "Your loans"}
+              </p>
+              <p className="mt-0.5 text-[11px] text-slate-500">
+                Only your own facilities. Expand to repay.
+              </p>
+              {myLoans.length === 0 ? (
+                <p className="mt-3 text-xs text-slate-500">You have no loan applications.</p>
+              ) : (
+                <div className="mt-3 divide-y divide-slate-800">
+                  {myLoans.map((p) => (
+                    <MemberLoanRow
+                      key={p.id}
+                      proposal={p}
+                      balance={outstandingOf(p)}
+                      onPartialRepay={onPartialRepay}
+                      members={members}
+                      onRepay={onRepay}
+                      onReschedule={onReschedule}
+                      canDisburse={canDisburse}
+                      onDisburse={onDisburse}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </motion.div>
         ) : (
           <motion.div
@@ -445,6 +572,213 @@ function LoanRatesChairPanel({
         className="mt-3 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-amber-400 disabled:opacity-60"
       >
         {saving ? "Saving…" : "Save rates for this chama"}
+      </button>
+    </div>
+  );
+}
+
+
+
+const PAY_METHODS = [
+  { id: "M-Pesa STK Push", label: "M-Pesa" },
+  { id: "Airtel Money", label: "Airtel Money" },
+  { id: "Bank EFT / RTGS", label: "Bank transfer" },
+  { id: "PesaLink", label: "PesaLink" },
+] as const;
+
+function OfficialLoanSummary({
+  proposal,
+  memberName,
+  balance,
+  members,
+  onRepay,
+  onReschedule,
+  canDisburse,
+  onDisburse,
+  onPartialRepay,
+}: {
+  proposal: Proposal;
+  memberName: string;
+  balance: number;
+  members: Member[];
+  onRepay: (id: string) => void;
+  onReschedule: LoansAndLedgerProps["onReschedule"];
+  canDisburse: boolean;
+  onDisburse: (id: string) => void | Promise<void>;
+  onPartialRepay?: LoansAndLedgerProps["onPartialRepay"];
+}) {
+  const [more, setMore] = useState(false);
+  return (
+    <div className="py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-white">{memberName}</p>
+          <p className="text-[11px] text-slate-500">
+            {proposal.status} · {fmtKsh(proposal.amount)} principal · balance {fmtKsh(balance)}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setMore((v) => !v)}
+          className="rounded-lg border border-slate-700 px-3 py-1.5 text-[11px] font-bold text-slate-300 hover:border-slate-500"
+        >
+          {more ? "Hide" : "See more"}
+        </button>
+      </div>
+      {more && (
+        <div className="mt-3">
+          <LoanCard
+            proposal={proposal}
+            members={members}
+            defaultOpen
+            onRepay={onRepay}
+            onReschedule={onReschedule}
+            canDisburse={canDisburse}
+            onDisburse={onDisburse}
+          />
+          {onPartialRepay && balance > 0 && proposal.status === "disbursed" && (
+            <RepayPanel
+              proposalId={proposal.id}
+              fullBalance={balance}
+              onPartialRepay={onPartialRepay}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MemberLoanRow({
+  proposal,
+  balance,
+  members,
+  onRepay,
+  onReschedule,
+  canDisburse,
+  onDisburse,
+  onPartialRepay,
+}: {
+  proposal: Proposal;
+  balance: number;
+  members: Member[];
+  onRepay: (id: string) => void;
+  onReschedule: LoansAndLedgerProps["onReschedule"];
+  canDisburse: boolean;
+  onDisburse: (id: string) => void | Promise<void>;
+  onPartialRepay?: LoansAndLedgerProps["onPartialRepay"];
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div id={`loan-row-${proposal.id}`} className="py-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
+        <div>
+          <p className="text-sm font-semibold text-white">{proposal.title}</p>
+          <p className="text-[11px] text-slate-500">
+            {proposal.status} · balance {fmtKsh(balance)}
+          </p>
+        </div>
+        <span className="text-[11px] font-bold text-emerald-400">{open ? "Close" : "View"}</span>
+      </button>
+      {open && (
+        <div className="mt-3 space-y-3">
+          {(proposal.status === "disbursed" || proposal.status === "approved") && balance > 0 && onPartialRepay && (
+            <RepayPanel
+              proposalId={proposal.id}
+              fullBalance={balance}
+              onPartialRepay={onPartialRepay}
+            />
+          )}
+          <LoanCard
+            proposal={proposal}
+            members={members}
+            defaultOpen
+            onRepay={onRepay}
+            onReschedule={onReschedule}
+            canDisburse={canDisburse}
+            onDisburse={onDisburse}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RepayPanel({
+  proposalId,
+  fullBalance,
+  onPartialRepay,
+}: {
+  proposalId: string;
+  fullBalance: number;
+  onPartialRepay: NonNullable<LoansAndLedgerProps["onPartialRepay"]>;
+}) {
+  const [amount, setAmount] = useState(fullBalance);
+  const [method, setMethod] = useState<string>(PAY_METHODS[0].id);
+  const [busy, setBusy] = useState(false);
+  const remaining = Math.max(0, Math.round((fullBalance - amount) * 100) / 100);
+
+  const submit = async () => {
+    if (amount <= 0) {
+      toast.error("Enter an amount greater than zero");
+      return;
+    }
+    if (amount > fullBalance + 0.01) {
+      toast.error("Amount cannot exceed loan balance");
+      return;
+    }
+    setBusy(true);
+    try {
+      await onPartialRepay(proposalId, amount, method);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+      <p className="text-xs font-bold text-emerald-300">Repay loan</p>
+      <p className="mt-1 text-[11px] text-slate-400">
+        Full balance <span className="font-mono text-white">{fmtKsh(fullBalance)}</span> — edit what you pay now
+      </p>
+      <label className="mt-2 block text-[10px] font-semibold uppercase text-slate-500">Amount (KES)</label>
+      <input
+        type="number"
+        min={1}
+        max={fullBalance}
+        step={100}
+        value={amount}
+        onChange={(e) => setAmount(Math.max(0, Number(e.target.value) || 0))}
+        className="mt-0.5 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-sm font-bold text-white"
+      />
+      <p className="mt-1 text-[11px] text-slate-500">
+        After payment, balance will be{" "}
+        <span className="font-mono font-semibold text-amber-300">{fmtKsh(remaining)}</span>
+      </p>
+      <label className="mt-2 block text-[10px] font-semibold uppercase text-slate-500">Pay via</label>
+      <select
+        value={method}
+        onChange={(e) => setMethod(e.target.value)}
+        className="mt-0.5 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+      >
+        {PAY_METHODS.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.label}
+          </option>
+        ))}
+      </select>
+      <p className="mt-1 text-[10px] text-slate-600">Payment APIs will connect here later — method is recorded now.</p>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void submit()}
+        className="mt-3 w-full rounded-lg bg-emerald-500 py-2.5 text-xs font-bold text-white hover:bg-emerald-400 disabled:opacity-60"
+      >
+        {busy ? "Processing…" : `Pay ${fmtKsh(amount)}`}
       </button>
     </div>
   );

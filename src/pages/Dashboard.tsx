@@ -119,6 +119,7 @@ export default function Dashboard() {
   );
   const [displayMembers, setDisplayMembers] = useState<Member[]>([]);
   const [kits, setKits] = useState<ChamaKit[]>([]);
+  const [loanLimitInfo, setLoanLimitInfo] = useState({ maxLoan: 0, shares: 0 });
 
   useEffect(() => {
     if (!activeChamaId) {
@@ -213,6 +214,24 @@ export default function Dashboard() {
       cancelled = true;
     };
   }, [activeChamaId, user?.id]);
+
+
+  useEffect(() => {
+    if (!activeChamaId || !user?.id) {
+      setLoanLimitInfo({ maxLoan: 0, shares: 0 });
+      return;
+    }
+    void supabase
+      .rpc("get_member_loan_limit", { p_chama_id: activeChamaId, p_user_id: user.id })
+      .then(({ data, error }) => {
+        if (error) return;
+        const row = Array.isArray(data) ? data[0] : data;
+        setLoanLimitInfo({
+          maxLoan: Number(row?.max_loan ?? 0),
+          shares: Number(row?.share_balance ?? 0),
+        });
+      });
+  }, [activeChamaId, user?.id, kits]);
 
   useEffect(() => {
     if (authChamaId) setActiveChamaIdLocal(authChamaId);
@@ -571,6 +590,81 @@ export default function Dashboard() {
     }
   };
 
+
+  const handlePartialRepay = async (
+    proposalId: string,
+    amount: number,
+    method: string,
+  ) => {
+    const target = proposals.find((p) => p.id === proposalId);
+    if (!target?.repayment) {
+      toast.error("No repayment schedule on this loan");
+      return;
+    }
+    let left = amount;
+    const schedule = target.repayment.schedule.map((pmt) => ({ ...pmt }));
+    for (let i = 0; i < schedule.length && left > 0.001; i++) {
+      if (schedule[i].paid) continue;
+      if (left >= schedule[i].amount - 0.001) {
+        left -= schedule[i].amount;
+        schedule[i] = { ...schedule[i], paid: true };
+      } else {
+        schedule[i] = {
+          ...schedule[i],
+          amount: Math.round((schedule[i].amount - left) * 100) / 100,
+        };
+        left = 0;
+      }
+    }
+    const allPaid = schedule.every((s) => s.paid);
+    setProposals((prev) =>
+      prev.map((p) =>
+        p.id !== proposalId
+          ? p
+          : {
+              ...p,
+              repayment: { ...p.repayment!, schedule },
+              status: allPaid ? ("settled" as const) : p.status,
+            },
+      ),
+    );
+    if (activeChamaId) {
+      const { error } = await supabase.rpc("credit_loan_fund", {
+        p_chama_id: activeChamaId,
+        p_amount: amount,
+        p_reference: `PAY-${proposalId}-${Date.now()}`,
+      });
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      const { data: kitRows } = await supabase.rpc("list_chama_kits", {
+        p_chama_id: activeChamaId,
+      });
+      if (kitRows) {
+        setKits(
+          kitRows.map((k: ChamaKit) => ({
+            ...k,
+            balance: Number(k.balance) || 0,
+          })),
+        );
+      }
+    }
+    setLedger((prev) =>
+      pushAudit(prev, {
+        memberId: user?.id ?? currentMemberId,
+        type: "repayment",
+        description: `Repayment ${fmtKsh(amount)} via ${method}${allPaid ? " · loan settled" : ""}`,
+        amount,
+      }),
+    );
+    toast.success(
+      allPaid
+        ? "Loan fully settled"
+        : `Paid ${fmtKsh(amount)} — remaining balance updated`,
+    );
+  };
+
   const handleProposeLoan = async () => {
     if (!activeChamaId || !user?.id) {
       toast.error("Select a chama and sign in first.");
@@ -818,6 +912,10 @@ export default function Dashboard() {
                 onReschedule={handleReschedule}
                 canDisburse={Boolean(user?.id && currentMember?.id === user.id && currentMember.role === "Treasurer")}
                 onDisburse={handleDisburse}
+                onBorrow={handleProposeLoan}
+                onPartialRepay={handlePartialRepay}
+                loanLimit={loanLimitInfo.maxLoan}
+                shareBalance={loanLimitInfo.shares}
                 onSaveLoanRates={async (next) => {
                   if (!activeChamaId || !chama) return;
                   const constitution = {
