@@ -226,7 +226,8 @@ export default function ChamaOverview({
             />
           </div>
           <p className="mt-1.5 text-[11px] text-slate-500">
-            Pooled from table banking, share capital, general savings and member-loans.
+            Kit totals follow member deposits (contributions). Available to lend is deposits
+            minus principal still out. Pooled from table banking, share capital, general savings and member-loans.
             Loans draw from this pool by % share of each kit. Your personal contributions stay
             intact for interest.
           </p>
