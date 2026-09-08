@@ -5,7 +5,7 @@ import {
   HandCoins,
   PiggyBank,
   Receipt,
-  Scale,
+  Calculator,
   TrendUp,
   WarningCircle,
   Wallet,
@@ -238,7 +238,7 @@ export default function MyFinance({
           title="Loan limit"
           value={fmtKsh(loanLimit)}
           sub={`${maxMultiple}× shares ${fmtKsh(myShares)} · pool ${fmtKsh(loaningPool)}`}
-          icon={<Scale size={14} />}
+          icon={<Calculator size={14} />}
           accent="violet"
         />
         <Card
