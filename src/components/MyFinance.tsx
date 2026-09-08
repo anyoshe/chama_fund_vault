@@ -21,6 +21,63 @@ import type {
 } from "../types/chama";
 import { fmtKsh } from "../data/mockChamaData";
 
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+function parseYmd(iso: string): Date | null {
+  if (!iso) return null;
+  const d = new Date(iso.slice(0, 10) + "T12:00:00");
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** e.g. 8 September 2026 */
+function fmtLongDate(isoOrDate: string | Date): string {
+  const d = typeof isoOrDate === "string" ? parseYmd(isoOrDate) : isoOrDate;
+  if (!d) return "—";
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+/** e.g. September 2026 */
+function fmtMonthYear(d: Date): string {
+  return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+/**
+ * Contribution cycle: calendar month ending on due day.
+ * dueDay: 1–28 (default 1). Cycle label uses real month/year.
+ */
+function contributionCycle(dueDay = 1, now = new Date()) {
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const day = Math.min(Math.max(1, dueDay), 28);
+  const due = new Date(y, m, day, 12, 0, 0);
+  // If today is past due day, the open cycle is still this month until next month starts;
+  // "next due" becomes next month's due day once overdue for display of upcoming.
+  const nextDue =
+    now.getDate() > day
+      ? new Date(y, m + 1, day, 12, 0, 0)
+      : due;
+  const cycleStart = new Date(nextDue.getFullYear(), nextDue.getMonth(), 1, 12, 0, 0);
+  const cycleEnd = nextDue;
+  return {
+    cycleStart,
+    cycleEnd,
+    dueDate: nextDue,
+    monthLabel: fmtMonthYear(nextDue),
+    dueLabel: fmtLongDate(nextDue),
+    startLabel: fmtLongDate(cycleStart),
+    isOverdue: now > nextDue,
+    daysUntilDue: Math.ceil((nextDue.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
+  };
+}
+
+function isoMonthKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+
 type MemberBalance = { user_id: string; kit_code: string; balance: number };
 
 interface MyFinanceProps {
@@ -146,14 +203,32 @@ export default function MyFinance({
   const monthlyTarget =
     me?.monthlyContribution || chama.constitution?.minMonthlyContribution || 0;
 
-  // Simple cycle estimate: current calendar month contributions
-  const monthKey = new Date().toISOString().slice(0, 7);
-  const paidThisMonth = myContributions
+  // Real cycle from constitution payout hint or 1st of month
+  const dueDayMatch = String(chama.constitution?.payoutCycle || "1").match(/(\d{1,2})/);
+  const dueDay = dueDayMatch ? Math.min(28, Math.max(1, Number(dueDayMatch[1]))) : 1;
+  const cycle = contributionCycle(dueDay);
+  const monthKey = isoMonthKey(cycle.dueDate);
+  const paidThisCycle = myContributions
     .filter((c) => (c.date || "").startsWith(monthKey))
     .reduce((s, c) => s + c.amount, 0);
-  const shortfall = Math.max(0, monthlyTarget - paidThisMonth);
+  const shortfall = Math.max(0, monthlyTarget - paidThisCycle);
   const fineRate = chama.constitution?.lateFineRate ?? 0;
   const estimatedFine = shortfall > 0 ? Math.round(shortfall * (fineRate / 100)) : 0;
+
+  const nextLoanDues = myLoans
+    .filter((p) => p.status === "disbursed" && p.repayment?.schedule?.length)
+    .map((p) => {
+      const next = p.repayment!.schedule.find((x) => !x.paid);
+      return next
+        ? {
+            title: p.title,
+            dueDate: next.dueDate,
+            amount: next.amount,
+            label: fmtLongDate(next.dueDate),
+          }
+        : null;
+    })
+    .filter(Boolean) as { title: string; dueDate: string; amount: number; label: string }[];
 
   const myPenalties = ledger.filter(
     (e) =>
@@ -224,12 +299,18 @@ export default function MyFinance({
           accent="emerald"
         />
         <Card
-          title="Paid this month"
-          value={fmtKsh(paidThisMonth)}
+          title={`Paid · ${cycle.monthLabel}`}
+          value={fmtKsh(paidThisCycle)}
           sub={
             monthlyTarget
-              ? `Target ${fmtKsh(monthlyTarget)}${shortfall > 0 ? ` · short ${fmtKsh(shortfall)}` : " · on track"}`
-              : "No monthly target set"
+              ? `Due ${cycle.dueLabel} · target ${fmtKsh(monthlyTarget)}${
+                  shortfall > 0
+                    ? cycle.isOverdue
+                      ? ` · overdue by ${Math.abs(cycle.daysUntilDue)}d`
+                      : ` · short ${fmtKsh(shortfall)} · ${cycle.daysUntilDue}d left`
+                    : " · on track"
+                }`
+              : `Due ${cycle.dueLabel}`
           }
           icon={<Coins size={14} />}
           accent={shortfall > 0 ? "amber" : "sky"}
@@ -300,18 +381,22 @@ export default function MyFinance({
           className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"
         >
           <p className="flex items-center gap-2 text-sm font-bold text-white">
-            <WarningCircle size={18} className="text-amber-400" /> Monthly cycle & fines
+            <WarningCircle size={18} className="text-amber-400" />{" "}
+            {cycle.monthLabel} cycle & fines
           </p>
           <p className="mt-1 text-[11px] text-slate-500">
-            Late fine rate: {fineRate}% of missed contribution (constitution)
+            Contribution window {cycle.startLabel} → due{" "}
+            <span className="font-semibold text-slate-300">{cycle.dueLabel}</span>
+            {" · "}
+            late fine {fineRate}% of missed amount
           </p>
           <div className="mt-3 space-y-2">
             <div className="flex justify-between text-xs text-slate-400">
-              <span>This month paid</span>
-              <span className="font-mono text-slate-200">{fmtKsh(paidThisMonth)}</span>
+              <span>Paid in {cycle.monthLabel}</span>
+              <span className="font-mono text-slate-200">{fmtKsh(paidThisCycle)}</span>
             </div>
             <div className="flex justify-between text-xs text-slate-400">
-              <span>Monthly target</span>
+              <span>Target for this cycle</span>
               <span className="font-mono text-slate-200">{fmtKsh(monthlyTarget)}</span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-slate-800">
@@ -322,7 +407,7 @@ export default function MyFinance({
                 style={{
                   width: `${Math.min(
                     100,
-                    monthlyTarget > 0 ? (paidThisMonth / monthlyTarget) * 100 : 0,
+                    monthlyTarget > 0 ? (paidThisCycle / monthlyTarget) * 100 : 0,
                   )}%`,
                 }}
               />
@@ -335,7 +420,26 @@ export default function MyFinance({
                   : ""}
               </p>
             ) : (
-              <p className="text-xs text-emerald-400/90">On track for this month.</p>
+              <p className="text-xs text-emerald-400/90">
+                On track for {cycle.monthLabel}
+                {cycle.daysUntilDue >= 0 ? ` · due ${cycle.dueLabel}` : ""}.
+              </p>
+            )}
+            {nextLoanDues.length > 0 && (
+              <div className="mt-3 border-t border-slate-800 pt-2">
+                <p className="text-[11px] font-semibold text-slate-400">Loan installments due</p>
+                {nextLoanDues.map((d) => (
+                  <div
+                    key={d.title + d.dueDate}
+                    className="mt-1 flex justify-between gap-2 text-xs text-slate-400"
+                  >
+                    <span className="truncate text-slate-300">{d.title}</span>
+                    <span className="shrink-0 font-mono text-amber-300">
+                      {fmtKsh(d.amount)} · {d.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
             )}
             <div className="flex justify-between border-t border-slate-800 pt-2 text-xs text-slate-400">
               <span>Recorded penalties</span>
@@ -380,7 +484,7 @@ export default function MyFinance({
                 myContributions.slice(0, 25).map((c) => (
                   <tr key={c.id} className="border-b border-slate-800/80">
                     <td className="py-2 text-slate-400">
-                      {(c.date || "").slice(0, 10) || "—"}
+                      {c.date ? fmtLongDate(c.date) : "—"}
                     </td>
                     <td className="py-2 text-slate-300">{kitLabel(c.destination)}</td>
                     <td className="py-2 text-slate-500">{c.method || "—"}</td>

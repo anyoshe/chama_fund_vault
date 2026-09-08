@@ -15,6 +15,21 @@ import { motion } from "framer-motion";
 import { CHAMA_ACTIVITIES, type Chama, type ChamaActivity, type ChamaKit, type Contribution, type Member, type Proposal } from "../types/chama";
 import { fmtKsh } from "../data/mockChamaData";
 
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+function fmtMonthYearNow() {
+  const d = new Date();
+  return `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+}
+function fmtLongDateIso(iso: string) {
+  if (!iso) return "";
+  const d = new Date(iso.slice(0, 10) + "T12:00:00");
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${d.getDate()} ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+}
+
 interface ChamaOverviewProps {
   chama: Chama;
   members: Member[];
@@ -221,7 +236,7 @@ export default function ChamaOverview({
         <div className="relative mt-5">
           <div className="flex items-center justify-between text-xs">
             <span className="font-semibold uppercase tracking-[0.14em] text-slate-400">
-              Current month loaning pool
+              {fmtMonthYearNow()} loaning pool
             </span>
             <span className="font-mono font-bold tabular-nums text-emerald-300">
               {fmtKsh(loaningPoolTotal)}
@@ -285,7 +300,7 @@ export default function ChamaOverview({
           icon={<Bank size={19} />}
           label="Outstanding loans"
           value={fmtKsh(totalDisbursed)}
-          sub={`${fmtKsh(Math.max(0, expectedInterest))} interest still due${lastCollectionDate ? ` · through ${lastCollectionDate}` : ""} · falls as members repay`}
+          sub={`${fmtKsh(Math.max(0, expectedInterest))} interest still due${lastCollectionDate ? ` · through ${fmtLongDateIso(lastCollectionDate)}` : ""} · falls as members repay`}
           accent="violet"
         />
       </div>

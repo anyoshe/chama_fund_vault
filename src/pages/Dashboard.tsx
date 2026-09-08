@@ -26,6 +26,21 @@ import {
   fmtKsh,
 } from "@/data/mockChamaData";
 
+
+const MONTH_NAMES_UI = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+function fmtLongDateDash(iso: string) {
+  if (!iso) return "—";
+  const d = new Date(iso.slice(0, 10) + "T12:00:00");
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${d.getDate()} ${MONTH_NAMES_UI[d.getMonth()]} ${d.getFullYear()}`;
+}
+function fmtMonthYearDash(d = new Date()) {
+  return `${MONTH_NAMES_UI[d.getMonth()]} ${d.getFullYear()}`;
+}
+
 const LS_KEY = "chamavault-state-v1";
 
 /** Flat % of principal per month, for each month of the term */
@@ -935,7 +950,78 @@ export default function Dashboard() {
     }
   };
 
-  const TABS: { id: Tab; label: string }[] = [
+  const financeAlerts = useMemo(() => {
+    const alerts: { id: string; title: string; body: string; tone: "amber" | "emerald" | "violet" }[] = [];
+    if (!chama || !currentMemberId) return alerts;
+    const dueDayMatch = String(chama.constitution?.payoutCycle || "1").match(/(\d{1,2})/);
+    const dueDay = dueDayMatch ? Math.min(28, Math.max(1, Number(dueDayMatch[1]))) : 1;
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const day = Math.min(dueDay, 28);
+    let due = new Date(y, m, day, 12, 0, 0);
+    if (now.getDate() > day) due = new Date(y, m + 1, day, 12, 0, 0);
+    const monthKey = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, "0")}`;
+    const target =
+      currentMember?.monthlyContribution ||
+      chama.constitution?.minMonthlyContribution ||
+      0;
+    const paid = contributions
+      .filter(
+        (c) =>
+          c.chamaId === activeChamaId &&
+          c.memberId === currentMemberId &&
+          c.status === "completed" &&
+          (c.date || "").startsWith(monthKey),
+      )
+      .reduce((s, c) => s + c.amount, 0);
+    const short = Math.max(0, target - paid);
+    const dueLabel = fmtLongDateDash(due.toISOString().slice(0, 10));
+    const monthLabel = fmtMonthYearDash(due);
+    if (target > 0 && short > 0) {
+      const days = Math.ceil((due.getTime() - now.getTime()) / 86400000);
+      alerts.push({
+        id: "contrib-due",
+        title: `Contribution due · ${monthLabel}`,
+        body:
+          days < 0
+            ? `Overdue since ${dueLabel}. Short ${fmtKsh(short)} of ${fmtKsh(target)}.`
+            : days === 0
+              ? `Due today (${dueLabel}). Still short ${fmtKsh(short)} of ${fmtKsh(target)}.`
+              : `Due ${dueLabel} (${days} day${days === 1 ? "" : "s"} left). Paid ${fmtKsh(paid)} of ${fmtKsh(target)}.`,
+        tone: days <= 3 ? "amber" : "violet",
+      });
+    } else if (target > 0) {
+      alerts.push({
+        id: "contrib-ok",
+        title: `${monthLabel} contribution`,
+        body: `On track · next due ${dueLabel} · target ${fmtKsh(target)}.`,
+        tone: "emerald",
+      });
+    }
+    for (const p of proposals) {
+      if (p.chamaId !== activeChamaId || p.requesterId !== currentMemberId) continue;
+      if (p.status !== "disbursed" || !p.repayment?.schedule) continue;
+      const next = p.repayment.schedule.find((x) => !x.paid);
+      if (!next) continue;
+      alerts.push({
+        id: `loan-${p.id}`,
+        title: `Loan installment · ${p.title}`,
+        body: `${fmtKsh(next.amount)} due ${fmtLongDateDash(next.dueDate)}.`,
+        tone: "amber",
+      });
+    }
+    return alerts;
+  }, [
+    chama,
+    currentMemberId,
+    currentMember,
+    contributions,
+    activeChamaId,
+    proposals,
+  ]);
+
+    const TABS: { id: Tab; label: string }[] = [
     { id: "overview", label: "Overview" },
     { id: "voting", label: "Voting Board" },
     { id: "loans", label: "Loans & Ledger" },
@@ -1133,7 +1219,9 @@ export default function Dashboard() {
               <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
                 <div>
                   <h3 className="text-sm font-bold text-white">Notifications</h3>
-                  <p className="text-[11px] text-slate-400">Voting alerts for {chama.name}</p>
+                  <p className="text-[11px] text-slate-400">
+                    Dues & voting · {chama.name} · {fmtMonthYearDash()}
+                  </p>
                 </div>
                 <button
                   onClick={() => setNotifOpen(false)}
@@ -1144,6 +1232,21 @@ export default function Dashboard() {
                 </button>
               </div>
               <div className="flex-1 space-y-2.5 overflow-y-auto p-4">
+                {financeAlerts.map((a) => (
+                  <div
+                    key={a.id}
+                    className={`rounded-xl border p-3 ${
+                      a.tone === "amber"
+                        ? "border-amber-400/25 bg-amber-400/5"
+                        : a.tone === "emerald"
+                          ? "border-emerald-500/25 bg-emerald-500/5"
+                          : "border-violet-500/25 bg-violet-500/5"
+                    }`}
+                  >
+                    <p className="text-xs font-semibold text-slate-200">{a.title}</p>
+                    <p className="mt-1 text-[11px] text-slate-400">{a.body}</p>
+                  </div>
+                ))}
                 {proposals
                   .filter((p) => p.chamaId === activeChamaId)
                   .slice(0, 8)
