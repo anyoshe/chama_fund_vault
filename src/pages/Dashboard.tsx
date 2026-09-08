@@ -119,17 +119,25 @@ export default function Dashboard() {
   );
   const [displayMembers, setDisplayMembers] = useState<Member[]>([]);
   const [kits, setKits] = useState<ChamaKit[]>([]);
+  const [memberBalances, setMemberBalances] = useState<{ user_id: string; kit_code: string; balance: number }[]>([]);
   const [loanLimitInfo, setLoanLimitInfo] = useState({ maxLoan: 0, shares: 0 });
 
   useEffect(() => {
     if (!activeChamaId) {
       setDisplayMembers([]);
       setKits([]);
+      setMemberBalances([]);
       return;
     }
     let cancelled = false;
     const loadMembers = async () => {
-      const [{ data: memberRows, error: membersError }, { data: profiles }, { data: contributionRows, error: contributionsError }, { data: kitRows, error: kitsError }] = await Promise.all([
+      const [
+        { data: memberRows, error: membersError },
+        { data: profiles },
+        { data: contributionRows, error: contributionsError },
+        { data: kitRows, error: kitsError },
+        { data: balanceRows, error: balancesError },
+      ] = await Promise.all([
         supabase.rpc("list_chama_members", { p_chama_id: activeChamaId }),
         supabase.rpc("list_chama_profiles", { p_chama_id: activeChamaId }),
         supabase
@@ -138,6 +146,7 @@ export default function Dashboard() {
           .eq("chama_id", activeChamaId)
           .order("created_at", { ascending: false }),
         supabase.rpc("list_chama_kits", { p_chama_id: activeChamaId }),
+        supabase.rpc("list_member_kit_balances", { p_chama_id: activeChamaId }),
       ]);
       if (kitsError) {
         console.error("loadDashboardKits", kitsError);
@@ -148,6 +157,18 @@ export default function Dashboard() {
             ...k,
             balance: Number(k.balance) || 0,
           })) as ChamaKit[],
+        );
+      }
+      if (balancesError) {
+        console.error("loadMemberKitBalances", balancesError);
+        setMemberBalances([]);
+      } else {
+        setMemberBalances(
+          (balanceRows ?? []).map((b: { user_id: string; kit_code: string; balance: number }) => ({
+            user_id: b.user_id,
+            kit_code: b.kit_code,
+            balance: Number(b.balance) || 0,
+          })),
         );
       }
       if (cancelled || membersError) {
@@ -739,14 +760,24 @@ export default function Dashboard() {
           `Principal restored ${fmtKsh(Number(rd.principal_applied || 0))} · Interest ${fmtKsh(Number(rd.interest_applied || 0))} (reserve ${fmtKsh(Number(rd.reserve_amount || 0))}) · Left ${fmtKsh(Number(rd.principal_remaining || 0) + Number(rd.interest_remaining || 0))}`,
         );
       }
-      const { data: kitRows } = await supabase.rpc("list_chama_kits", {
-        p_chama_id: activeChamaId,
-      });
+      const [{ data: kitRows }, { data: balRows }] = await Promise.all([
+        supabase.rpc("list_chama_kits", { p_chama_id: activeChamaId }),
+        supabase.rpc("list_member_kit_balances", { p_chama_id: activeChamaId }),
+      ]);
       if (kitRows) {
         setKits(
           kitRows.map((k: ChamaKit) => ({
             ...k,
             balance: Number(k.balance) || 0,
+          })),
+        );
+      }
+      if (balRows) {
+        setMemberBalances(
+          balRows.map((b: { user_id: string; kit_code: string; balance: number }) => ({
+            user_id: b.user_id,
+            kit_code: b.kit_code,
+            balance: Number(b.balance) || 0,
           })),
         );
       }
@@ -1000,6 +1031,7 @@ export default function Dashboard() {
                 contributions={contributions.filter((contribution) => contribution.chamaId === activeChamaId)}
                 proposals={proposals}
                 kits={kits}
+                memberBalances={memberBalances}
                 currentMemberId={currentMemberId}
                 onContribute={() => setContribOpen(true)}
                 onProposeLoan={handleProposeLoan}

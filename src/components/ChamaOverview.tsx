@@ -21,6 +21,8 @@ interface ChamaOverviewProps {
   contributions: Contribution[];
   proposals: Proposal[];
   kits?: ChamaKit[];
+  /** Personal kit balances (deposits + interest credits) */
+  memberBalances?: { user_id: string; kit_code: string; balance: number }[];
   currentMemberId: string;
   onContribute: () => void;
   onProposeLoan: () => void;
@@ -71,6 +73,7 @@ export default function ChamaOverview({
   contributions,
   proposals,
   kits = [],
+  memberBalances = [],
   currentMemberId,
   onContribute,
   onProposeLoan,
@@ -379,7 +382,9 @@ export default function ChamaOverview({
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-sm font-bold text-white">Member savings standings</h3>
-            <p className="mt-1 text-[11px] text-slate-500">Track contributions against each member&apos;s monthly target</p>
+            <p className="mt-1 text-[11px] text-slate-500">
+              Deposits plus interest credits for the selected kit
+            </p>
           </div>
           <select
             value={selectedAccount}
@@ -398,9 +403,15 @@ export default function ChamaOverview({
         </p>
         <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
           {members.map((m) => {
-            const memberPaid = accountContributions
+            const fromBalance = memberBalances.find(
+              (b) => b.user_id === m.id && b.kit_code === selectedAccount,
+            );
+            const fromContributions = accountContributions
               .filter((contribution) => contribution.memberId === m.id)
               .reduce((sum, contribution) => sum + contribution.amount, 0);
+            // Prefer ledger balance (includes interest); fall back to contributions only
+            const memberPaid =
+              fromBalance != null ? Number(fromBalance.balance) || 0 : fromContributions;
             const target = m.monthlyContribution || chama.constitution.minMonthlyContribution;
             const pct = target > 0 ? Math.min(100, Math.round((memberPaid / target) * 100)) : 0;
             const isCurrent = m.id === currentMemberId;
