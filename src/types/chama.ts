@@ -218,7 +218,7 @@ export interface Chama {
   currency: string; // "KES"
 }
 
-export type AuditType = "contribution" | "loan-disbursed" | "repayment" | "withdrawal" | "vote" | "penalty";
+export type AuditType = "contribution" | "loan-disbursed" | "repayment" | "loan-settled" | "withdrawal" | "vote" | "penalty";
 
 export interface AuditEvent {
   id: string;

@@ -544,14 +544,29 @@ export default function Dashboard() {
             },
       ),
     );
-    setLedger((prev) =>
-      pushAudit(prev, {
+    setLedger((prev) => {
+      const paidNow = paidAmount - existingPaid;
+      let next = pushAudit(prev, {
         memberId: target.requesterId,
         type: "repayment",
-        description: allPaid ? "Loan fully settled" : `Repayment installment for ${proposalId}`,
-        amount: paidAmount - existingPaid,
-      }),
-    );
+        description: allPaid
+          ? "Final installment · loan settled"
+          : `Repayment installment for ${target.title}`,
+        amount: paidNow,
+      });
+      if (allPaid) {
+        const who =
+          displayMembers.find((m) => m.id === target.requesterId)?.name ??
+          "Member";
+        next = pushAudit(next, {
+          memberId: target.requesterId,
+          type: "loan-settled",
+          description: `Loan settled · ${target.title} · ${who} · principal ${fmtKsh(target.amount)}`,
+          amount: target.amount,
+        });
+      }
+      return next;
+    });
     const repaid = paidAmount - existingPaid;
     if (repaid > 0 && activeChamaId) {
       const { error: repayError } = await supabase.rpc("credit_loan_fund", {
@@ -736,17 +751,29 @@ export default function Dashboard() {
         );
       }
     }
-    setLedger((prev) =>
-      pushAudit(prev, {
+    setLedger((prev) => {
+      let next = pushAudit(prev, {
         memberId: user?.id ?? currentMemberId,
         type: "repayment",
-        description: `Repayment ${fmtKsh(amount)} via ${method}${allPaid ? " · loan settled" : ""}`,
+        description: `Repayment ${fmtKsh(amount)} via ${method}${allPaid ? " · final installment" : ""}`,
         amount,
-      }),
-    );
+      });
+      if (allPaid) {
+        const who =
+          displayMembers.find((m) => m.id === target.requesterId)?.name ??
+          "Member";
+        next = pushAudit(next, {
+          memberId: target.requesterId,
+          type: "loan-settled",
+          description: `Loan settled · ${target.title} · ${who} · principal ${fmtKsh(target.amount)} · paid via ${method}`,
+          amount: target.amount,
+        });
+      }
+      return next;
+    });
     toast.success(
       allPaid
-        ? "Loan fully settled"
+        ? "Loan fully settled — removed from active list (see settlement logs)"
         : `Paid ${fmtKsh(amount)} — remaining balance updated`,
     );
   };

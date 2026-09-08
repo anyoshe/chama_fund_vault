@@ -118,13 +118,28 @@ export default function LoansAndLedger({
     [loans, me?.id],
   );
 
-  const settledCount = useMemo(
+  const settledLoans = useMemo(
     () =>
       proposals.filter(
         (p) =>
           p.chamaId === chamaId && p.type === "loan" && p.status === "settled",
-      ).length,
+      ),
     [proposals, chamaId],
+  );
+  const settledCount = settledLoans.length;
+
+  const settlementLogs = useMemo(
+    () =>
+      ledger
+        .filter(
+          (e) =>
+            e.chamaId === chamaId &&
+            (e.type === "loan-settled" ||
+              (e.type === "repayment" &&
+                e.description.toLowerCase().includes("settled"))),
+        )
+        .sort((a, b) => b.timestamp.localeCompare(a.timestamp)),
+    [ledger, chamaId],
   );
 
   const myOutstanding = myLoans
@@ -370,6 +385,62 @@ export default function LoansAndLedger({
                   ))}
                 </div>
               )}
+
+            {/* Settlement audit — settled loans hidden from active list but logged here */}
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+              <p className="text-sm font-bold text-white">Loan settlement logs</p>
+              <p className="mt-0.5 text-[11px] text-slate-500">
+                Settled facilities are removed from the active list. Full history stays here and on the Audit Ledger.
+              </p>
+              {settlementLogs.length === 0 && settledLoans.length === 0 ? (
+                <p className="mt-3 text-xs text-slate-500">No settlements recorded yet.</p>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  {settlementLogs.map((e) => (
+                    <div
+                      key={e.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2"
+                    >
+                      <div>
+                        <p className="text-xs font-semibold text-emerald-200">
+                          {e.description}
+                        </p>
+                        <p className="text-[10px] text-slate-500">
+                          {fmtDate(e.timestamp)} ·{" "}
+                          {memberById(e.memberId, members).name} · {e.reference}
+                        </p>
+                      </div>
+                      <span className="font-mono text-xs font-bold text-emerald-300">
+                        {fmtKsh(e.amount)}
+                      </span>
+                    </div>
+                  ))}
+                  {settledLoans.map((p) => {
+                    const who =
+                      members.find((m) => m.id === p.requesterId)?.name ?? "Member";
+                    return (
+                      <div
+                        key={p.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2"
+                      >
+                        <div>
+                          <p className="text-xs font-semibold text-slate-200">
+                            {p.title}
+                          </p>
+                          <p className="text-[10px] text-slate-500">
+                            {who} · settled · principal {fmtKsh(p.amount)}
+                          </p>
+                        </div>
+                        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+                          Settled
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             </div>
           </motion.div>
         ) : (
@@ -409,6 +480,7 @@ export default function LoansAndLedger({
                     ["contribution", "Contributions"],
                     ["loan-disbursed", "Loan disbursed"],
                     ["repayment", "Repayments"],
+                    ["loan-settled", "Loan settled"],
                     ["withdrawal", "Withdrawals"],
                     ["vote", "Votes"],
                     ["penalty", "Penalties"],
@@ -1132,6 +1204,7 @@ function TypePill({ type }: { type: AuditType }) {
     contribution: "bg-emerald-500/10 text-emerald-300",
     "loan-disbursed": "bg-sky-500/10 text-sky-300",
     repayment: "bg-teal-500/10 text-teal-300",
+    "loan-settled": "bg-emerald-500/15 text-emerald-200",
     withdrawal: "bg-amber-500/10 text-amber-300",
     vote: "bg-violet-500/10 text-violet-300",
     penalty: "bg-rose-500/10 text-rose-300",
