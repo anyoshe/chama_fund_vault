@@ -8,6 +8,7 @@ import GovernanceVoting from "@/components/GovernanceVoting";
 import ContributionModal from "@/components/ContributionModal";
 import LoansAndLedger from "@/components/LoansAndLedger";
 import Members from "@/pages/Members";
+import MyFinance from "@/components/MyFinance";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { ChamaKit,
@@ -78,7 +79,7 @@ function loadPersisted(): PersistedState | null {
   }
 }
 
-type Tab = "overview" | "voting" | "loans" | "members";
+type Tab = "overview" | "voting" | "loans" | "my-finance" | "members";
 
 export default function Dashboard() {
   const {
@@ -938,6 +939,7 @@ export default function Dashboard() {
     { id: "overview", label: "Overview" },
     { id: "voting", label: "Voting Board" },
     { id: "loans", label: "Loans & Ledger" },
+    { id: "my-finance", label: "My Finance" },
     { id: "members", label: "Members" },
   ];
 
@@ -1088,6 +1090,20 @@ export default function Dashboard() {
                   // refresh memberships so constitution updates in UI
                   window.location.reload();
                 }}
+              />
+            )}
+            {tab === "my-finance" && (
+              <MyFinance
+                chama={chama}
+                me={currentMember}
+                members={displayMembers}
+                contributions={contributions.filter((c) => c.chamaId === activeChamaId)}
+                proposals={proposals}
+                kits={kits}
+                memberBalances={memberBalances}
+                ledger={ledger}
+                onContribute={() => setContribOpen(true)}
+                onProposeLoan={handleProposeLoan}
               />
             )}
             {tab === "members" && <Members />}
