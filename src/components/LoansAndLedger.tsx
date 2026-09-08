@@ -107,7 +107,8 @@ export default function LoansAndLedger({
         (p) =>
           p.chamaId === chamaId &&
           (p.type === "loan" || p.type === "withdrawal") &&
-          p.status !== "rejected",
+          p.status !== "rejected" &&
+          p.status !== "settled",
       ),
     [proposals, chamaId],
   );
@@ -115,6 +116,15 @@ export default function LoansAndLedger({
   const myLoans = useMemo(
     () => loans.filter((p) => p.requesterId === me?.id && p.type === "loan"),
     [loans, me?.id],
+  );
+
+  const settledCount = useMemo(
+    () =>
+      proposals.filter(
+        (p) =>
+          p.chamaId === chamaId && p.type === "loan" && p.status === "settled",
+      ).length,
+    [proposals, chamaId],
   );
 
   const myOutstanding = myLoans
@@ -333,7 +343,11 @@ export default function LoansAndLedger({
               </p>
               {myLoans.length === 0 ? (
                 <p className="mt-3 text-xs text-slate-500">
-                  You have no loan applications.
+                  You have no open loans
+                  {settledCount > 0
+                    ? ` (${settledCount} settled — hidden from this list)`
+                    : ""}
+                  .
                 </p>
               ) : (
                 <div className="mt-3 space-y-2">
