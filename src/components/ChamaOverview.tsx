@@ -129,21 +129,27 @@ export default function ChamaOverview({
   const approvedBorrowers = approvedLoans
     .map((proposal) => members.find((member) => member.id === proposal.requesterId)?.name ?? "Unknown member")
     .join(", ");
-  const totalDisbursed = chamaProposals
-    .filter((proposal) => proposal.status === "disbursed" || proposal.status === "settled")
-    .reduce((sum, proposal) => sum + proposal.amount, 0);
-  const expectedInterest = chamaProposals
-    .filter((proposal) => proposal.status === "disbursed" || proposal.status === "settled")
-    .reduce(
-      (sum, proposal) =>
-        sum +
-        (proposal.repayment?.schedule.reduce((scheduleTotal, payment) => scheduleTotal + payment.amount, 0) ?? 0) -
-        proposal.amount,
-      0,
-    );
-  const lastCollectionDate = chamaProposals
-    .filter((proposal) => proposal.status === "disbursed" || proposal.status === "settled")
-    .flatMap((proposal) => proposal.repayment?.schedule.map((payment) => payment.dueDate) ?? [])
+  // Outstanding principal still out (not lifetime disbursed). Settled = 0.
+  // Interest expected = interest still unpaid. Both fall as repayments are applied.
+  const loanExposure = chamaProposals
+    .filter((proposal) => proposal.type === "loan" && proposal.status === "disbursed")
+    .map((proposal) => {
+      const schedule = proposal.repayment?.schedule ?? [];
+      const scheduleTotal = schedule.reduce((s, p) => s + p.amount, 0);
+      const originalInterest = Math.max(0, scheduleTotal - proposal.amount);
+      const paidTotal = schedule.filter((p) => p.paid).reduce((s, p) => s + p.amount, 0);
+      // Interest first (matches repay_loan)
+      const interestPaid = Math.min(paidTotal, originalInterest);
+      const principalPaid = Math.max(0, paidTotal - interestPaid);
+      const principalOutstanding = Math.max(0, proposal.amount - principalPaid);
+      const interestOutstanding = Math.max(0, originalInterest - interestPaid);
+      const unpaidDates = schedule.filter((p) => !p.paid).map((p) => p.dueDate);
+      return { principalOutstanding, interestOutstanding, unpaidDates };
+    });
+  const totalDisbursed = loanExposure.reduce((s, x) => s + x.principalOutstanding, 0);
+  const expectedInterest = loanExposure.reduce((s, x) => s + x.interestOutstanding, 0);
+  const lastCollectionDate = loanExposure
+    .flatMap((x) => x.unpaidDates)
     .sort()
     .at(-1);
   const contributionRate = Math.min(100, Math.round((accountPool / (chama.monthlyTarget || 1)) * 100));
@@ -264,9 +270,9 @@ export default function ChamaOverview({
         />
         <MetricCard
           icon={<Bank size={19} />}
-          label="Total Disbursed"
+          label="Outstanding loans"
           value={fmtKsh(totalDisbursed)}
-          sub={`${fmtKsh(Math.max(0, expectedInterest))} interest expected${lastCollectionDate ? ` · through ${lastCollectionDate}` : ""}`}
+          sub={`${fmtKsh(Math.max(0, expectedInterest))} interest still due${lastCollectionDate ? ` · through ${lastCollectionDate}` : ""} · falls as members repay`}
           accent="violet"
         />
       </div>
