@@ -670,6 +670,38 @@ export default function Dashboard() {
         target.disbursement?.loanRef ||
         target.disbursement?.reference ||
         `DISB-${proposalId}`;
+
+      const scheduleTotal = target.repayment.schedule.reduce(
+        (s, x) => s + x.amount,
+        0,
+      );
+      const paidBefore = target.repayment.schedule
+        .filter((x) => x.paid)
+        .reduce((s, x) => s + x.amount, 0);
+      // Note: schedule already updated above for this payment; use pre-update paid
+      const interestTotal = Math.max(0, scheduleTotal - target.amount);
+      // Recompute paid before this payment from original target (not updated schedule)
+      const paidPrior = (target.repayment.schedule as { paid?: boolean; amount: number }[])
+        .filter((x) => x.paid)
+        .reduce((s, x) => s + x.amount, 0);
+      // paidPrior still reflects pre-payment because we mapped a copy; original target unchanged
+      const interestAlready = Math.min(paidPrior, interestTotal);
+      const principalAlready = Math.max(0, paidPrior - interestAlready);
+
+      const allocations = target.disbursement?.fundingAllocations ?? null;
+
+      // Backfill loan_book for loans disbursed before proportional wiring
+      await supabase.rpc("ensure_loan_book", {
+        p_chama_id: activeChamaId,
+        p_loan_ref: loanRef,
+        p_borrower_id: target.requesterId,
+        p_principal: target.amount,
+        p_interest_total: interestTotal,
+        p_principal_already_paid: principalAlready,
+        p_interest_already_paid: interestAlready,
+        p_allocations: allocations,
+      });
+
       const { data: repayData, error } = await supabase.rpc("repay_loan", {
         p_chama_id: activeChamaId,
         p_loan_ref: loanRef,
@@ -677,25 +709,19 @@ export default function Dashboard() {
         p_reference: `PAY-${proposalId}-${Date.now()}`,
       });
       if (error) {
-        // Fallback for loans disbursed before loan_books existed
-        const { error: fb } = await supabase.rpc("credit_loan_fund", {
-          p_chama_id: activeChamaId,
-          p_amount: amount,
-          p_reference: `PAY-${proposalId}-${Date.now()}`,
-        });
-        if (fb) {
-          toast.error(error.message || fb.message);
-          return;
-        }
-      } else if (repayData) {
+        toast.error(error.message || "Repayment could not be posted");
+        return;
+      }
+      if (repayData) {
         const rd = repayData as {
           principal_applied?: number;
           interest_applied?: number;
           reserve_amount?: number;
-          member_interest_pool?: number;
+          principal_remaining?: number;
+          interest_remaining?: number;
         };
         toast.message(
-          `Principal ${fmtKsh(Number(rd.principal_applied || 0))} restored · Interest ${fmtKsh(Number(rd.interest_applied || 0))} (reserve ${fmtKsh(Number(rd.reserve_amount || 0))})`,
+          `Principal restored ${fmtKsh(Number(rd.principal_applied || 0))} · Interest ${fmtKsh(Number(rd.interest_applied || 0))} (reserve ${fmtKsh(Number(rd.reserve_amount || 0))}) · Left ${fmtKsh(Number(rd.principal_remaining || 0) + Number(rd.interest_remaining || 0))}`,
         );
       }
       const { data: kitRows } = await supabase.rpc("list_chama_kits", {
