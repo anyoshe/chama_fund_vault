@@ -373,15 +373,85 @@ $$;
 grant execute on function public.repay_loan(uuid, text, numeric, text) to authenticated;
 
 -- ------------------------------------------------------------
--- CLEAN SLATE FOR LOAN TESTING (keeps all contributions)
--- Run after the functions above.
+-- CLEAN SLATE (run AFTER this file succeeds):
+--   truncate public.loan_books;
+--   update public.chama_members set active_loans = 0 where coalesce(active_loans, 0) <> 0;
+--   select public.rebuild_kits_from_contributions(null::uuid);
 -- ------------------------------------------------------------
--- 1) Wipe loan books only
-truncate public.loan_books;
 
-update public.chama_members
-set active_loans = 0
-where coalesce(active_loans, 0) <> 0;
+-- Ensure rebuild exists (in case rebuild_kits_from_contributions.sql was never run)
+create or replace function public.rebuild_kits_from_contributions(p_chama_id uuid default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  r record;
+  v_chamas int := 0;
+  v_kits int := 0;
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
 
--- 2) Rebuild kit pots from deposits so starting balances match contributions
-select public.rebuild_kits_from_contributions(null);
+  for r in
+    select c.id
+    from public.chamas c
+    where p_chama_id is null or c.id = p_chama_id
+  loop
+    if p_chama_id is not null then
+      if not exists (
+        select 1 from public.chama_members m
+        where m.chama_id = r.id and m.user_id = auth.uid()
+          and m.role in ('Chairperson', 'Treasurer') and m.status = 'active'
+      ) then
+        raise exception 'Only chairperson or treasurer can rebuild kits';
+      end if;
+    end if;
+
+    perform public.ensure_chama_kits(r.id);
+
+    update public.chama_kits set balance = 0 where chama_id = r.id;
+
+    update public.chama_kits k
+    set balance = coalesce((
+      select sum(c.amount)
+      from public.contributions c
+      where c.chama_id = k.chama_id
+        and c.destination = k.kit_code
+        and c.status = 'completed'
+    ), 0)
+    where k.chama_id = r.id;
+
+    delete from public.member_kit_balances where chama_id = r.id;
+
+    insert into public.member_kit_balances (chama_id, user_id, kit_code, balance, updated_at)
+    select
+      c.chama_id,
+      c.member_id,
+      c.destination,
+      sum(c.amount),
+      now()
+    from public.contributions c
+    where c.chama_id = r.id
+      and c.status = 'completed'
+      and c.member_id is not null
+      and c.destination is not null
+    group by c.chama_id, c.member_id, c.destination;
+
+    update public.chamas c
+    set pool_balance = coalesce((
+      select sum(k.balance) from public.chama_kits k where k.chama_id = c.id
+    ), 0)
+    where c.id = r.id;
+
+    v_chamas := v_chamas + 1;
+    v_kits := v_kits + (select count(*) from public.chama_kits where chama_id = r.id);
+  end loop;
+
+  return jsonb_build_object('ok', true, 'chamas', v_chamas, 'kits', v_kits);
+end;
+$$;
+
+grant execute on function public.rebuild_kits_from_contributions(uuid) to authenticated;
