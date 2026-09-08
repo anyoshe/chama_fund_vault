@@ -104,9 +104,14 @@ export default function ChamaOverview({
     Math.round((loaningPoolTotal / Math.max(loaningPoolTotal, chama.monthlyTarget || 1, 1)) * 100),
   );
 
-  // Share-like pots only — aligns with kit_counts_toward_loan in SQL
+  // Share-like pots — prefer live member_kit_balances (deposits + interest)
   const shareCodes = new Set(["table-banking", "share-capital", "general-savings"]);
-  const memberShareBalance = contributions
+  const memberShareFromBalances = memberBalances
+    .filter(
+      (b) => b.user_id === currentMemberId && shareCodes.has(b.kit_code),
+    )
+    .reduce((sum, b) => sum + (Number(b.balance) || 0), 0);
+  const memberShareFromContributions = contributions
     .filter(
       (c) =>
         c.status === "completed" &&
@@ -114,8 +119,12 @@ export default function ChamaOverview({
         shareCodes.has(c.destination as string),
     )
     .reduce((sum, c) => sum + c.amount, 0);
-  const maxLoanFromShares =
-    memberShareBalance * (chama.constitution.maxLoanMultiple || 3);
+  const memberShareBalance =
+    memberShareFromBalances > 0 ? memberShareFromBalances : memberShareFromContributions;
+  const maxMultiple = chama.constitution.maxLoanMultiple || 3;
+  const maxLoanFromShares = memberShareBalance * maxMultiple;
+  // Cannot borrow more than what is currently in the loaning pool
+  const maxBorrowable = Math.min(maxLoanFromShares, loaningPoolTotal);
   const quorumVoterCount = members.filter((member) => member.role !== "New Applicant").length || 1;
   const pendingVotes = proposals
     .filter((proposal) => proposal.type === "loan" && proposal.status === "active")
@@ -347,17 +356,27 @@ export default function ChamaOverview({
           <p className="mt-2 text-xs text-slate-400">
             Your loan limit is based on{" "}
             <span className="font-semibold text-slate-300">your shares</span> (table banking, share
-            capital, general savings), not the whole group pot. You can borrow up to{" "}
+            capital, general savings — including interest credits), not the whole group pot.
+            Shares now:{" "}
+            <span className="font-mono font-bold text-slate-200">
+              {fmtKsh(memberShareBalance)}
+            </span>
+            . Limit:{" "}
             <span className="font-mono font-bold text-slate-200">
               {fmtKsh(maxLoanFromShares)}
             </span>{" "}
-            ({chama.constitution.maxLoanMultiple}× your shares of {fmtKsh(memberShareBalance)}).
-            Loans draw from the loaning pool (table banking + share capital + general savings + member-loans). Liquidity shown as{" "}
-            <span className="font-semibold text-slate-300">
-              {loanFund ? loanFund.label : "member loans"}
-            </span>{" "}
-            kit
-            {loanFund ? ` (${fmtKsh(Number(loanFund.balance) || 0)} available)` : ""}.
+            ({maxMultiple}× shares). Loaning pool available:{" "}
+            <span className="font-mono font-bold text-emerald-300">
+              {fmtKsh(loaningPoolTotal)}
+            </span>
+            . Max you can take now:{" "}
+            <span className="font-mono font-bold text-violet-300">
+              {fmtKsh(maxBorrowable)}
+            </span>
+            {loanFund
+              ? ` · ${loanFund.label} kit ${fmtKsh(Number(loanFund.balance) || 0)}`
+              : ""}
+            .
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {[
