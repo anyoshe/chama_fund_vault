@@ -2,7 +2,6 @@ import ChamaVaultLogo from "@/components/ChamaVaultLogo";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
-  PiggyBank,
   ShieldCheck,
   UsersFour,
   ChartLineUp,
@@ -35,12 +34,7 @@ export default function Landing() {
       <header className="relative z-10 border-b border-slate-800/60">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 shadow-lg shadow-emerald-500/25">
-              <PiggyBank size={20} weight="fill" className="text-white" />
-            </div>
-            <span className="text-sm font-bold tracking-tight text-white">
-              <ChamaVaultLogo size={44} showWordmark />
-            </span>
+            <ChamaVaultLogo size={44} showWordmark />
           </div>
           <div className="flex items-center gap-3">
             <Link
