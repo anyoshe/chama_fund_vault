@@ -22,7 +22,7 @@ import type {
   Proposal,
 } from "../types/chama";
 import { fmtKsh } from "../data/mockChamaData";
-import LoansAndLedger from "./LoansAndLedger";
+import { LoanRatesChairPanel } from "./LoansAndLedger";
 
 type MemberBalance = { user_id: string; kit_code: string; balance: number };
 
@@ -1023,22 +1023,82 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             setOpsCard={setOpsCard}
             monthLabel={monthLabel}
           />
-          <LoansAndLedger
-            chamaId={props.chamaId}
+          <LoanRatesChairPanel
             chama={props.chama}
             members={props.members}
-            proposals={props.proposals}
-            ledger={props.ledger}
-            onRepay={props.onRepay}
-            onReschedule={props.onReschedule}
-            canDisburse={props.canDisburse}
-            onDisburse={props.onDisburse}
-            onBorrow={props.onBorrow}
-            onPartialRepay={props.onPartialRepay}
-            loanLimit={props.loanLimit}
-            shareBalance={props.shareBalance}
             onSaveLoanRates={props.onSaveLoanRates}
           />
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+            <p className="text-sm font-bold text-white">Disbursement queue</p>
+            <p className="mt-1 text-[11px] text-slate-500">
+              Treasurer confirms the applicant and releases funds from the loaning pool. Personal
+              repayments stay on <span className="text-emerald-300">My Finance</span>.
+            </p>
+            <div className="mt-3 space-y-2">
+              {awaitingDisburse.length === 0 ? (
+                <p className="text-xs text-slate-500">No loans waiting for disbursement.</p>
+              ) : (
+                awaitingDisburse.map((p) => {
+                  const who =
+                    members.find((m) => m.id === p.requesterId)?.name ?? "Member";
+                  return (
+                    <div
+                      key={p.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5"
+                    >
+                      <div>
+                        <p className="text-xs font-semibold text-slate-200">
+                          {who} · {p.title}
+                        </p>
+                        <p className="text-[10px] text-slate-500">
+                          {fmtKsh(p.amount)} · status {p.status}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={!props.canDisburse}
+                        onClick={() => void props.onDisburse(p.id)}
+                        className={`rounded-xl px-3 py-1.5 text-[11px] font-bold ${
+                          props.canDisburse
+                            ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
+                            : "cursor-not-allowed bg-slate-800 text-slate-500"
+                        }`}
+                      >
+                        {props.canDisburse ? "Disburse" : "Treasurer only"}
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+            <p className="text-sm font-bold text-white">Group audit (recent)</p>
+            <p className="mt-1 text-[11px] text-slate-500">
+              High-level trail only — not personal loan management.
+            </p>
+            <div className="mt-3 max-h-48 space-y-1.5 overflow-y-auto">
+              {ledger
+                .filter((e) => e.chamaId === chamaId)
+                .slice(0, 12)
+                .map((e) => (
+                  <div
+                    key={e.id}
+                    className="flex justify-between gap-2 rounded-lg border border-slate-800/80 px-2.5 py-1.5 text-[11px]"
+                  >
+                    <span className="truncate text-slate-400">{e.description}</span>
+                    <span className="shrink-0 font-mono text-slate-300">
+                      {fmtKsh(e.amount)}
+                    </span>
+                  </div>
+                ))}
+              {ledger.filter((e) => e.chamaId === chamaId).length === 0 && (
+                <p className="text-xs text-slate-500">No audit events yet.</p>
+              )}
+            </div>
+          </div>
         </motion.div>
       )}
     </div>

@@ -580,7 +580,7 @@ export default function LoansAndLedger({
   );
 }
 
-function LoanRatesChairPanel({
+export function LoanRatesChairPanel({
   chama,
   members,
   onSaveLoanRates,
