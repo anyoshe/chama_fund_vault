@@ -100,6 +100,7 @@ export async function fetchChamaAudit(chamaId: string): Promise<AuditEvent[]> {
     description: String(r.description ?? ""),
     amount: Number(r.amount) || 0,
     timestamp: String(r.timestamp ?? r.created_at ?? new Date().toISOString()),
+    reference: String(r.reference ?? r.id ?? ""),
   }));
 }
 

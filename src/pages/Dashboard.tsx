@@ -227,11 +227,25 @@ export default function Dashboard() {
         if (membersError) console.error("loadDashboardMembers", membersError);
         return;
       }
-      const profileMap = new Map(
-        (profiles ?? []).map((profile) => [profile.id, profile]),
+      type ProfileRow = {
+        id: string;
+        full_name?: string | null;
+        phone?: string | null;
+        avatar_hue?: number | null;
+      };
+      type MemberRow = {
+        user_id: string;
+        role: string;
+        joined_at: string;
+        monthly_contribution?: number | null;
+        total_paid?: number | null;
+        active_loans?: number | null;
+      };
+      const profileMap = new Map<string, ProfileRow>(
+        ((profiles ?? []) as ProfileRow[]).map((profile) => [profile.id, profile]),
       );
       setDisplayMembers(
-        (memberRows ?? []).map((membership) => {
+        ((memberRows ?? []) as MemberRow[]).map((membership) => {
           const profile = profileMap.get(membership.user_id);
           return {
             id: membership.user_id,
