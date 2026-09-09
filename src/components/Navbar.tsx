@@ -13,6 +13,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import type { Chama } from "../types/chama";
 import { fmtKsh } from "../data/mockChamaData";
+import ChamaVaultLogo from "./ChamaVaultLogo";
 
 interface NavbarProps {
   chamas: Chama[];
@@ -52,18 +53,11 @@ export default function Navbar({
     <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:px-6">
         {/* Brand */}
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 shadow-lg shadow-emerald-500/25">
-            <PiggyBank size={20} weight="fill" className="text-white" />
-          </div>
-          <div className="hidden sm:block">
-            <p className="text-sm font-bold leading-tight tracking-tight text-white">
-              Chama<span className="text-emerald-400">Vault</span>
-            </p>
-            <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-slate-400">
-              Zero-cash treasury
-            </p>
-          </div>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <ChamaVaultLogo size={42} showWordmark className="min-w-0" />
+          <p className="hidden text-[10px] font-medium uppercase tracking-[0.18em] text-slate-400 lg:block">
+            Zero-cash treasury
+          </p>
         </div>
 
         {/* Chama switcher */}

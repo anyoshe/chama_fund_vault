@@ -1,3 +1,4 @@
+import ChamaVaultLogo from "@/components/ChamaVaultLogo";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -38,7 +39,7 @@ export default function Landing() {
               <PiggyBank size={20} weight="fill" className="text-white" />
             </div>
             <span className="text-sm font-bold tracking-tight text-white">
-              Chama<span className="text-emerald-400">Vault</span>
+              <ChamaVaultLogo size={44} showWordmark />
             </span>
           </div>
           <div className="flex items-center gap-3">

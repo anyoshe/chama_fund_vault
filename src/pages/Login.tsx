@@ -1,3 +1,4 @@
+import ChamaVaultLogo from "@/components/ChamaVaultLogo";
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -44,7 +45,7 @@ export default function Login() {
               <PiggyBank size={28} weight="fill" className="text-white" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-white">
-              Chama<span className="text-emerald-400">Vault</span>
+              <ChamaVaultLogo size={56} showWordmark />
             </h1>
             <p className="mt-1 text-sm text-slate-400">
               Sign in to your chama treasury
