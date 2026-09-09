@@ -1273,6 +1273,7 @@ export default function Dashboard() {
                 onProposeLoan={handleProposeLoan}
                 canRequestLoan={canRequestLoan}
                 availableLoanLimit={availableLoanLimit}
+                onPartialRepay={handlePartialRepay}
               />
             )}
             {tab === "members" && <Members />}

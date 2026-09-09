@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   ChartLineUp,
   Coins,
@@ -93,6 +93,11 @@ interface MyFinanceProps {
   onProposeLoan: () => void;
   canRequestLoan?: boolean;
   availableLoanLimit?: number;
+  onPartialRepay?: (
+    proposalId: string,
+    amount: number,
+    method: string,
+  ) => void | Promise<void>;
 }
 
 function Card({
@@ -140,7 +145,12 @@ export default function MyFinance({
   onProposeLoan,
   canRequestLoan = true,
   availableLoanLimit,
+  onPartialRepay,
 }: MyFinanceProps) {
+  const [repayOpen, setRepayOpen] = useState(false);
+  const [repayAmount, setRepayAmount] = useState("");
+  const [repayMethod, setRepayMethod] = useState("M-Pesa STK Push");
+  const [repayBusy, setRepayBusy] = useState(false);
   const myId = me?.id ?? "";
 
   const myContributions = useMemo(
@@ -236,6 +246,19 @@ export default function MyFinance({
     })
     .filter(Boolean) as { title: string; dueDate: string; amount: number; label: string }[];
 
+  const activeDisbursed = myLoans.filter((p) => p.status === "disbursed");
+  const primaryLoan = activeDisbursed[0];
+  const primaryOutstanding = primaryLoan
+    ? (() => {
+        const schedule = primaryLoan.repayment?.schedule ?? [];
+        if (schedule.length) {
+          return schedule.filter((x) => !x.paid).reduce((s, x) => s + x.amount, 0);
+        }
+        return primaryLoan.amount;
+      })()
+    : 0;
+
+
   const myPenalties = ledger.filter(
     (e) =>
       e.chamaId === chama.id &&
@@ -306,7 +329,84 @@ export default function MyFinance({
             <HandCoins size={16} />{" "}
             {canRequestLoan ? "Request loan" : "Loan locked — settle first"}
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (!primaryLoan) return;
+              setRepayAmount(String(Math.round(primaryOutstanding * 100) / 100));
+              setRepayOpen((v) => !v);
+            }}
+            disabled={!primaryLoan || !onPartialRepay}
+            title={
+              !primaryLoan
+                ? "No disbursed loan to repay"
+                : "Repay your outstanding loan"
+            }
+            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-bold ${
+              primaryLoan && onPartialRepay
+                ? "border-amber-400/40 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20"
+                : "cursor-not-allowed border-slate-700 bg-slate-800 text-slate-500"
+            }`}
+          >
+            <Receipt size={16} />{" "}
+            {primaryLoan ? "Repay loan" : "No loan to repay"}
+          </button>
         </div>
+
+        {repayOpen && primaryLoan && onPartialRepay && (
+          <div className="mt-4 rounded-xl border border-amber-500/25 bg-slate-950/60 p-4">
+            <p className="text-xs font-bold text-white">
+              Repay · {primaryLoan.title}
+            </p>
+            <p className="mt-1 text-[11px] text-slate-500">
+              Outstanding balance {fmtKsh(primaryOutstanding)}. Edit amount if paying part of it.
+            </p>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+              <label className="flex-1 text-[11px] font-semibold text-slate-400">
+                Amount (KES)
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={repayAmount}
+                  onChange={(e) => setRepayAmount(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-sm text-white outline-none focus:border-amber-400/50"
+                />
+              </label>
+              <label className="flex-1 text-[11px] font-semibold text-slate-400">
+                Payment method
+                <select
+                  value={repayMethod}
+                  onChange={(e) => setRepayMethod(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-amber-400/50"
+                >
+                  <option>M-Pesa STK Push</option>
+                  <option>M-Pesa Paybill</option>
+                  <option>Bank transfer</option>
+                  <option>Cash to treasurer (recorded)</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                disabled={repayBusy}
+                onClick={async () => {
+                  const amt = Math.round(Number(repayAmount) * 100) / 100;
+                  if (!amt || amt <= 0) return;
+                  setRepayBusy(true);
+                  try {
+                    await onPartialRepay(primaryLoan.id, amt, repayMethod);
+                    setRepayOpen(false);
+                  } finally {
+                    setRepayBusy(false);
+                  }
+                }}
+                className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-amber-500/20 disabled:opacity-50"
+              >
+                {repayBusy ? "Posting…" : "Confirm repayment"}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
