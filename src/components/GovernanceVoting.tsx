@@ -69,7 +69,11 @@ export default function GovernanceVoting({
         <div className="grid gap-4 lg:grid-cols-2">
           {active.map((p) => {
             const requester = memberById(p.requesterId, members);
-            const voterCount = members.filter((m) => m.role !== "New Applicant").length || 1;
+            const isApplicant = p.requesterId === currentMemberId;
+            const voterCount =
+              members.filter(
+                (m) => m.role !== "New Applicant" && m.id !== p.requesterId,
+              ).length || 1;
             const required = Math.ceil(voterCount * p.quorumThreshold);
             const approvals = Object.values(p.votes).filter((v) => v === "approve").length;
             const rejections = Object.values(p.votes).filter((v) => v === "reject").length;
@@ -151,26 +155,32 @@ export default function GovernanceVoting({
                     </p>
                   </div>
 
-                  {/* Vote buttons */}
-                  <div className="mt-4 grid grid-cols-2 gap-2">
-                    <VoteButton
-                      value="approve"
-                      myVote={myVote}
-                      onClick={() => {
-                        onCastVote(p.id, "approve");
-                        toast.success("Vote cast — Approve", { description: p.title });
-                      }}
-                    />
-                    <VoteButton
-                      value="reject"
-                      myVote={myVote}
-                      reject
-                      onClick={() => {
-                        onCastVote(p.id, "reject");
-                        toast("Vote cast — Reject", { description: p.title });
-                      }}
-                    />
-                  </div>
+                  {/* Vote buttons — applicant cannot vote on own motion */}
+                  {isApplicant ? (
+                    <p className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/5 px-3 py-2.5 text-center text-xs text-amber-200/90">
+                      You applied for this loan — you cannot vote on your own application. Other members decide.
+                    </p>
+                  ) : (
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <VoteButton
+                        value="approve"
+                        myVote={myVote}
+                        onClick={() => {
+                          onCastVote(p.id, "approve");
+                          toast.success("Vote cast — Approve", { description: p.title });
+                        }}
+                      />
+                      <VoteButton
+                        value="reject"
+                        myVote={myVote}
+                        reject
+                        onClick={() => {
+                          onCastVote(p.id, "reject");
+                          toast("Vote cast — Reject", { description: p.title });
+                        }}
+                      />
+                    </div>
+                  )}
 
                   <button
                     onClick={() => setOpenId(open ? null : p.id)}

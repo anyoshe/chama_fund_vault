@@ -409,8 +409,16 @@ export default function Dashboard() {
   const handleCastVote = (proposalId: string, vote: VoteValue) => {
     const target = proposals.find((p) => p.id === proposalId);
     if (!target) return;
+    if (target.requesterId === currentMemberId) {
+      toast.error("You cannot vote on your own loan application.");
+      return;
+    }
     const nextVotes = { ...target.votes, [currentMemberId]: vote };
-    const voterCount = displayMembers.filter((m) => m.role !== "New Applicant").length || 1;
+    // Eligible voters exclude New Applicants and the loan applicant
+    const voterCount =
+      displayMembers.filter(
+        (m) => m.role !== "New Applicant" && m.id !== target.requesterId,
+      ).length || 1;
     const required = Math.ceil(voterCount * target.quorumThreshold);
     const approvals = Object.values(nextVotes).filter((v) => v === "approve").length;
     const passed = target.status === "active" && approvals >= required;
