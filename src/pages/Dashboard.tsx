@@ -651,6 +651,23 @@ export default function Dashboard() {
     toast.success("Loan disbursed from the loaning pool", {
       description: `${target.title} · ${fmtKsh(target.amount)}`,
     });
+    try {
+      await updateProposalOnServer({
+        proposalId,
+        status: "disbursed",
+        disbursement: target.disbursement ?? null,
+        repayment: target.repayment ?? null,
+      });
+      if (activeChamaId) {
+        const list = await fetchChamaProposals(activeChamaId);
+        setProposals((prev) => {
+          const others = prev.filter((p) => p.chamaId !== activeChamaId);
+          return [...list, ...others];
+        });
+      }
+    } catch (e) {
+      console.warn("Disburse server sync skipped", e);
+    }
   };
 
   const handleRepay = async (proposalId: string) => {
