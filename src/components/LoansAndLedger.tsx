@@ -326,7 +326,7 @@ export default function LoansAndLedger({
 
             {isOfficial && (
               <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-                <p className="text-sm font-bold text-white">All loans (officials)</p>
+                <p className="text-sm font-bold text-white">Member facilities (group book)</p>
                 <p className="mt-0.5 text-[11px] text-slate-500">
                   View-only summary. Members manage their own repayments.
                 </p>
@@ -363,7 +363,7 @@ export default function LoansAndLedger({
 
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
               <p className="text-sm font-bold text-white">
-                {isOfficial ? "My loans" : "Your loans"}
+                {isOfficial ? "Your facilities (as member)" : "Your loans"}
               </p>
               <p className="mt-0.5 text-[11px] text-slate-500">
                 Expand to view schedule and repay.

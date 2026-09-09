@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   Bank,
+  CaretDown,
   ChartLineUp,
   Coins,
   GearSix,
@@ -116,6 +117,449 @@ function Kpi({
   );
 }
 
+
+function CollapseSection({
+  title,
+  subtitle,
+  open,
+  onToggle,
+  children,
+  count,
+}: {
+  title: string;
+  subtitle?: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+  count?: number;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/70">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+      >
+        <div>
+          <p className="text-sm font-bold text-white">
+            {title}
+            {typeof count === "number" && (
+              <span className="ml-2 rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-slate-400">
+                {count}
+              </span>
+            )}
+          </p>
+          {subtitle && <p className="mt-0.5 text-[11px] text-slate-500">{subtitle}</p>}
+        </div>
+        <CaretDown
+          size={18}
+          className={`shrink-0 text-slate-400 transition ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && <div className="border-t border-slate-800 px-4 pb-4 pt-3">{children}</div>}
+    </div>
+  );
+}
+
+
+function OpsReportCards({
+  chama,
+  members,
+  chamaProposals,
+  paidLoans,
+  awaitingDisburse,
+  activeVotes,
+  rejected,
+  outstandingPrincipal,
+  outstandingInterest,
+  loaningPool,
+  kits,
+  interestAccrued,
+  interestCollected,
+  repaidPrincipal,
+  totalContributions,
+  completedContributions,
+  reserveBalance,
+  opsCard,
+  setOpsCard,
+  monthLabel,
+}: {
+  chama: Chama;
+  members: Member[];
+  chamaProposals: Proposal[];
+  paidLoans: Proposal[];
+  awaitingDisburse: Proposal[];
+  activeVotes: Proposal[];
+  rejected: Proposal[];
+  outstandingPrincipal: number;
+  outstandingInterest: number;
+  loaningPool: number;
+  kits: ChamaKit[];
+  interestAccrued: number;
+  interestCollected: number;
+  repaidPrincipal: number;
+  totalContributions: number;
+  completedContributions: Contribution[];
+  reserveBalance: number;
+  opsCard: string | null;
+  setOpsCard: (id: string | null) => void;
+  monthLabel: string;
+}) {
+  const liquidityCodes = new Set([
+    "table-banking",
+    "share-capital",
+    "general-savings",
+    "member-loans",
+  ]);
+  const monthKey = new Date().toISOString().slice(0, 7);
+  const disbursed = chamaProposals.filter((p) => p.status === "disbursed");
+  const quorumVoterCount =
+    members.filter((m) => m.role !== "New Applicant").length || 1;
+
+  const exp = (p: Proposal) => {
+    const schedule = p.repayment?.schedule ?? [];
+    const scheduleTotal = schedule.reduce((s, x) => s + x.amount, 0);
+    const originalInterest = Math.max(0, scheduleTotal - p.amount);
+    const paidTotal = schedule.filter((x) => x.paid).reduce((s, x) => s + x.amount, 0);
+    const interestPaid = Math.min(paidTotal, originalInterest);
+    const principalPaid = Math.max(0, paidTotal - interestPaid);
+    return {
+      principalOut: Math.max(0, p.amount - principalPaid),
+      interestOut: Math.max(0, originalInterest - interestPaid),
+      interestTotal: originalInterest,
+      interestPaid,
+      next: schedule.find((x) => !x.paid) ?? null,
+    };
+  };
+
+  const duesList = disbursed
+    .map((p) => {
+      const e = exp(p);
+      if (!e.next) return null;
+      return {
+        id: p.id,
+        who: members.find((m) => m.id === p.requesterId)?.name ?? "Member",
+        title: p.title,
+        amount: e.next.amount,
+        dueDate: e.next.dueDate,
+        principalOut: e.principalOut,
+      };
+    })
+    .filter(Boolean) as {
+    id: string;
+    who: string;
+    title: string;
+    amount: number;
+    dueDate: string;
+    principalOut: number;
+  }[];
+
+  const disbursedThisMonth = chamaProposals.filter(
+    (p) =>
+      (p.status === "disbursed" || p.status === "settled") &&
+      (p.disbursedAt || "").startsWith(monthKey),
+  );
+  const disbursedThisMonthAmt = disbursedThisMonth.reduce((s, p) => s + p.amount, 0);
+  const interestExpectedThisMonth = disbursedThisMonth.reduce(
+    (s, p) => s + exp(p).interestTotal,
+    0,
+  );
+
+  const Card = ({
+    id,
+    label,
+    value,
+    sub,
+    accent,
+  }: {
+    id: string;
+    label: string;
+    value: string;
+    sub?: string;
+    accent: string;
+  }) => {
+    const open = opsCard === id;
+    return (
+      <button
+        type="button"
+        onClick={() => setOpsCard(open ? null : id)}
+        className={`rounded-2xl border bg-slate-900/70 p-4 text-left transition ${
+          open ? "border-violet-500/40 bg-violet-500/10" : "border-slate-800 hover:border-slate-600"
+        }`}
+      >
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          {label}
+        </p>
+        <p className="mt-1.5 font-mono text-lg font-bold text-white">{value}</p>
+        {sub && <p className="mt-1 text-[11px] text-slate-500">{sub}</p>}
+        <p className="mt-2 text-[10px] font-semibold text-slate-400">
+          {open ? "Hide details" : "Tap for details"}
+        </p>
+      </button>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-slate-500">
+        Group loan book · tap a card for lists and breakdowns
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Card
+          id="balances"
+          label="Loan balances outstanding"
+          value={fmtKsh(outstandingPrincipal)}
+          sub={`${fmtKsh(outstandingInterest)} interest still due`}
+          accent="rose"
+        />
+        <Card
+          id="available"
+          label="Available for loaning"
+          value={fmtKsh(loaningPool)}
+          sub="4 liquidity kits"
+          accent="emerald"
+        />
+        <Card
+          id="dues"
+          label="Loan payments due"
+          value={String(duesList.length)}
+          sub={
+            duesList[0]
+              ? `Next ${fmtKsh(duesList[0].amount)} · ${fmtLongDate(duesList[0].dueDate)}`
+              : "No upcoming installments"
+          }
+          accent="amber"
+        />
+        <Card
+          id="applied"
+          label="Loans applied"
+          value={String(activeVotes.length + awaitingDisburse.length + rejected.length)}
+          sub={`${activeVotes.length} voting · ${awaitingDisburse.length} approved`}
+          accent="violet"
+        />
+        <Card
+          id="approved"
+          label="Approved for disbursement"
+          value={String(awaitingDisburse.length)}
+          sub={
+            awaitingDisburse.length
+              ? fmtKsh(awaitingDisburse.reduce((s, p) => s + p.amount, 0))
+              : "Queue empty"
+          }
+          accent="sky"
+        />
+        <Card
+          id="month-disb"
+          label={`Disbursed · ${monthLabel}`}
+          value={fmtKsh(disbursedThisMonthAmt)}
+          sub={`Interest expected ${fmtKsh(interestExpectedThisMonth)}`}
+          accent="violet"
+        />
+        <Card
+          id="repaid"
+          label="Principal repaid"
+          value={fmtKsh(repaidPrincipal)}
+          sub={`Interest in ${fmtKsh(interestCollected)}`}
+          accent="emerald"
+        />
+        <Card
+          id="interest"
+          label="Interest report"
+          value={fmtKsh(interestAccrued)}
+          sub={`Reserve ${fmtKsh(reserveBalance)}`}
+          accent="amber"
+        />
+        <Card
+          id="deposits"
+          label="Member deposits"
+          value={fmtKsh(totalContributions)}
+          sub={`${completedContributions.length} records`}
+          accent="sky"
+        />
+      </div>
+
+      {opsCard && (
+        <div className="rounded-2xl border border-slate-700 bg-slate-900/80 p-4">
+          {opsCard === "balances" && (
+            <div className="space-y-2">
+              <p className="text-sm font-bold text-white">Outstanding balances</p>
+              {disbursed.length === 0 ? (
+                <p className="text-xs text-slate-500">None.</p>
+              ) : (
+                disbursed.map((p) => {
+                  const e = exp(p);
+                  const who = members.find((m) => m.id === p.requesterId)?.name ?? "Member";
+                  return (
+                    <div
+                      key={p.id}
+                      className="flex justify-between gap-2 rounded-xl border border-slate-800 px-3 py-2 text-xs"
+                    >
+                      <span className="text-slate-300">
+                        {who} · {p.title}
+                      </span>
+                      <span className="font-mono text-rose-300">
+                        {fmtKsh(e.principalOut)} + int {fmtKsh(e.interestOut)}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+          {opsCard === "available" && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {kits
+                .filter((k) => liquidityCodes.has(k.kit_code))
+                .map((k) => (
+                  <div
+                    key={k.kit_code}
+                    className="flex justify-between rounded-xl border border-slate-800 px-3 py-2 text-xs"
+                  >
+                    <span className="text-slate-300">{k.label}</span>
+                    <span className="font-mono text-emerald-300">
+                      {fmtKsh(Number(k.balance) || 0)}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          )}
+          {opsCard === "dues" && (
+            <div className="space-y-2">
+              <p className="text-sm font-bold text-white">Payments due</p>
+              {duesList.length === 0 ? (
+                <p className="text-xs text-slate-500">No open installments.</p>
+              ) : (
+                duesList.map((d) => (
+                  <div
+                    key={d.id}
+                    className="flex justify-between gap-2 rounded-xl border border-slate-800 px-3 py-2 text-xs"
+                  >
+                    <div>
+                      <p className="font-semibold text-slate-200">
+                        {d.who} · {d.title}
+                      </p>
+                      <p className="text-[10px] text-slate-500">
+                        Due {fmtLongDate(d.dueDate)}
+                      </p>
+                    </div>
+                    <span className="font-mono font-bold text-amber-300">
+                      {fmtKsh(d.amount)}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+          {opsCard === "applied" && (
+            <div className="space-y-2">
+              <p className="text-sm font-bold text-white">Applications</p>
+              {[...activeVotes, ...awaitingDisburse, ...rejected].map((p) => {
+                const who = members.find((m) => m.id === p.requesterId)?.name ?? "Member";
+                const votes = Object.values(p.votes || {});
+                const approve = votes.filter((v) => v === "approve").length;
+                const need = Math.ceil(quorumVoterCount * (p.quorumThreshold || 0.6));
+                return (
+                  <div key={p.id} className="rounded-xl border border-slate-800 px-3 py-2 text-xs">
+                    <div className="flex justify-between gap-2">
+                      <span className="font-semibold text-slate-200">
+                        {who} · {p.title}
+                      </span>
+                      <span className="text-[10px] font-bold uppercase text-slate-400">
+                        {p.status}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-slate-500">
+                      {fmtKsh(p.amount)} · {approve} yes votes · need {need} for quorum
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {opsCard === "approved" && (
+            <div className="space-y-2">
+              <p className="text-sm font-bold text-white">Awaiting disbursement</p>
+              {awaitingDisburse.map((p) => {
+                const who = members.find((m) => m.id === p.requesterId)?.name ?? "Member";
+                return (
+                  <div
+                    key={p.id}
+                    className="flex justify-between rounded-xl border border-sky-500/20 px-3 py-2 text-xs"
+                  >
+                    <span className="text-slate-200">
+                      {who} · {p.title}
+                    </span>
+                    <span className="font-mono text-sky-300">{fmtKsh(p.amount)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {opsCard === "month-disb" && (
+            <div className="space-y-2">
+              <p className="text-sm font-bold text-white">Disbursed in {monthLabel}</p>
+              {disbursedThisMonth.length === 0 ? (
+                <p className="text-xs text-slate-500">None this month.</p>
+              ) : (
+                disbursedThisMonth.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex justify-between rounded-xl border border-slate-800 px-3 py-2 text-xs"
+                  >
+                    <span className="text-slate-300">
+                      {members.find((m) => m.id === p.requesterId)?.name ?? "Member"} ·{" "}
+                      {fmtLongDate(p.disbursedAt || "")}
+                    </span>
+                    <span className="font-mono text-violet-300">{fmtKsh(p.amount)}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+          {opsCard === "repaid" && (
+            <p className="text-xs text-slate-400">
+              Principal restored to kits (book): {fmtKsh(repaidPrincipal)}. Interest collected:{" "}
+              {fmtKsh(interestCollected)}. See Audit Ledger for line items.
+            </p>
+          )}
+          {opsCard === "interest" && (
+            <ul className="space-y-1 text-xs text-slate-400">
+              <li>Accrued: {fmtKsh(interestAccrued)}</li>
+              <li>Collected: {fmtKsh(interestCollected)}</li>
+              <li>Still due: {fmtKsh(outstandingInterest)}</li>
+              <li>Reserve kit: {fmtKsh(reserveBalance)}</li>
+            </ul>
+          )}
+          {opsCard === "deposits" && (
+            <div className="max-h-56 space-y-2 overflow-y-auto">
+              {completedContributions.slice(0, 20).map((c) => (
+                <div
+                  key={c.id}
+                  className="flex justify-between rounded-xl border border-slate-800 px-3 py-2 text-xs"
+                >
+                  <span className="text-slate-300">
+                    {members.find((m) => m.id === c.memberId)?.name ?? "Member"} ·{" "}
+                    {c.destination} · {fmtLongDate(c.date)}
+                  </span>
+                  <span className="font-mono text-emerald-300">{fmtKsh(c.amount)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/40 p-4">
+        <p className="text-sm font-bold text-white">External borrowing (chama as borrower)</p>
+        <p className="mt-1 text-xs text-slate-500">
+          Placeholder for bank or inter-chama debt. Member facilities stay in the group loan book
+          above; this section will track loans the chama itself takes.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function ChamaFinance(props: ChamaFinanceProps) {
   const {
     chama,
@@ -137,6 +581,11 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
   const isTreasurer = me?.role === "Treasurer";
 
   const [section, setSection] = useState<"command" | "operations">("command");
+  const [openOut, setOpenOut] = useState(false);
+  const [openSettled, setOpenSettled] = useState(false);
+  const [openMembers, setOpenMembers] = useState(false);
+  const [openExternal, setOpenExternal] = useState(false);
+  const [opsCard, setOpsCard] = useState<string | null>(null);
 
   const chamaProposals = useMemo(
     () => proposals.filter((p) => p.chamaId === chamaId && p.type === "loan"),
@@ -372,14 +821,15 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             </p>
           </div>
 
-          {/* Outstanding facilities */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-            <p className="text-sm font-bold text-white">Outstanding facilities</p>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Principal still out and interest still due (live from schedules)
-            </p>
-            <div className="mt-3 space-y-2">
-              {chamaProposals.filter((p) => p.status === "disbursed").length === 0 ? (
+          <CollapseSection
+            title="Outstanding facilities"
+            subtitle="Principal still out · expand to view"
+            open={openOut}
+            onToggle={() => setOpenOut((v) => !v)}
+            count={chamaProposals.filter((p) => p.status === "disbursed").length}
+          >
+            <div className="space-y-2">
+{chamaProposals.filter((p) => p.status === "disbursed").length === 0 ? (
                 <p className="text-xs text-slate-500">No disbursed loans outstanding.</p>
               ) : (
                 chamaProposals
@@ -419,13 +869,17 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                   })
               )}
             </div>
-          </div>
+          </CollapseSection>
 
-          {/* Paid loans */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-            <p className="text-sm font-bold text-white">Settled loans</p>
-            <div className="mt-3 space-y-2">
-              {paidLoans.length === 0 ? (
+          <CollapseSection
+            title="Settled loans"
+            subtitle="Fully repaid facilities"
+            open={openSettled}
+            onToggle={() => setOpenSettled((v) => !v)}
+            count={paidLoans.length}
+          >
+            <div className="space-y-2">
+{paidLoans.length === 0 ? (
                 <p className="text-xs text-slate-500">No fully settled loans yet.</p>
               ) : (
                 paidLoans.map((p) => {
@@ -455,16 +909,17 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                 })
               )}
             </div>
-          </div>
+          </CollapseSection>
 
-          {/* Member contributions rollup */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-            <p className="text-sm font-bold text-white">Member contributions & balances</p>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Deposits recorded + live kit balances (includes interest credits)
-            </p>
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[28rem] text-left text-xs">
+          <CollapseSection
+            title="Member contributions & balances"
+            subtitle="Deposits + live kit balances · expand to view"
+            open={openMembers}
+            onToggle={() => setOpenMembers((v) => !v)}
+            count={contribByMember.length}
+          >
+            <div className="overflow-x-auto">
+<table className="w-full min-w-[28rem] text-left text-xs">
                 <thead>
                   <tr className="border-b border-slate-800 text-[10px] uppercase tracking-wide text-slate-500">
                     <th className="pb-2 font-semibold">Member</th>
@@ -489,9 +944,24 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                 </tbody>
               </table>
             </div>
-          </div>
+          </CollapseSection>
 
-          {/* Leader actions hint */}
+          <CollapseSection
+            title="External loans (chama as borrower)"
+            subtitle="Banks or other chamas — group debt book"
+            open={openExternal}
+            onToggle={() => setOpenExternal((v) => !v)}
+          >
+            <p className="text-xs text-slate-400">
+              When this chama borrows externally, facilities will list here (lender, schedule, repayments).
+              Member loans remain separate. This is the group&apos;s own external debt.
+            </p>
+            <div className="mt-3 rounded-xl border border-dashed border-slate-700 bg-slate-950/40 px-3 py-6 text-center text-[11px] text-slate-500">
+              No external facilities yet
+            </div>
+          </CollapseSection>
+
+{/* Leader actions hint */}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
               <p className="flex items-center gap-2 text-sm font-bold text-white">
@@ -523,7 +993,36 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
           </div>
         </motion.div>
       ) : (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+          <OpsReportCards
+            chama={chama}
+            members={members}
+            chamaProposals={chamaProposals}
+            paidLoans={paidLoans}
+            awaitingDisburse={awaitingDisburse}
+            activeVotes={activeVotes}
+            rejected={chamaProposals.filter((p) => p.status === "rejected")}
+            outstandingPrincipal={outstandingPrincipal}
+            outstandingInterest={outstandingInterest}
+            loaningPool={loaningPool}
+            kits={kits}
+            interestAccrued={interestAccrued}
+            interestCollected={interestCollected}
+            repaidPrincipal={[...chamaProposals.filter((p) => p.status === "disbursed" || p.status === "settled")].reduce((s, p) => {
+              const schedule = p.repayment?.schedule ?? [];
+              const scheduleTotal = schedule.reduce((a, x) => a + x.amount, 0);
+              const originalInterest = Math.max(0, scheduleTotal - p.amount);
+              const paidTotal = schedule.filter((x) => x.paid).reduce((a, x) => a + x.amount, 0);
+              const interestPaid = Math.min(paidTotal, originalInterest);
+              return s + Math.max(0, paidTotal - interestPaid);
+            }, 0)}
+            totalContributions={totalContributions}
+            completedContributions={completedContributions}
+            reserveBalance={Number(reserveKit?.balance) || 0}
+            opsCard={opsCard}
+            setOpsCard={setOpsCard}
+            monthLabel={monthLabel}
+          />
           <LoansAndLedger
             chamaId={props.chamaId}
             chama={props.chama}
