@@ -2,7 +2,7 @@ import ChamaVaultLogo from "@/components/ChamaVaultLogo";
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { PiggyBank, Eye, EyeSlash, SpinnerGap } from "@phosphor-icons/react";
+import { Eye, EyeSlash, SpinnerGap } from "@phosphor-icons/react";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function Login() {
@@ -41,12 +41,9 @@ export default function Login() {
         >
           {/* Brand */}
           <div className="mb-8 flex flex-col items-center text-center">
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 shadow-lg shadow-emerald-500/30">
-              <PiggyBank size={28} weight="fill" className="text-white" />
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">
+            <div className="mb-4">
               <ChamaVaultLogo size={56} showWordmark />
-            </h1>
+            </div>
             <p className="mt-1 text-sm text-slate-400">
               Sign in to your chama treasury
             </p>

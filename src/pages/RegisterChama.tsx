@@ -3,7 +3,6 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
-  PiggyBank,
   Eye,
   EyeSlash,
   SpinnerGap,
@@ -103,9 +102,7 @@ export default function RegisterChama() {
         >
           {/* Brand */}
           <div className="mb-8 flex flex-col items-center text-center">
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 shadow-lg shadow-emerald-500/30">
-              <PiggyBank size={28} weight="fill" className="text-white" />
-            </div>
+<div className="mb-4"><ChamaVaultLogo size={56} /></div>
             <h1 className="text-2xl font-bold tracking-tight text-white">
               Create your <span className="text-emerald-400">Chama</span>
             </h1>
