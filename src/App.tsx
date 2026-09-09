@@ -6,6 +6,7 @@ import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import RegisterChama from "@/pages/RegisterChama";
 import Dashboard from "@/pages/Dashboard";
+import Legal from "@/pages/Legal";
 
 function PublicOnly({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
@@ -44,6 +45,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="/legal/:doc" element={<Legal />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <Toaster

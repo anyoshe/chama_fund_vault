@@ -12,6 +12,14 @@ import Members from "@/pages/Members";
 import MyFinance from "@/components/MyFinance";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
+import {
+  appendAudit,
+  castVoteOnServer,
+  createLoanProposalOnServer,
+  fetchChamaAudit,
+  fetchChamaProposals,
+  updateProposalOnServer,
+} from "@/lib/proposalsApi";
 import type { ChamaKit,
   AuditEvent,
   Chama,
@@ -435,15 +443,65 @@ export default function Dashboard() {
     );
   };
 
-  const handleCastVote = (proposalId: string, vote: VoteValue) => {
+
+  // Server proposals + audit (source of truth when SQL applied)
+  useEffect(() => {
+    if (!activeChamaId) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const [plist, alist] = await Promise.all([
+          fetchChamaProposals(activeChamaId),
+          fetchChamaAudit(activeChamaId),
+        ]);
+        if (cancelled) return;
+        if (plist.length || true) {
+          setProposals((prev) => {
+            // Prefer server rows for this chama; keep other chamas local if any
+            const others = prev.filter((p) => p.chamaId !== activeChamaId);
+            return [...plist, ...others];
+          });
+        }
+        if (alist.length) {
+          setLedger((prev) => {
+            const others = prev.filter((e) => e.chamaId !== activeChamaId);
+            return [...alist, ...others];
+          });
+        }
+      } catch (e) {
+        console.warn("Server proposals unavailable — using local until SQL is applied", e);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeChamaId]);
+
+  const handleCastVote = async (proposalId: string, vote: VoteValue) => {
     const target = proposals.find((p) => p.id === proposalId);
     if (!target) return;
     if (target.requesterId === currentMemberId) {
       toast.error("You cannot vote on your own loan application.");
       return;
     }
+    try {
+      const list = await castVoteOnServer(proposalId, vote);
+      setProposals((prev) => {
+        const others = prev.filter((p) => p.chamaId !== activeChamaId);
+        return [...list, ...others];
+      });
+      const updated = list.find((p) => p.id === proposalId);
+      if (updated?.status === "approved") {
+        toast.success("Quorum reached — awaiting treasurer disbursement", {
+          description: target.title,
+        });
+      }
+      return;
+    } catch (e) {
+      console.warn("Server vote failed, local fallback", e);
+    }
     const nextVotes = { ...target.votes, [currentMemberId]: vote };
-    // Eligible voters exclude New Applicants and the loan applicant
     const voterCount =
       displayMembers.filter(
         (m) => m.role !== "New Applicant" && m.id !== target.requesterId,
@@ -986,8 +1044,38 @@ export default function Dashboard() {
       },
     };
 
+        try {
+      const list = await createLoanProposalOnServer({
+        chamaId: activeChamaId,
+        amount,
+        title,
+        reason: newProposal.reason,
+        quorum: quorumThreshold,
+        repayment: plan
+          ? {
+              interestRate: plan.interestRate,
+              interestModel: plan.interestModel,
+              installments: plan.installments,
+              schedule: plan.schedule,
+            }
+          : undefined,
+      });
+      setProposals((prev) => {
+        const others = prev.filter((p) => p.chamaId !== activeChamaId);
+        return [...list, ...others];
+      });
+      toast.success("Loan request submitted for quorum vote");
+      setTab("voting");
+      return;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Could not save proposal on server";
+      console.warn(msg, e);
+      toast.message("Saved locally — run proposals SQL for multi-device sync", {
+        description: String(msg),
+      });
+    }
     setProposals((prev) => [newProposal, ...prev]);
-    setLedger((prev) =>
+ setLedger((prev) =>
       pushAudit(prev, {
         memberId: user.id,
         type: "loan-disbursed",

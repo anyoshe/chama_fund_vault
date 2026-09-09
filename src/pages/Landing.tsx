@@ -113,6 +113,12 @@ export default function Landing() {
           ))}
         </div>
       </main>
-    </div>
+          <p className="pb-8 text-center text-[11px] text-slate-600">
+        <a href="/legal/terms" className="hover:text-emerald-400">Terms</a>
+        {" · "}
+        <a href="/legal/privacy" className="hover:text-emerald-400">Privacy</a>
+      </p>
+</div>
   );
 }
+

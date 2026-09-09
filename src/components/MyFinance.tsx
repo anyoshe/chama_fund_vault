@@ -312,6 +312,33 @@ export default function MyFinance({
           <button
             type="button"
             onClick={() => {
+              const lines = [
+                "ChamaVault personal statement",
+                `Member,${me?.name ?? ""}`,
+                `Chama,${chama.name}`,
+                `Generated,${new Date().toISOString()}`,
+                "",
+                "Date,Kit,Method,Amount",
+                ...myContributions.map(
+                  (c) =>
+                    `${(c.date || "").slice(0, 10)},${c.destination},${c.method},${c.amount}`,
+                ),
+              ];
+              const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `chamavault-statement-${(me?.name || "member").replace(/\s+/g, "-")}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-600 bg-slate-800/80 px-4 py-2 text-xs font-bold text-slate-200 hover:bg-slate-800"
+          >
+            <Receipt size={16} /> Download statement
+          </button>
+          <button
+            type="button"
+            onClick={() => {
               if (canRequestLoan) onProposeLoan();
             }}
             disabled={!canRequestLoan}
