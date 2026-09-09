@@ -30,8 +30,6 @@ import type { ChamaKit,
 } from "@/types/chama";
 import {
   chamas as seedChamas,
-  initialLedger,
-  initialContributions,
   fmtKsh,
 } from "@/data/mockChamaData";
 
@@ -326,27 +324,13 @@ export default function Dashboard() {
   const [tab, setTab] = useState<Tab>("overview");
   const [contribOpen, setContribOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [contributions, setContributions] = useState<Contribution[]>(() => {
-    const s = loadPersisted();
-    return s ? s.contributions : initialContributions;
-  });
-  const [proposals, setProposals] = useState<Proposal[]>(() => {
-    const s = loadPersisted();
-    return s ? s.proposals.filter((proposal) => !/^p-\d+$/.test(proposal.id)) : [];
-  });
-  const [ledger, setLedger] = useState<AuditEvent[]>(() => {
-    const s = loadPersisted();
-    return s ? s.ledger : initialLedger;
-  });
-
-  useEffect(() => {
-    const s: PersistedState = { contributions, proposals, ledger };
-    try {
-      localStorage.setItem(LS_KEY, JSON.stringify(s));
-    } catch {
-      /* storage full or blocked - non-fatal */
-    }
-  }, [contributions, proposals, ledger]);
+  const [serverNotifs, setServerNotifs] = useState<
+    { id: string; title: string; body: string; kind: string; createdAt: string }[]
+  >([]);
+  const [contributions, setContributions] = useState<Contribution[]>([]);
+  const [proposals, setProposals] = useState<Proposal[]>([]);
+  const [ledger, setLedger] = useState<AuditEvent[]>([]);
+  // Proposals/votes/ledger: server is source of truth (run proposals_ledger_persistence.sql)
 
   const chama = useMemo(
     () => displayChamas.find((c) => c.id === activeChamaId) ?? displayChamas[0],
@@ -450,10 +434,23 @@ export default function Dashboard() {
     let cancelled = false;
     const load = async () => {
       try {
-        const [plist, alist] = await Promise.all([
+        const [plist, alist, nres] = await Promise.all([
           fetchChamaProposals(activeChamaId),
           fetchChamaAudit(activeChamaId),
+          supabase.rpc("list_my_notifications", { p_limit: 40 }),
         ]);
+        if (!cancelled && nres.data) {
+          const rows = Array.isArray(nres.data) ? nres.data : [];
+          setServerNotifs(
+            rows.map((n: Record<string, unknown>) => ({
+              id: String(n.id),
+              title: String(n.title ?? ""),
+              body: String(n.body ?? ""),
+              kind: String(n.kind ?? "info"),
+              createdAt: String(n.createdAt ?? n.created_at ?? ""),
+            })),
+          );
+        }
         if (cancelled) return;
         if (plist.length || true) {
           setProposals((prev) => {
@@ -1082,6 +1079,14 @@ export default function Dashboard() {
         return [...list, ...others];
       });
       toast.success("Loan request submitted for quorum vote");
+      try {
+        const created = list.find((p) => p.requesterId === user.id && p.status === "active");
+        if (created?.id) {
+          await supabase.rpc("notify_loan_proposed", { p_proposal_id: created.id });
+        }
+      } catch {
+        /* optional */
+      }
       setTab("voting");
       return;
     } catch (e) {
@@ -1421,6 +1426,15 @@ export default function Dashboard() {
                 </button>
               </div>
               <div className="flex-1 space-y-2.5 overflow-y-auto p-4">
+                {serverNotifs.map((n) => (
+                  <div
+                    key={n.id}
+                    className="rounded-xl border border-slate-700 bg-slate-950/60 p-3"
+                  >
+                    <p className="text-xs font-semibold text-slate-200">{n.title}</p>
+                    <p className="mt-1 text-[11px] text-slate-400">{n.body}</p>
+                  </div>
+                ))}
                 {financeAlerts.map((a) => (
                   <div
                     key={a.id}

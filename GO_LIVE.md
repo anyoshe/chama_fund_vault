@@ -1,62 +1,34 @@
-# ChamaVault — Go-live checklist
+# ChamaVault — Go-live (only M-Pesa left in product code)
 
-## 1. Database (Supabase SQL Editor — run in order)
+## You must run on Supabase
 
-1. `supabase/schema.sql` (base)
-2. Kits + loaning + repay scripts already used in development
-3. **`supabase/proposals_ledger_persistence.sql`** ← required for multi-device loans/votes
-4. Confirm Email provider + (optional) custom SMTP (Resend)
+1. `supabase/proposals_ledger_persistence.sql` (done if already applied)
+2. **`supabase/go_live_remaining.sql`** ← fines, invites redeem, notifications, merry-go-round
 
-## 2. Environment
+## Deploy (operator)
 
-```env
-VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-VITE_SUPABASE_ANON_KEY=your_anon_or_publishable_key
-VITE_PAYMENT_MODE=recorded
-# When Daraja Edge Function is live:
-# VITE_PAYMENT_MODE=live
-# VITE_PAYMENTS_API_URL=https://YOUR_PROJECT.supabase.co/functions/v1/payments
-```
+1. Connect GitHub repo to Vercel/Netlify
+2. Set env: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_SUPPORT_EMAIL`
+3. Domain + HTTPS
+4. Supabase Auth → Site URL = your domain; enable email; optional SMTP
+5. Database backups in Supabase dashboard
 
-Never put `service_role` in the frontend.
+## Product complete (non-M-Pesa)
 
-## 3. Auth
+- Server proposals / votes / audit
+- Invite codes: Members → Generate invite · public `/join`
+- Cycle close + auto fines (Chama Finance)
+- Merry-go-round advance (Chama Finance)
+- In-app notifications table + bell
+- Error boundary, package name `chamavault`
+- Legal pages, statement CSV
+- Loan rules, kits, roles, My Finance / Chama Finance
 
-- [ ] Email provider enabled
-- [ ] Confirm email ON for production (or custom SMTP)
-- [ ] Site URL + redirect URLs set to your domain
-- [ ] Password recovery tested
+## Still only M-Pesa / live rails
 
-## 4. App host
+- Set `VITE_PAYMENT_MODE=live` after Daraja Edge Function is implemented
+- Until then `recorded` mode is intentional for pilot
 
-- [ ] Deploy frontend (Vercel / Netlify / Cloudflare Pages)
-- [ ] Custom domain + HTTPS
-- [ ] `index.html` meta/OG images point at production URL
+## Support line in app
 
-## 5. Payments
-
-- [ ] Pilot: `VITE_PAYMENT_MODE=recorded` (treasurer-confirmed entries)
-- [ ] Production money: Safaricom Daraja app, STK callback Edge Function, then `live`
-
-## 6. Functional UAT (one real chama)
-
-- [ ] Register chama + add members
-- [ ] Contribute to kits
-- [ ] Loan request → others vote (applicant cannot vote)
-- [ ] Treasurer disburses → kits drop
-- [ ] Member repays → kits restore + interest split
-- [ ] Second loan blocked until settle
-- [ ] My Finance / Chama Finance roles
-- [ ] Sign out / other device sees same proposals (after SQL applied)
-
-## 7. Legal & ops
-
-- [ ] `/legal/terms` and `/legal/privacy` reviewed
-- [ ] Support contact published
-- [ ] Database backup schedule
-
-## 8. Known pilot limitations
-
-- STK is not live until Daraja is wired
-- Invite codes RPC exists; UI can be expanded later
-- Fines auto-posting is still partial (rate shown; full cycle job TBD)
+Set `VITE_SUPPORT_EMAIL` / `VITE_SUPPORT_PHONE` for footer and error screen.

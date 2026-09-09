@@ -109,9 +109,15 @@ export default function Landing() {
         </div>
       </main>
           <p className="pb-8 text-center text-[11px] text-slate-600">
+        <a href="/join" className="hover:text-emerald-400">Join with invite</a>
+        {" · "}
         <a href="/legal/terms" className="hover:text-emerald-400">Terms</a>
         {" · "}
         <a href="/legal/privacy" className="hover:text-emerald-400">Privacy</a>
+        {" · "}
+        <span className="text-slate-600">
+          Support {import.meta.env.VITE_SUPPORT_EMAIL || "support@chamavault.local"}
+        </span>
       </p>
 </div>
   );

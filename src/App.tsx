@@ -7,6 +7,8 @@ import Login from "@/pages/Login";
 import RegisterChama from "@/pages/RegisterChama";
 import Dashboard from "@/pages/Dashboard";
 import Legal from "@/pages/Legal";
+import JoinInvite from "@/pages/JoinInvite";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 function PublicOnly({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
@@ -18,6 +20,7 @@ function PublicOnly({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <ErrorBoundary>
       <AuthProvider>
         <Routes>
           <Route path="/" element={<Landing />} />
@@ -45,6 +48,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="/join" element={<JoinInvite />} />
           <Route path="/legal/:doc" element={<Legal />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
@@ -60,6 +64,7 @@ export default function App() {
           }}
         />
       </AuthProvider>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }

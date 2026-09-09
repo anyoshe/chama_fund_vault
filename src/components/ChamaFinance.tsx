@@ -23,6 +23,8 @@ import type {
 } from "../types/chama";
 import { fmtKsh } from "../data/mockChamaData";
 import { LoanRatesChairPanel } from "./LoansAndLedger";
+import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 
 type MemberBalance = { user_id: string; kit_code: string; balance: number };
 
@@ -819,6 +821,54 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
               {chama.constitution?.interestReservePercent ?? 20}% · split basis{" "}
               {chama.constitution?.interestSplitBasis ?? "share-capital"}
             </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const { data, error } = await supabase.rpc("close_contribution_cycle", {
+                    p_chama_id: chamaId,
+                    p_cycle_key: null,
+                  });
+                  if (error) throw error;
+                  const r = data as { cycle?: string; finesPosted?: number; totalFines?: number };
+                  toast.success(
+                    `Cycle ${r.cycle ?? ""} closed · ${r.finesPosted ?? 0} fine(s) · Ksh ${r.totalFines ?? 0}`,
+                  );
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Could not close cycle");
+                }
+              }}
+              className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-left text-xs font-bold text-amber-200 hover:bg-amber-500/15"
+            >
+              Close contribution cycle & post fines
+              <span className="mt-1 block text-[10px] font-normal text-slate-400">
+                Officials only · uses constitution late fine %
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const { data, error } = await supabase.rpc("advance_merry_go_round", {
+                    p_chama_id: chamaId,
+                  });
+                  if (error) throw error;
+                  const r = data as { recipientName?: string };
+                  toast.success(`Merry-go-round → ${r.recipientName ?? "next member"}`);
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Could not advance rotation");
+                }
+              }}
+              className="rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-left text-xs font-bold text-sky-200 hover:bg-sky-500/15"
+            >
+              Advance merry-go-round turn
+              <span className="mt-1 block text-[10px] font-normal text-slate-400">
+                Rotates next recipient among active members
+              </span>
+            </button>
           </div>
 
           <CollapseSection

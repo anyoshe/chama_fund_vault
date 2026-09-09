@@ -53,10 +53,31 @@ export default function Members() {
   const [role, setRole] = useState<MemberRole>("Active Member");
   const [monthly, setMonthly] = useState(5000);
   const [submitting, setSubmitting] = useState(false);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [inviteBusy, setInviteBusy] = useState(false);
 
   const myMembership = user?.memberships.find((m) => m.chama_id === activeChamaId);
   const canManage =
     myMembership?.role === "Chairperson" || myMembership?.role === "Secretary";
+
+
+  const createInvite = async () => {
+    if (!activeChamaId || !canManage) return;
+    setInviteBusy(true);
+    try {
+      const { data, error } = await supabase.rpc("create_chama_invite", {
+        p_chama_id: activeChamaId,
+        p_max_uses: 50,
+      });
+      if (error) throw error;
+      setInviteCode(String(data));
+      toast.success("Invite code created — share with new members");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not create invite");
+    } finally {
+      setInviteBusy(false);
+    }
+  };
 
   const loadMembers = async () => {
     if (!activeChamaId) return;
@@ -320,13 +341,28 @@ export default function Members() {
           </p>
         </div>
         {canManage && (
-          <button
-            onClick={() => setShowAdd((v) => !v)}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition hover:from-emerald-400 hover:to-teal-500"
-          >
-            <UserPlus size={18} weight="bold" />
-            Add member
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void createInvite()}
+              disabled={inviteBusy}
+              className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs font-bold text-emerald-300"
+            >
+              {inviteBusy ? "Creating…" : "Generate invite code"}
+            </button>
+            {inviteCode && (
+              <span className="font-mono text-xs font-bold text-emerald-200">
+                {inviteCode}
+              </span>
+            )}
+            <button
+              onClick={() => setShowAdd((v) => !v)}
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 transition hover:from-emerald-400 hover:to-teal-500"
+            >
+              <UserPlus size={18} weight="bold" />
+              Add member
+            </button>
+          </div>
         )}
       </div>
 
