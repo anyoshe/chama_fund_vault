@@ -7,6 +7,7 @@ import ChamaOverview from "@/components/ChamaOverview";
 import GovernanceVoting from "@/components/GovernanceVoting";
 import ContributionModal from "@/components/ContributionModal";
 import LoansAndLedger from "@/components/LoansAndLedger";
+import ChamaFinance from "@/components/ChamaFinance";
 import Members from "@/pages/Members";
 import MyFinance from "@/components/MyFinance";
 import { useAuth } from "@/contexts/AuthContext";
@@ -1024,7 +1025,7 @@ export default function Dashboard() {
     const TABS: { id: Tab; label: string }[] = [
     { id: "overview", label: "Overview" },
     { id: "voting", label: "Voting Board" },
-    { id: "loans", label: "Loans & Ledger" },
+    { id: "loans", label: "Chama Finance" },
     { id: "my-finance", label: "My Finance" },
     { id: "members", label: "Members" },
   ];
@@ -1135,15 +1136,22 @@ export default function Dashboard() {
               />
             )}
             {tab === "loans" && (
-              <LoansAndLedger
-                chamaId={activeChamaId}
+              <ChamaFinance
                 chama={chama}
+                chamaId={activeChamaId}
                 members={displayMembers}
+                contributions={contributions.filter((c) => c.chamaId === activeChamaId)}
                 proposals={proposals}
+                kits={kits}
+                memberBalances={memberBalances}
                 ledger={chamaLedger}
                 onRepay={handleRepay}
                 onReschedule={handleReschedule}
-                canDisburse={Boolean(user?.id && currentMember?.id === user.id && currentMember.role === "Treasurer")}
+                canDisburse={Boolean(
+                  user?.id &&
+                    currentMember?.id === user.id &&
+                    currentMember.role === "Treasurer",
+                )}
                 onDisburse={handleDisburse}
                 onBorrow={handleProposeLoan}
                 onPartialRepay={handlePartialRepay}
@@ -1173,7 +1181,6 @@ export default function Dashboard() {
                     return;
                   }
                   toast.success("Loan interest rates saved for this chama");
-                  // refresh memberships so constitution updates in UI
                   window.location.reload();
                 }}
               />

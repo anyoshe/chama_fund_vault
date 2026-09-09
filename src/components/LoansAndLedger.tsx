@@ -206,6 +206,18 @@ export default function LoansAndLedger({
     },
   ];
 
+  if (!isOfficial) {
+    return (
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/70 px-6 py-16 text-center">
+        <p className="text-lg font-bold text-white">Chama Finance — leaders only</p>
+        <p className="mt-2 max-w-md text-sm text-slate-400">
+          Loan operations, disbursement, rates, and the group ledger are for officials.
+          Use <span className="font-semibold text-emerald-300">My Finance</span> for your personal position.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <section className="space-y-4">
       <div className="flex gap-1.5 rounded-2xl border border-slate-800 bg-slate-900/70 p-1.5">
