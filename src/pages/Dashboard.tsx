@@ -44,6 +44,35 @@ function fmtMonthYearDash(d = new Date()) {
 
 const LS_KEY = "chamavault-state-v1";
 
+/** Loans that still block new borrowing: pending vote, approved, or disbursed unpaid */
+function memberOpenLoans(
+  proposals: Proposal[],
+  memberId: string,
+  chamaId: string,
+) {
+  return proposals.filter(
+    (p) =>
+      p.chamaId === chamaId &&
+      p.type === "loan" &&
+      p.requesterId === memberId &&
+      (p.status === "active" || p.status === "approved" || p.status === "disbursed"),
+  );
+}
+
+function outstandingPrincipalOnLoan(p: Proposal): number {
+  if (p.status === "settled" || p.status === "rejected") return 0;
+  if (p.status === "active" || p.status === "approved") return p.amount;
+  const schedule = p.repayment?.schedule ?? [];
+  if (!schedule.length) return p.amount;
+  const scheduleTotal = schedule.reduce((s, x) => s + x.amount, 0);
+  const originalInterest = Math.max(0, scheduleTotal - p.amount);
+  const paidTotal = schedule.filter((x) => x.paid).reduce((s, x) => s + x.amount, 0);
+  const interestPaid = Math.min(paidTotal, originalInterest);
+  const principalPaid = Math.max(0, paidTotal - interestPaid);
+  return Math.max(0, p.amount - principalPaid);
+}
+
+
 /** Flat % of principal per month, for each month of the term */
 function buildFlatMonthlySchedule(principal: number, months: number, monthlyRatePct = 10) {
   const monthlyInterest = principal * (monthlyRatePct / 100);
@@ -840,6 +869,19 @@ export default function Dashboard() {
       return;
     }
 
+    const open = memberOpenLoans(proposals, user.id, activeChamaId);
+    if (open.length > 0) {
+      const labels = open
+        .map((p) => `${p.title} (${p.status})`)
+        .slice(0, 3)
+        .join("; ");
+      toast.error(
+        "You already have an open loan. Fully settle it before requesting another.",
+        { description: labels },
+      );
+      return;
+    }
+
     const raw = window.prompt("Loan amount (KES)?");
     if (raw == null) return;
     const amount = Number(String(raw).replace(/[,\s]/g, ""));
@@ -901,9 +943,16 @@ export default function Dashboard() {
       toast.error("You have no share balance yet. Contribute to table banking, share capital, or general savings first.");
       return;
     }
-    if (amount > maxLoan) {
+    const committed = memberOpenLoans(proposals, user.id, activeChamaId).reduce(
+      (s, p) => s + outstandingPrincipalOnLoan(p),
+      0,
+    );
+    const availableLimit = Math.max(0, maxLoan - committed);
+    if (amount > availableLimit) {
       toast.error(
-        `Max you can request is ${fmtKsh(maxLoan)} (${mult}× your shares of ${fmtKsh(shares)}).`,
+        availableLimit <= 0
+          ? "No remaining loan limit — settle open facilities first."
+          : `Max you can request is ${fmtKsh(availableLimit)} (${mult}× shares ${fmtKsh(shares)} minus open ${fmtKsh(committed)}).`,
       );
       return;
     }
@@ -1030,7 +1079,22 @@ export default function Dashboard() {
     proposals,
   ]);
 
-    const TABS: { id: Tab; label: string }[] = [
+  
+  const canRequestLoan = useMemo(() => {
+    if (!user?.id || !activeChamaId) return false;
+    return memberOpenLoans(proposals, user.id, activeChamaId).length === 0;
+  }, [user?.id, activeChamaId, proposals]);
+
+  const availableLoanLimit = useMemo(() => {
+    if (!user?.id || !activeChamaId) return loanLimitInfo.maxLoan;
+    const committed = memberOpenLoans(proposals, user.id, activeChamaId).reduce(
+      (s, p) => s + outstandingPrincipalOnLoan(p),
+      0,
+    );
+    return Math.max(0, loanLimitInfo.maxLoan - committed);
+  }, [user?.id, activeChamaId, proposals, loanLimitInfo.maxLoan]);
+
+  const TABS: { id: Tab; label: string }[] = [
     { id: "overview", label: "Overview" },
     { id: "voting", label: "Voting Board" },
     { id: "loans", label: "Chama Finance" },
@@ -1132,6 +1196,8 @@ export default function Dashboard() {
                 currentMemberId={currentMemberId}
                 onContribute={() => setContribOpen(true)}
                 onProposeLoan={handleProposeLoan}
+                canRequestLoan={canRequestLoan}
+                availableLoanLimit={availableLoanLimit}
               />
             )}
             {tab === "voting" && (
@@ -1205,6 +1271,8 @@ export default function Dashboard() {
                 ledger={ledger}
                 onContribute={() => setContribOpen(true)}
                 onProposeLoan={handleProposeLoan}
+                canRequestLoan={canRequestLoan}
+                availableLoanLimit={availableLoanLimit}
               />
             )}
             {tab === "members" && <Members />}

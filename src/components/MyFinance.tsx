@@ -91,6 +91,8 @@ interface MyFinanceProps {
   ledger: AuditEvent[];
   onContribute: () => void;
   onProposeLoan: () => void;
+  canRequestLoan?: boolean;
+  availableLoanLimit?: number;
 }
 
 function Card({
@@ -136,6 +138,8 @@ export default function MyFinance({
   ledger,
   onContribute,
   onProposeLoan,
+  canRequestLoan = true,
+  availableLoanLimit,
 }: MyFinanceProps) {
   const myId = me?.id ?? "";
 
@@ -171,7 +175,9 @@ export default function MyFinance({
     .filter((b) => b.user_id === myId && shareCodes.has(b.kit_code))
     .reduce((s, b) => s + (Number(b.balance) || 0), 0);
   const maxMultiple = chama.constitution?.maxLoanMultiple ?? 3;
-  const loanLimit = myShares * maxMultiple;
+  const rawLimit = myShares * maxMultiple;
+  const loanLimit =
+    availableLoanLimit != null ? availableLoanLimit : rawLimit;
 
   const liquidityCodes = new Set([
     "table-banking",
@@ -282,10 +288,23 @@ export default function MyFinance({
           </button>
           <button
             type="button"
-            onClick={onProposeLoan}
-            className="inline-flex items-center gap-2 rounded-xl border border-violet-500/40 bg-violet-500/10 px-4 py-2 text-xs font-bold text-violet-300 hover:bg-violet-500/20"
+            onClick={() => {
+              if (canRequestLoan) onProposeLoan();
+            }}
+            disabled={!canRequestLoan}
+            title={
+              !canRequestLoan
+                ? "Settle your open loan fully before borrowing again"
+                : "Request loan"
+            }
+            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-bold ${
+              canRequestLoan
+                ? "border-violet-500/40 bg-violet-500/10 text-violet-300 hover:bg-violet-500/20"
+                : "cursor-not-allowed border-slate-700 bg-slate-800 text-slate-500"
+            }`}
           >
-            <HandCoins size={16} /> Request loan
+            <HandCoins size={16} />{" "}
+            {canRequestLoan ? "Request loan" : "Loan locked — settle first"}
           </button>
         </div>
       </div>
@@ -318,7 +337,11 @@ export default function MyFinance({
         <Card
           title="Loan limit"
           value={fmtKsh(loanLimit)}
-          sub={`${maxMultiple}× shares ${fmtKsh(myShares)} · pool ${fmtKsh(loaningPool)}`}
+          sub={
+            canRequestLoan
+              ? `${maxMultiple}× shares ${fmtKsh(myShares)} · pool ${fmtKsh(loaningPool)}`
+              : "Locked until current loan is fully repaid"
+          }
           icon={<Calculator size={14} />}
           accent="violet"
         />

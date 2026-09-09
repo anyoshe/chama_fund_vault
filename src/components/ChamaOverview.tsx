@@ -41,6 +41,8 @@ interface ChamaOverviewProps {
   currentMemberId: string;
   onContribute: () => void;
   onProposeLoan: () => void;
+  canRequestLoan?: boolean;
+  availableLoanLimit?: number;
 }
 
 function MetricCard({
@@ -92,6 +94,8 @@ export default function ChamaOverview({
   currentMemberId,
   onContribute,
   onProposeLoan,
+  canRequestLoan = true,
+  availableLoanLimit,
 }: ChamaOverviewProps) {
   const [viewRule, setViewRule] = useState(false);
   const activities: ChamaActivity[] = chama.constitution?.activities?.length
@@ -139,7 +143,9 @@ export default function ChamaOverview({
   const maxMultiple = chama.constitution.maxLoanMultiple || 3;
   const maxLoanFromShares = memberShareBalance * maxMultiple;
   // Cannot borrow more than what is currently in the loaning pool
-  const maxBorrowable = Math.min(maxLoanFromShares, loaningPoolTotal);
+  const effectiveLimit =
+    availableLoanLimit != null ? availableLoanLimit : maxLoanFromShares;
+  const maxBorrowable = Math.min(effectiveLimit, loaningPoolTotal);
   const quorumVoterCount = members.filter((member) => member.role !== "New Applicant").length || 1;
   const pendingVotes = proposals
     .filter((proposal) => proposal.type === "loan" && proposal.status === "active")
@@ -223,8 +229,9 @@ export default function ChamaOverview({
               Contribute Now · M-Pesa / Bank
             </button>
             <button
-              onClick={onProposeLoan}
-              className="flex items-center justify-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/10 px-6 py-2.5 text-sm font-bold text-amber-300 transition hover:bg-amber-400/20 active:scale-[0.98]"
+              onClick={() => { if (canRequestLoan) onProposeLoan(); }}
+              disabled={!canRequestLoan}
+              className={`${!canRequestLoan ? "opacity-40 cursor-not-allowed " : ""}flex items-center justify-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/10 px-6 py-2.5 text-sm font-bold text-amber-300 transition hover:bg-amber-400/20 active:scale-[0.98]`}
             >
               <HandCoins size={18} />
               Propose Loan / Withdrawal
@@ -378,16 +385,26 @@ export default function ChamaOverview({
             </span>
             . Limit:{" "}
             <span className="font-mono font-bold text-slate-200">
-              {fmtKsh(maxLoanFromShares)}
+              {fmtKsh(effectiveLimit)}
             </span>{" "}
-            ({maxMultiple}× shares). Loaning pool available:{" "}
+            ({maxMultiple}× shares
+            {availableLoanLimit != null && availableLoanLimit < maxLoanFromShares
+              ? ", reduced by open loans"
+              : ""}
+            ). Loaning pool available:{" "}
             <span className="font-mono font-bold text-emerald-300">
               {fmtKsh(loaningPoolTotal)}
             </span>
             . Max you can take now:{" "}
             <span className="font-mono font-bold text-violet-300">
-              {fmtKsh(maxBorrowable)}
+              {fmtKsh(canRequestLoan ? maxBorrowable : 0)}
             </span>
+            {!canRequestLoan && (
+              <span className="text-amber-300">
+                {" "}
+                · Borrowing locked until your current loan is fully settled.
+              </span>
+            )}
             {loanFund
               ? ` · ${loanFund.label} kit ${fmtKsh(Number(loanFund.balance) || 0)}`
               : ""}
