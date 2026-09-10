@@ -20,6 +20,8 @@ import type {
   Proposal,
 } from "../types/chama";
 import { fmtKsh } from "../data/mockChamaData";
+import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 import { CHAMA_ACTIVITIES, type ChamaActivity } from "../types/chama";
 
 const MONTHS = [
@@ -543,6 +545,51 @@ export default function MyFinance({
               </button>
             );
           })}
+        </div>
+        <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+          <p className="text-xs font-bold text-white">Share / table-banking withdrawal</p>
+          <p className="mt-1 text-[11px] text-slate-500">
+            Mode: {chama.constitution?.shareWithdrawMode ?? "locked"}
+            {(chama.constitution?.shareLockMonths
+              ? ` · lock ${chama.constitution.shareLockMonths} months`
+              : " · typically locked until anniversary or break-up")}
+            . Registration fees are never withdrawable. Member-loans kit is lending capital only.
+          </p>
+          <button
+            type="button"
+            className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-200 hover:bg-amber-500/20"
+            onClick={async () => {
+              const kit =
+                window.prompt(
+                  "Withdraw from kit code? (share-capital or table-banking)",
+                  "share-capital",
+                ) || "share-capital";
+              const amtRaw = window.prompt("Amount (KES)?");
+              if (amtRaw == null) return;
+              const amount = Number(amtRaw);
+              if (!amount || amount <= 0) {
+                toast.error("Enter a valid amount");
+                return;
+              }
+              const reason = window.prompt("Reason (optional)?") || null;
+              try {
+                const { error } = await supabase.rpc("request_share_withdrawal", {
+                  p_chama_id: chama.id,
+                  p_amount: amount,
+                  p_reason: reason,
+                  p_kit_code: kit.trim(),
+                });
+                if (error) throw error;
+                toast.success("Withdrawal request submitted for officials");
+              } catch (e) {
+                toast.error(
+                  e instanceof Error ? e.message : "Withdrawal not allowed",
+                );
+              }
+            }}
+          >
+            Request withdrawal
+          </button>
         </div>
       </div>
 

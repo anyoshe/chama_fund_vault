@@ -974,6 +974,169 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                 Members contribute to Contingency kit for this cause
               </span>
             </button>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const { data, error } = await supabase.rpc(
+                    "list_contingency_campaigns",
+                    { p_chama_id: chamaId },
+                  );
+                  if (error) throw error;
+                  const rows = (Array.isArray(data) ? data : []) as {
+                    id: string;
+                    title: string;
+                    status: string;
+                    targetAmount: number;
+                  }[];
+                  const open = rows.filter((r) => r.status === "open");
+                  if (!open.length) {
+                    toast.message("No open contingency campaigns");
+                    return;
+                  }
+                  const list = open
+                    .map(
+                      (r, i) =>
+                        `${i + 1}. ${r.title} (target ${r.targetAmount})`,
+                    )
+                    .join("\n");
+                  const pick = window.prompt(
+                    `Close & pay which campaign?\n${list}\nEnter number`,
+                    "1",
+                  );
+                  if (pick == null) return;
+                  const idx =
+                    Math.max(1, Math.min(open.length, Math.floor(Number(pick) || 1))) -
+                    1;
+                  const camp = open[idx];
+                  const amtRaw = window.prompt(
+                    `Payout amount for "${camp.title}" (KES)?`,
+                    String(camp.targetAmount || ""),
+                  );
+                  if (amtRaw == null) return;
+                  const amount = Number(amtRaw);
+                  if (!amount || amount <= 0) {
+                    toast.error("Invalid amount");
+                    return;
+                  }
+                  const { error: err2 } = await supabase.rpc(
+                    "close_contingency_campaign",
+                    {
+                      p_campaign_id: camp.id,
+                      p_amount: amount,
+                      p_description: `Contingency payout: ${camp.title}`,
+                      p_reference: "contingency",
+                    },
+                  );
+                  if (err2) throw err2;
+                  toast.success(`Campaign closed · paid ${amount}`);
+                  window.location.reload();
+                } catch (e) {
+                  toast.error(
+                    e instanceof Error ? e.message : "Could not close campaign",
+                  );
+                }
+              }}
+              className="rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-left text-xs font-bold text-violet-200 hover:bg-violet-500/15"
+            >
+              Close contingency & pay out
+              <span className="mt-1 block text-[10px] font-normal text-slate-400">
+                Debits contingency kit and marks campaign closed
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const { data, error } = await supabase.rpc(
+                    "list_share_withdrawal_requests",
+                    { p_chama_id: chamaId },
+                  );
+                  if (error) throw error;
+                  const rows = (Array.isArray(data) ? data : []) as {
+                    id: string;
+                    userId: string;
+                    amount: number;
+                    kitCode: string;
+                    status: string;
+                  }[];
+                  const pending = rows.filter((r) => r.status === "pending");
+                  if (!pending.length) {
+                    toast.message("No pending withdrawal requests");
+                    return;
+                  }
+                  const list = pending
+                    .map((r, i) => {
+                      const who =
+                        members.find((m) => m.id === r.userId)?.name ?? "Member";
+                      return `${i + 1}. ${who} · ${r.kitCode} · ${r.amount}`;
+                    })
+                    .join("\n");
+                  const pick = window.prompt(
+                    `Pending withdrawals:\n${list}\nEnter number to decide`,
+                    "1",
+                  );
+                  if (pick == null) return;
+                  const idx =
+                    Math.max(
+                      1,
+                      Math.min(pending.length, Math.floor(Number(pick) || 1)),
+                    ) - 1;
+                  const req = pending[idx];
+                  const ok = window.confirm(
+                    `Approve withdrawal of ${req.amount} from ${req.kitCode}? (Cancel = reject)`,
+                  );
+                  const { error: err2 } = await supabase.rpc(
+                    "decide_share_withdrawal",
+                    { p_request_id: req.id, p_approve: ok },
+                  );
+                  if (err2) throw err2;
+                  toast.success(ok ? "Withdrawal paid" : "Withdrawal rejected");
+                  window.location.reload();
+                } catch (e) {
+                  toast.error(
+                    e instanceof Error ? e.message : "Could not decide request",
+                  );
+                }
+              }}
+              className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-left text-xs font-bold text-amber-200 hover:bg-amber-500/15"
+            >
+              Review share withdrawal requests
+              <span className="mt-1 block text-[10px] font-normal text-slate-400">
+                Approve or reject pending member withdrawals
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                const mode = window.prompt(
+                  "Share withdraw mode:\nlocked | anniversary | break-up-only | exit-with-notice",
+                  chama.constitution?.shareWithdrawMode ?? "locked",
+                );
+                if (!mode) return;
+                const monthsRaw = window.prompt("Lock months (for anniversary/exit)?", "12");
+                const months = Math.max(1, Math.floor(Number(monthsRaw) || 12));
+                try {
+                  const { error } = await supabase.rpc("update_share_lock_settings", {
+                    p_chama_id: chamaId,
+                    p_mode: mode.trim(),
+                    p_lock_months: months,
+                  });
+                  if (error) throw error;
+                  toast.success(`Share lock: ${mode} · ${months} months`);
+                } catch (e) {
+                  toast.error(
+                    e instanceof Error ? e.message : "Only chairperson can change this",
+                  );
+                }
+              }}
+              className="rounded-2xl border border-slate-600 bg-slate-800/80 px-4 py-3 text-left text-xs font-bold text-slate-200 hover:bg-slate-800"
+            >
+              Set share lock rules (chair)
+              <span className="mt-1 block text-[10px] font-normal text-slate-400">
+                locked / anniversary / break-up-only / exit-with-notice
+              </span>
+            </button>
           </div>
 
           <CollapseSection

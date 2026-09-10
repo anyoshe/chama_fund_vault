@@ -211,6 +211,11 @@ export interface Chama {
      * share-capital | four-kits | table-banking | member-loans
      */
     interestSplitBasis?: "share-capital" | "four-kits" | "table-banking" | "member-loans";
+    registrationFeeAmount?: number;
+    registrationFeeRequired?: boolean;
+    tableBankingMandatory?: boolean;
+    shareWithdrawMode?: "locked" | "anniversary" | "break-up-only" | "exit-with-notice";
+    shareLockMonths?: number;
   };
   nextPayout: {
     recipientName: string;

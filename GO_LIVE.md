@@ -40,3 +40,10 @@ Run: supabase/phase_a_c_kits_mgr.sql
 - record_expense_from_kit
 - mgr_payout
 
+
+## Phase D–E
+Run: supabase/phase_d_e_locks_contingency.sql
+- share withdrawal requests + locks
+- close contingency campaign
+- chair share lock settings
+
