@@ -546,14 +546,55 @@ export default function Dashboard() {
       toast.error("You cannot vote on your own loan application.");
       return;
     }
+    // Optimistic UI so Pending Votes drops immediately
+    const optimisticVotes = { ...target.votes, [currentMemberId]: vote };
+    const voterCountOptimistic =
+      displayMembers.filter(
+        (m) => m.role !== "New Applicant" && m.id !== target.requesterId,
+      ).length || 1;
+    const requiredOptimistic = Math.ceil(
+      voterCountOptimistic * target.quorumThreshold,
+    );
+    const approvalsOptimistic = Object.values(optimisticVotes).filter(
+      (v) => v === "approve",
+    ).length;
+    const passedOptimistic =
+      target.status === "active" && approvalsOptimistic >= requiredOptimistic;
+    setProposals((prev) =>
+      prev.map((p) =>
+        p.id === proposalId
+          ? {
+              ...p,
+              votes: optimisticVotes,
+              status: passedOptimistic ? "approved" : p.status,
+            }
+          : p,
+      ),
+    );
     try {
       const list = await castVoteOnServer(proposalId, vote);
       setProposals((prev) => {
         const others = prev.filter((p) => p.chamaId !== activeChamaId);
-        return [...list, ...others];
+        // Prefer server rows but keep optimistic votes if server omits them
+        const merged = list.map((sp) => {
+          if (sp.id !== proposalId) return sp;
+          const serverVotes = sp.votes || {};
+          if (Object.keys(serverVotes).length === 0 && Object.keys(optimisticVotes).length > 0) {
+            return {
+              ...sp,
+              votes: optimisticVotes,
+              status:
+                sp.status === "active" && passedOptimistic
+                  ? "approved"
+                  : sp.status,
+            };
+          }
+          return sp;
+        });
+        return [...merged, ...others];
       });
       const updated = list.find((p) => p.id === proposalId);
-      if (updated?.status === "approved") {
+      if (updated?.status === "approved" || passedOptimistic) {
         toast.success("Quorum reached — awaiting treasurer disbursement", {
           description: target.title,
         });
