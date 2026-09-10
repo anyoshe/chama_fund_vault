@@ -703,6 +703,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
   }
 
   return (
+    <>
     <div className="space-y-5">
       <div className="rounded-2xl border border-violet-500/20 bg-gradient-to-br from-slate-900 via-slate-900 to-violet-950/40 p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1483,5 +1484,6 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
         }}
       />
 
+    </>
   );
 }
