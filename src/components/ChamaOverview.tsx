@@ -146,14 +146,18 @@ export default function ChamaOverview({
   const effectiveLimit =
     availableLoanLimit != null ? availableLoanLimit : maxLoanFromShares;
   const maxBorrowable = Math.min(effectiveLimit, loaningPoolTotal);
-  const quorumVoterCount = members.filter((member) => member.role !== "New Applicant").length || 1;
-  const pendingVotes = proposals
+  const chamaProposals = proposals.filter((proposal) => proposal.chamaId === chama.id);
+  const quorumVoterCount =
+    members.filter((member) => member.role !== "New Applicant").length || 1;
+  // Votes still needed to reach quorum on active loans (this chama only).
+  // Each cast vote (any choice) reduces the pending count by 1.
+  const pendingVotes = chamaProposals
     .filter((proposal) => proposal.type === "loan" && proposal.status === "active")
     .reduce((remaining, proposal) => {
-      const required = Math.ceil(quorumVoterCount * proposal.quorumThreshold);
-      return remaining + Math.max(0, required - Object.keys(proposal.votes).length);
+      const required = Math.ceil(quorumVoterCount * (proposal.quorumThreshold || 0.6));
+      const cast = Object.keys(proposal.votes || {}).length;
+      return remaining + Math.max(0, required - cast);
     }, 0);
-  const chamaProposals = proposals.filter((proposal) => proposal.chamaId === chama.id);
   const approvedLoans = chamaProposals.filter((proposal) => {
     if (proposal.type !== "loan" || proposal.status !== "approved") return false;
     const required = Math.ceil(quorumVoterCount * proposal.quorumThreshold);

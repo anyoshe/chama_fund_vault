@@ -546,36 +546,20 @@ export default function Dashboard() {
       toast.error("You cannot vote on your own loan application.");
       return;
     }
-    try {
-      const list = await castVoteOnServer(proposalId, vote);
-      setProposals((prev) => {
-        const others = prev.filter((p) => p.chamaId !== activeChamaId);
-        return [...list, ...others];
-      });
-      const updated = list.find((p) => p.id === proposalId);
-      if (updated?.status === "approved") {
-        toast.success("Quorum reached — awaiting treasurer disbursement", {
-          description: target.title,
-        });
-      }
-      return;
-    } catch (e) {
-      console.warn("Server vote failed, local fallback", e);
-    }
-    const nextVotes = { ...target.votes, [currentMemberId]: vote };
+    const nextVotes = { ...(target.votes || {}), [currentMemberId]: vote };
     const voterCount =
-      displayMembers.filter(
-        (m) => m.role !== "New Applicant" && m.id !== target.requesterId,
-      ).length || 1;
-    const required = Math.ceil(voterCount * target.quorumThreshold);
+      displayMembers.filter((m) => m.role !== "New Applicant").length || 1;
+    const required = Math.ceil(voterCount * (target.quorumThreshold || 0.6));
     const approvals = Object.values(nextVotes).filter((v) => v === "approve").length;
     const passed = target.status === "active" && approvals >= required;
 
+    // Always update local state first so Pending Votes drops immediately
     setProposals((prev) =>
-      prev.map((p) => {
-        if (p.id !== proposalId) return p;
-        return { ...p, votes: nextVotes, status: passed ? "approved" : p.status };
-      }),
+      prev.map((p) =>
+        p.id === proposalId
+          ? { ...p, votes: nextVotes, status: passed ? "approved" : p.status }
+          : p,
+      ),
     );
     setLedger((prev) =>
       pushAudit(prev, {
@@ -585,7 +569,41 @@ export default function Dashboard() {
         amount: 0,
       }),
     );
-    if (passed) toast.success("Quorum reached — awaiting treasurer disbursement", { description: target.title });
+    if (passed) {
+      toast.success("Quorum reached — awaiting treasurer disbursement", {
+        description: target.title,
+      });
+    }
+
+    try {
+      const list = await castVoteOnServer(proposalId, vote);
+      setProposals((prev) => {
+        const others = prev.filter((p) => p.chamaId !== activeChamaId);
+        const merged = (list || []).map((sp) => {
+          if (sp.id !== proposalId) return sp;
+          const serverVotes = sp.votes || {};
+          // Keep local votes if server returns empty votes map
+          const votes =
+            Object.keys(serverVotes).length > 0
+              ? { ...serverVotes, ...nextVotes }
+              : nextVotes;
+          return {
+            ...sp,
+            votes,
+            status:
+              sp.status === "approved" || passed ? "approved" : sp.status,
+          };
+        });
+        // If server list missing this proposal, keep local version
+        if (!merged.some((p) => p.id === proposalId)) {
+          const local = prev.find((p) => p.id === proposalId);
+          if (local) merged.unshift({ ...local, votes: nextVotes });
+        }
+        return [...merged, ...others];
+      });
+    } catch (e) {
+      console.warn("Server vote failed — local vote kept", e);
+    }
   };
 
   const handleDisburse = async (proposalId: string) => {

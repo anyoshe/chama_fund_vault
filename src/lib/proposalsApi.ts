@@ -12,7 +12,13 @@ function mapProposal(row: Record<string, unknown>): Proposal {
     reason: String(row.reason ?? ""),
     requestedAt: String(row.requestedAt ?? row.requested_at ?? new Date().toISOString()),
     status: (row.status as Proposal["status"]) || "active",
-    votes: (row.votes as Record<string, VoteValue>) || {},
+    votes: (() => {
+      const v = row.votes;
+      if (v && typeof v === "object" && !Array.isArray(v)) {
+        return v as Record<string, VoteValue>;
+      }
+      return {};
+    })(),
     quorumThreshold: Number(row.quorumThreshold ?? row.quorum_threshold ?? 0.6),
     guarantorIds: (row.guarantorIds as string[]) || [],
     disbursedAt: row.disbursedAt
