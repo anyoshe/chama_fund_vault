@@ -12,6 +12,7 @@ import Members from "@/pages/Members";
 import MyFinance from "@/components/MyFinance";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { requiredApprovals, countApprovals } from "@/lib/quorum";
 import {
   appendAudit,
   castVoteOnServer,
@@ -548,16 +549,12 @@ export default function Dashboard() {
     }
     // Optimistic UI so Pending Votes drops immediately
     const optimisticVotes = { ...target.votes, [currentMemberId]: vote };
-    const voterCountOptimistic =
-      displayMembers.filter(
-        (m) => m.role !== "New Applicant" && m.id !== target.requesterId,
-      ).length || 1;
-    const requiredOptimistic = Math.ceil(
-      voterCountOptimistic * target.quorumThreshold,
+    const requiredOptimistic = requiredApprovals(
+      displayMembers,
+      target.requesterId,
+      target.quorumThreshold,
     );
-    const approvalsOptimistic = Object.values(optimisticVotes).filter(
-      (v) => v === "approve",
-    ).length;
+    const approvalsOptimistic = countApprovals(optimisticVotes);
     const passedOptimistic =
       target.status === "active" && approvalsOptimistic >= requiredOptimistic;
     setProposals((prev) =>
@@ -604,12 +601,12 @@ export default function Dashboard() {
       console.warn("Server vote failed, local fallback", e);
     }
     const nextVotes = { ...target.votes, [currentMemberId]: vote };
-    const voterCount =
-      displayMembers.filter(
-        (m) => m.role !== "New Applicant" && m.id !== target.requesterId,
-      ).length || 1;
-    const required = Math.ceil(voterCount * target.quorumThreshold);
-    const approvals = Object.values(nextVotes).filter((v) => v === "approve").length;
+    const required = requiredApprovals(
+      displayMembers,
+      target.requesterId,
+      target.quorumThreshold,
+    );
+    const approvals = countApprovals(nextVotes);
     const passed = target.status === "active" && approvals >= required;
 
     setProposals((prev) =>

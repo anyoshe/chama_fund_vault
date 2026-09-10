@@ -14,6 +14,7 @@ import {
 import { motion } from "framer-motion";
 import { CHAMA_ACTIVITIES, type Chama, type ChamaActivity, type ChamaKit, type Contribution, type Member, type Proposal } from "../types/chama";
 import { fmtKsh } from "../data/mockChamaData";
+import { approvalsStillNeeded, requiredApprovals, countApprovals } from "@/lib/quorum";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -147,36 +148,28 @@ export default function ChamaOverview({
     availableLoanLimit != null ? availableLoanLimit : maxLoanFromShares;
   const maxBorrowable = Math.min(effectiveLimit, loaningPoolTotal);
   const chamaProposals = proposals.filter((proposal) => proposal.chamaId === chama.id);
-  /** Eligible voters for a motion: active members except New Applicant and the requester */
-  const eligibleVoterCount = (requesterId: string) =>
-    members.filter(
-      (member) =>
-        member.role !== "New Applicant" && member.id !== requesterId,
-    ).length || 1;
-  /**
-   * Pending Votes = approve votes still needed to hit quorum across active loan motions.
-   * Uses approvals only (not rejects), excludes applicant from the pool — same rules as Voting Board.
-   */
+  /** Approve votes still needed across active loans (same rules as Voting Board). */
   const pendingVotes = chamaProposals
     .filter((proposal) => proposal.type === "loan" && proposal.status === "active")
-    .reduce((remaining, proposal) => {
-      const required = Math.ceil(
-        eligibleVoterCount(proposal.requesterId) * proposal.quorumThreshold,
-      );
-      const approvals = Object.values(proposal.votes || {}).filter(
-        (vote) => vote === "approve",
-      ).length;
-      return remaining + Math.max(0, required - approvals);
-    }, 0);
+    .reduce(
+      (remaining, proposal) =>
+        remaining +
+        approvalsStillNeeded(
+          members,
+          proposal.requesterId,
+          proposal.quorumThreshold,
+          proposal.votes,
+        ),
+      0,
+    );
   const approvedLoans = chamaProposals.filter((proposal) => {
     if (proposal.type !== "loan" || proposal.status !== "approved") return false;
-    const required = Math.ceil(
-      eligibleVoterCount(proposal.requesterId) * proposal.quorumThreshold,
+    const required = requiredApprovals(
+      members,
+      proposal.requesterId,
+      proposal.quorumThreshold,
     );
-    return (
-      Object.values(proposal.votes || {}).filter((vote) => vote === "approve")
-        .length >= required
-    );
+    return countApprovals(proposal.votes) >= required;
   });
   const approvedBorrowers = approvedLoans
     .map((proposal) => members.find((member) => member.id === proposal.requesterId)?.name ?? "Unknown member")
