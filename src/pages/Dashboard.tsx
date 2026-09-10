@@ -1012,6 +1012,46 @@ export default function Dashboard() {
           })),
         );
       }
+
+      // If loan book says nothing left, force settle even if schedule math drifted
+      const rd = repayData as {
+        principal_remaining?: number;
+        interest_remaining?: number;
+      } | null;
+      const bookCleared =
+        rd != null &&
+        Number(rd.principal_remaining || 0) <= 0.01 &&
+        Number(rd.interest_remaining || 0) <= 0.01;
+      const fullySettled = allPaid || bookCleared;
+
+      if (fullySettled) {
+        schedule.forEach((s, i) => {
+          schedule[i] = { ...s, paid: true };
+        });
+      }
+
+      setProposals((prev) =>
+        prev.map((p) =>
+          p.id !== proposalId
+            ? p
+            : {
+                ...p,
+                repayment: { ...p.repayment!, schedule },
+                status: fullySettled ? ("settled" as const) : p.status,
+              },
+        ),
+      );
+
+      try {
+        await updateProposalOnServer({
+          proposalId,
+          status: fullySettled ? "settled" : "disbursed",
+          repayment: { ...target.repayment!, schedule },
+          disbursement: target.disbursement ?? null,
+        });
+      } catch (e) {
+        console.warn("Could not persist repayment schedule/status", e);
+      }
     }
     setLedger((prev) => {
       let next = pushAudit(prev, {
@@ -1033,9 +1073,10 @@ export default function Dashboard() {
       }
       return next;
     });
+    const settledNow = proposals.find((p) => p.id === proposalId)?.status === "settled" || allPaid;
     toast.success(
-      allPaid
-        ? "Loan fully settled — removed from active list (see settlement logs)"
+      settledNow || allPaid
+        ? "Loan fully settled — outstanding cleared · limit restored"
         : `Paid ${fmtKsh(amount)} — remaining balance updated`,
     );
   };

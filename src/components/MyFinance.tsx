@@ -221,9 +221,12 @@ export default function MyFinance({
     .filter((p) => p.status === "disbursed")
     .reduce((sum, p) => {
       const schedule = p.repayment?.schedule ?? [];
-      const unpaid = schedule.filter((x) => !x.paid).reduce((s, x) => s + x.amount, 0);
-      if (schedule.length) return sum + unpaid;
-      return sum + p.amount;
+      if (!schedule.length) return sum + p.amount;
+      const unpaid = schedule
+        .filter((x) => !x.paid)
+        .reduce((s, x) => s + x.amount, 0);
+      if (unpaid <= 0.01 || schedule.every((x) => x.paid)) return sum;
+      return sum + unpaid;
     }, 0);
 
   const monthlyTarget =

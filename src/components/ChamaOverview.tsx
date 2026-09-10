@@ -184,20 +184,43 @@ export default function ChamaOverview({
   // Outstanding principal still out (not lifetime disbursed). Settled = 0.
   // Interest expected = interest still unpaid. Both fall as repayments are applied.
   const loanExposure = chamaProposals
-    .filter((proposal) => proposal.type === "loan" && proposal.status === "disbursed")
+    .filter(
+      (proposal) =>
+        proposal.type === "loan" &&
+        proposal.status === "disbursed" &&
+        proposal.status !== "settled",
+    )
     .map((proposal) => {
       const schedule = proposal.repayment?.schedule ?? [];
+      if (!schedule.length) {
+        // No schedule: cannot assume full principal still out if status is disbursed only
+        return {
+          principalOutstanding: proposal.amount,
+          interestOutstanding: 0,
+          unpaidDates: [] as string[],
+        };
+      }
       const scheduleTotal = schedule.reduce((s, p) => s + p.amount, 0);
       const originalInterest = Math.max(0, scheduleTotal - proposal.amount);
-      const paidTotal = schedule.filter((p) => p.paid).reduce((s, p) => s + p.amount, 0);
-      // Interest first (matches repay_loan)
+      // Count paid installments + residual reduced amounts on unpaid rows
+      const paidMarked = schedule.filter((p) => p.paid).reduce((s, p) => s + p.amount, 0);
+      const remainingOnOpen = schedule
+        .filter((p) => !p.paid)
+        .reduce((s, p) => s + p.amount, 0);
+      const paidTotal = Math.max(0, scheduleTotal - remainingOnOpen);
       const interestPaid = Math.min(paidTotal, originalInterest);
       const principalPaid = Math.max(0, paidTotal - interestPaid);
-      const principalOutstanding = Math.max(0, proposal.amount - principalPaid);
-      const interestOutstanding = Math.max(0, originalInterest - interestPaid);
+      let principalOutstanding = Math.max(0, proposal.amount - principalPaid);
+      let interestOutstanding = Math.max(0, originalInterest - interestPaid);
+      // If all rows paid or residual tiny, clear
+      if (schedule.every((p) => p.paid) || remainingOnOpen <= 0.01) {
+        principalOutstanding = 0;
+        interestOutstanding = 0;
+      }
       const unpaidDates = schedule.filter((p) => !p.paid).map((p) => p.dueDate);
       return { principalOutstanding, interestOutstanding, unpaidDates };
-    });
+    })
+    .filter((x) => x.principalOutstanding > 0.01 || x.interestOutstanding > 0.01);
   const totalDisbursed = loanExposure.reduce((s, x) => s + x.principalOutstanding, 0);
   const expectedInterest = loanExposure.reduce((s, x) => s + x.interestOutstanding, 0);
   const lastCollectionDate = loanExposure
