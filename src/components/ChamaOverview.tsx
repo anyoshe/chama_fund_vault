@@ -14,7 +14,6 @@ import {
 import { motion } from "framer-motion";
 import { CHAMA_ACTIVITIES, type Chama, type ChamaActivity, type ChamaKit, type Contribution, type Member, type Proposal } from "../types/chama";
 import { fmtKsh } from "../data/mockChamaData";
-import { approvalsStillNeeded, requiredApprovals, countApprovals } from "@/lib/quorum";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -147,29 +146,18 @@ export default function ChamaOverview({
   const effectiveLimit =
     availableLoanLimit != null ? availableLoanLimit : maxLoanFromShares;
   const maxBorrowable = Math.min(effectiveLimit, loaningPoolTotal);
-  const chamaProposals = proposals.filter((proposal) => proposal.chamaId === chama.id);
-  /** Approve votes still needed across active loans (same rules as Voting Board). */
-  const pendingVotes = chamaProposals
+  const quorumVoterCount = members.filter((member) => member.role !== "New Applicant").length || 1;
+  const pendingVotes = proposals
     .filter((proposal) => proposal.type === "loan" && proposal.status === "active")
-    .reduce(
-      (remaining, proposal) =>
-        remaining +
-        approvalsStillNeeded(
-          members,
-          proposal.requesterId,
-          proposal.quorumThreshold,
-          proposal.votes,
-        ),
-      0,
-    );
+    .reduce((remaining, proposal) => {
+      const required = Math.ceil(quorumVoterCount * proposal.quorumThreshold);
+      return remaining + Math.max(0, required - Object.keys(proposal.votes).length);
+    }, 0);
+  const chamaProposals = proposals.filter((proposal) => proposal.chamaId === chama.id);
   const approvedLoans = chamaProposals.filter((proposal) => {
     if (proposal.type !== "loan" || proposal.status !== "approved") return false;
-    const required = requiredApprovals(
-      members,
-      proposal.requesterId,
-      proposal.quorumThreshold,
-    );
-    return countApprovals(proposal.votes) >= required;
+    const required = Math.ceil(quorumVoterCount * proposal.quorumThreshold);
+    return Object.values(proposal.votes).filter((vote) => vote === "approve").length >= required;
   });
   const approvedBorrowers = approvedLoans
     .map((proposal) => members.find((member) => member.id === proposal.requesterId)?.name ?? "Unknown member")

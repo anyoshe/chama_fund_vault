@@ -70,10 +70,13 @@ export default function GovernanceVoting({
           {active.map((p) => {
             const requester = memberById(p.requesterId, members);
             const isApplicant = p.requesterId === currentMemberId;
-            const voterCount = countEligibleVoters(members, p.requesterId);
-            const required = requiredApprovals(members, p.requesterId, p.quorumThreshold);
-            const approvals = countApprovals(p.votes);
-            const rejections = Object.values(p.votes || {}).filter((v) => v === "reject").length;
+            const voterCount =
+              members.filter(
+                (m) => m.role !== "New Applicant" && m.id !== p.requesterId,
+              ).length || 1;
+            const required = Math.ceil(voterCount * p.quorumThreshold);
+            const approvals = Object.values(p.votes).filter((v) => v === "approve").length;
+            const rejections = Object.values(p.votes).filter((v) => v === "reject").length;
             const progress = Math.min(100, Math.round((approvals / required) * 100));
             const passed = approvals >= required;
             const myVote = p.votes[currentMemberId];

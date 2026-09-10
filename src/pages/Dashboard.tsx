@@ -12,7 +12,6 @@ import Members from "@/pages/Members";
 import MyFinance from "@/components/MyFinance";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { requiredApprovals, countApprovals } from "@/lib/quorum";
 import {
   appendAudit,
   castVoteOnServer,
@@ -547,51 +546,14 @@ export default function Dashboard() {
       toast.error("You cannot vote on your own loan application.");
       return;
     }
-    // Optimistic UI so Pending Votes drops immediately
-    const optimisticVotes = { ...target.votes, [currentMemberId]: vote };
-    const requiredOptimistic = requiredApprovals(
-      displayMembers,
-      target.requesterId,
-      target.quorumThreshold,
-    );
-    const approvalsOptimistic = countApprovals(optimisticVotes);
-    const passedOptimistic =
-      target.status === "active" && approvalsOptimistic >= requiredOptimistic;
-    setProposals((prev) =>
-      prev.map((p) =>
-        p.id === proposalId
-          ? {
-              ...p,
-              votes: optimisticVotes,
-              status: passedOptimistic ? "approved" : p.status,
-            }
-          : p,
-      ),
-    );
     try {
       const list = await castVoteOnServer(proposalId, vote);
       setProposals((prev) => {
         const others = prev.filter((p) => p.chamaId !== activeChamaId);
-        // Prefer server rows but keep optimistic votes if server omits them
-        const merged = list.map((sp) => {
-          if (sp.id !== proposalId) return sp;
-          const serverVotes = sp.votes || {};
-          if (Object.keys(serverVotes).length === 0 && Object.keys(optimisticVotes).length > 0) {
-            return {
-              ...sp,
-              votes: optimisticVotes,
-              status:
-                sp.status === "active" && passedOptimistic
-                  ? "approved"
-                  : sp.status,
-            };
-          }
-          return sp;
-        });
-        return [...merged, ...others];
+        return [...list, ...others];
       });
       const updated = list.find((p) => p.id === proposalId);
-      if (updated?.status === "approved" || passedOptimistic) {
+      if (updated?.status === "approved") {
         toast.success("Quorum reached — awaiting treasurer disbursement", {
           description: target.title,
         });
@@ -601,12 +563,12 @@ export default function Dashboard() {
       console.warn("Server vote failed, local fallback", e);
     }
     const nextVotes = { ...target.votes, [currentMemberId]: vote };
-    const required = requiredApprovals(
-      displayMembers,
-      target.requesterId,
-      target.quorumThreshold,
-    );
-    const approvals = countApprovals(nextVotes);
+    const voterCount =
+      displayMembers.filter(
+        (m) => m.role !== "New Applicant" && m.id !== target.requesterId,
+      ).length || 1;
+    const required = Math.ceil(voterCount * target.quorumThreshold);
+    const approvals = Object.values(nextVotes).filter((v) => v === "approve").length;
     const passed = target.status === "active" && approvals >= required;
 
     setProposals((prev) =>
