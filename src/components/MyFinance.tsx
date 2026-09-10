@@ -23,6 +23,7 @@ import { fmtKsh } from "../data/mockChamaData";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { CHAMA_ACTIVITIES, type ChamaActivity } from "../types/chama";
+import { SimpleFieldsModal, ChoiceModal } from "./FlowModals";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -161,6 +162,9 @@ export default function MyFinance({
   const [repayAmount, setRepayAmount] = useState("");
   const [repayMethod, setRepayMethod] = useState("M-Pesa STK Push");
   const [repayBusy, setRepayBusy] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [moveKitId, setMoveKitId] = useState<string | null>(null);
+
   const myId = me?.id ?? "";
 
   const myContributions = useMemo(
@@ -561,35 +565,7 @@ export default function MyFinance({
           <button
             type="button"
             className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-200 hover:bg-amber-500/20"
-            onClick={async () => {
-              const kit =
-                window.prompt(
-                  "Withdraw from kit code? (share-capital or table-banking)",
-                  "share-capital",
-                ) || "share-capital";
-              const amtRaw = window.prompt("Amount (KES)?");
-              if (amtRaw == null) return;
-              const amount = Number(amtRaw);
-              if (!amount || amount <= 0) {
-                toast.error("Enter a valid amount");
-                return;
-              }
-              const reason = window.prompt("Reason (optional)?") || null;
-              try {
-                const { error } = await supabase.rpc("request_share_withdrawal", {
-                  p_chama_id: chama.id,
-                  p_amount: amount,
-                  p_reason: reason,
-                  p_kit_code: kit.trim(),
-                });
-                if (error) throw error;
-                toast.success("Withdrawal request submitted for officials");
-              } catch (e) {
-                toast.error(
-                  e instanceof Error ? e.message : "Withdrawal not allowed",
-                );
-              }
-            }}
+            onClick={() => setWithdrawOpen(true)}
           >
             Request withdrawal
           </button>
@@ -759,37 +735,7 @@ export default function MyFinance({
                         <button
                           type="button"
                           className="rounded-lg border border-slate-700 px-2 py-1 text-[10px] font-semibold text-amber-200 hover:border-amber-500/40 hover:bg-amber-500/10"
-                          onClick={() => {
-                            const opts = Array.from(
-                              new Set([
-                                ...(chama.constitution.activities ?? []),
-                                "member-loans",
-                                "table-banking",
-                                "share-capital",
-                                "general-savings",
-                              ]),
-                            ).filter((x) => x !== c.destination);
-                            const labels = opts
-                              .map(
-                                (code, i) =>
-                                  `${i + 1}. ${kitLabel(code)}`,
-                              )
-                              .join("\n");
-                            const pick = window.prompt(
-                              `Move ${fmtKsh(c.amount)} from ${kitLabel(c.destination || "")} to which kit?\n\n${labels}\n\nEnter number 1-${opts.length}`,
-                              "1",
-                            );
-                            if (pick == null) return;
-                            const idx =
-                              Math.max(
-                                1,
-                                Math.min(
-                                  opts.length,
-                                  Math.floor(Number(pick) || 1),
-                                ),
-                              ) - 1;
-                            void onReallocateContribution(c.id, opts[idx]);
-                          }}
+                          onClick={() => setMoveKitId(c.id)}
                         >
                           Move to correct kit
                         </button>
@@ -873,5 +819,72 @@ export default function MyFinance({
         Transparent personal ledger · {members.length} members in {chama.name} · zero-cash rails
       </p>
     </div>
+
+      <SimpleFieldsModal
+        open={withdrawOpen}
+        onClose={() => setWithdrawOpen(false)}
+        title="Request withdrawal"
+        subtitle="Share capital or table banking — subject to chama lock rules"
+        submitLabel="Submit request"
+        fields={[
+          {
+            key: "kit",
+            label: "Kit",
+            defaultValue: "share-capital",
+            placeholder: "share-capital or table-banking",
+            required: true,
+          },
+          {
+            key: "amount",
+            label: "Amount (KES)",
+            type: "number",
+            required: true,
+          },
+          { key: "reason", label: "Reason (optional)" },
+        ]}
+        onSubmit={async (v) => {
+          const amount = Number(v.amount);
+          if (!amount || amount <= 0) throw new Error("Enter a valid amount");
+          const { error } = await supabase.rpc("request_share_withdrawal", {
+            p_chama_id: chama.id,
+            p_amount: amount,
+            p_reason: v.reason || null,
+            p_kit_code: (v.kit || "share-capital").trim(),
+          });
+          if (error) throw error;
+          toast.success("Withdrawal request submitted for officials");
+        }}
+      />
+      <ChoiceModal
+        open={Boolean(moveKitId)}
+        onClose={() => setMoveKitId(null)}
+        title="Move contribution to another kit"
+        subtitle="Correct a payment that went to the wrong pot"
+        options={Array.from(
+          new Set([
+            ...(chama.constitution.activities ?? []),
+            "member-loans",
+            "table-banking",
+            "share-capital",
+            "general-savings",
+            "registration-fees",
+            "contingency",
+          ]),
+        )
+          .filter((code) => {
+            const row = myContributions.find((c) => c.id === moveKitId);
+            return code !== row?.destination;
+          })
+          .map((code) => ({
+            id: code,
+            label: kitLabel(code),
+          }))}
+        confirmLabel="Move funds"
+        onConfirm={async (kit) => {
+          if (!moveKitId || !onReallocateContribution) return;
+          await onReallocateContribution(moveKitId, kit);
+        }}
+      />
+
   );
 }

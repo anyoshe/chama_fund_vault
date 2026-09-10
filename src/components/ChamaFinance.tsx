@@ -23,6 +23,7 @@ import type {
 } from "../types/chama";
 import { fmtKsh } from "../data/mockChamaData";
 import { LoanRatesChairPanel } from "./LoansAndLedger";
+import { SimpleFieldsModal, ChoiceModal } from "./FlowModals";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
@@ -584,6 +585,20 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
 
   const [section, setSection] = useState<"command" | "operations">("command");
   const [openOut, setOpenOut] = useState(false);
+  const [expenseOpen, setExpenseOpen] = useState(false);
+  const [campaignOpen, setCampaignOpen] = useState(false);
+  const [closeCampOpen, setCloseCampOpen] = useState(false);
+  const [campaignOptions, setCampaignOptions] = useState<
+    { id: string; label: string; description?: string; target?: number }[]
+  >([]);
+  const [selectedCampId, setSelectedCampId] = useState<string | null>(null);
+  const [payoutAmountOpen, setPayoutAmountOpen] = useState(false);
+  const [wdOpen, setWdOpen] = useState(false);
+  const [wdOptions, setWdOptions] = useState<
+    { id: string; label: string; description?: string }[]
+  >([]);
+  const [lockOpen, setLockOpen] = useState(false);
+
   const [openSettled, setOpenSettled] = useState(false);
   const [openMembers, setOpenMembers] = useState(false);
   const [openExternal, setOpenExternal] = useState(false);
@@ -900,40 +915,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             </button>
             <button
               type="button"
-              onClick={async () => {
-                const kit = window.prompt(
-                  "Expense from which kit code?\n(e.g. registration-fees, contingency, group-reserve, welfare)",
-                  "registration-fees",
-                );
-                if (!kit) return;
-                const amtRaw = window.prompt("Amount (KES)?", "500");
-                if (amtRaw == null) return;
-                const amount = Number(amtRaw);
-                if (!amount || amount <= 0) {
-                  toast.error("Enter a valid amount");
-                  return;
-                }
-                const desc = window.prompt(
-                  "Description / purpose?",
-                  "Group expense",
-                );
-                if (desc == null) return;
-                try {
-                  const { error } = await supabase.rpc("record_expense_from_kit", {
-                    p_chama_id: chamaId,
-                    p_kit_code: kit.trim(),
-                    p_amount: amount,
-                    p_description: desc,
-                    p_reference: kit.trim(),
-                    p_campaign_id: null,
-                  });
-                  if (error) throw error;
-                  toast.success(`Expense ${amount} from ${kit}`);
-                  window.location.reload();
-                } catch (e) {
-                  toast.error(e instanceof Error ? e.message : "Expense failed");
-                }
-              }}
+              onClick={() => setExpenseOpen(true)}
               className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-left text-xs font-bold text-rose-200 hover:bg-rose-500/15"
             >
               Record expense from a kit
@@ -943,30 +925,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             </button>
             <button
               type="button"
-              onClick={async () => {
-                const title = window.prompt(
-                  "Contingency campaign title?",
-                  "Emergency support",
-                );
-                if (!title) return;
-                const targetRaw = window.prompt("Target amount (KES)?", "10000");
-                const target = Number(targetRaw) || 0;
-                try {
-                  const { data, error } = await supabase.rpc(
-                    "create_contingency_campaign",
-                    {
-                      p_chama_id: chamaId,
-                      p_title: title,
-                      p_target: target,
-                      p_notes: null,
-                    },
-                  );
-                  if (error) throw error;
-                  toast.success(`Campaign opened: ${(data as { title?: string })?.title ?? title}`);
-                } catch (e) {
-                  toast.error(e instanceof Error ? e.message : "Could not open campaign");
-                }
-              }}
+              onClick={() => setCampaignOpen(true)}
               className="rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-left text-xs font-bold text-violet-200 hover:bg-violet-500/15"
             >
               Open contingency campaign
@@ -994,46 +953,18 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                     toast.message("No open contingency campaigns");
                     return;
                   }
-                  const list = open
-                    .map(
-                      (r, i) =>
-                        `${i + 1}. ${r.title} (target ${r.targetAmount})`,
-                    )
-                    .join("\n");
-                  const pick = window.prompt(
-                    `Close & pay which campaign?\n${list}\nEnter number`,
-                    "1",
+                  setCampaignOptions(
+                    open.map((r) => ({
+                      id: r.id,
+                      label: r.title,
+                      description: `Target ${r.targetAmount}`,
+                      target: r.targetAmount,
+                    })),
                   );
-                  if (pick == null) return;
-                  const idx =
-                    Math.max(1, Math.min(open.length, Math.floor(Number(pick) || 1))) -
-                    1;
-                  const camp = open[idx];
-                  const amtRaw = window.prompt(
-                    `Payout amount for "${camp.title}" (KES)?`,
-                    String(camp.targetAmount || ""),
-                  );
-                  if (amtRaw == null) return;
-                  const amount = Number(amtRaw);
-                  if (!amount || amount <= 0) {
-                    toast.error("Invalid amount");
-                    return;
-                  }
-                  const { error: err2 } = await supabase.rpc(
-                    "close_contingency_campaign",
-                    {
-                      p_campaign_id: camp.id,
-                      p_amount: amount,
-                      p_description: `Contingency payout: ${camp.title}`,
-                      p_reference: "contingency",
-                    },
-                  );
-                  if (err2) throw err2;
-                  toast.success(`Campaign closed · paid ${amount}`);
-                  window.location.reload();
+                  setCloseCampOpen(true);
                 } catch (e) {
                   toast.error(
-                    e instanceof Error ? e.message : "Could not close campaign",
+                    e instanceof Error ? e.message : "Could not load campaigns",
                   );
                 }
               }}
@@ -1065,37 +996,21 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                     toast.message("No pending withdrawal requests");
                     return;
                   }
-                  const list = pending
-                    .map((r, i) => {
+                  setWdOptions(
+                    pending.map((r) => {
                       const who =
                         members.find((m) => m.id === r.userId)?.name ?? "Member";
-                      return `${i + 1}. ${who} · ${r.kitCode} · ${r.amount}`;
-                    })
-                    .join("\n");
-                  const pick = window.prompt(
-                    `Pending withdrawals:\n${list}\nEnter number to decide`,
-                    "1",
+                      return {
+                        id: r.id,
+                        label: `${who} · ${r.kitCode}`,
+                        description: `KES ${r.amount}`,
+                      };
+                    }),
                   );
-                  if (pick == null) return;
-                  const idx =
-                    Math.max(
-                      1,
-                      Math.min(pending.length, Math.floor(Number(pick) || 1)),
-                    ) - 1;
-                  const req = pending[idx];
-                  const ok = window.confirm(
-                    `Approve withdrawal of ${req.amount} from ${req.kitCode}? (Cancel = reject)`,
-                  );
-                  const { error: err2 } = await supabase.rpc(
-                    "decide_share_withdrawal",
-                    { p_request_id: req.id, p_approve: ok },
-                  );
-                  if (err2) throw err2;
-                  toast.success(ok ? "Withdrawal paid" : "Withdrawal rejected");
-                  window.location.reload();
+                  setWdOpen(true);
                 } catch (e) {
                   toast.error(
-                    e instanceof Error ? e.message : "Could not decide request",
+                    e instanceof Error ? e.message : "Could not load requests",
                   );
                 }
               }}
@@ -1108,28 +1023,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             </button>
             <button
               type="button"
-              onClick={async () => {
-                const mode = window.prompt(
-                  "Share withdraw mode:\nlocked | anniversary | break-up-only | exit-with-notice",
-                  chama.constitution?.shareWithdrawMode ?? "locked",
-                );
-                if (!mode) return;
-                const monthsRaw = window.prompt("Lock months (for anniversary/exit)?", "12");
-                const months = Math.max(1, Math.floor(Number(monthsRaw) || 12));
-                try {
-                  const { error } = await supabase.rpc("update_share_lock_settings", {
-                    p_chama_id: chamaId,
-                    p_mode: mode.trim(),
-                    p_lock_months: months,
-                  });
-                  if (error) throw error;
-                  toast.success(`Share lock: ${mode} · ${months} months`);
-                } catch (e) {
-                  toast.error(
-                    e instanceof Error ? e.message : "Only chairperson can change this",
-                  );
-                }
-              }}
+              onClick={() => setLockOpen(true)}
               className="rounded-2xl border border-slate-600 bg-slate-800/80 px-4 py-3 text-left text-xs font-bold text-slate-200 hover:bg-slate-800"
             >
               Set share lock rules (chair)
@@ -1420,5 +1314,174 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
         </motion.div>
       )}
     </div>
+
+      <SimpleFieldsModal
+        open={expenseOpen}
+        onClose={() => setExpenseOpen(false)}
+        title="Record expense from a kit"
+        subtitle="Debits the kit and writes an audit trail"
+        submitLabel="Post expense"
+        fields={[
+          {
+            key: "kit",
+            label: "Kit code",
+            defaultValue: "registration-fees",
+            placeholder: "registration-fees | contingency | group-reserve | welfare",
+            required: true,
+          },
+          { key: "amount", label: "Amount (KES)", type: "number", required: true },
+          {
+            key: "description",
+            label: "Description",
+            defaultValue: "Group expense",
+            required: true,
+          },
+        ]}
+        onSubmit={async (v) => {
+          const amount = Number(v.amount);
+          if (!amount || amount <= 0) throw new Error("Enter a valid amount");
+          const { error } = await supabase.rpc("record_expense_from_kit", {
+            p_chama_id: chamaId,
+            p_kit_code: v.kit.trim(),
+            p_amount: amount,
+            p_description: v.description,
+            p_reference: v.kit.trim(),
+            p_campaign_id: null,
+          });
+          if (error) throw error;
+          toast.success(`Expense ${amount} from ${v.kit}`);
+          window.location.reload();
+        }}
+      />
+      <SimpleFieldsModal
+        open={campaignOpen}
+        onClose={() => setCampaignOpen(false)}
+        title="Open contingency campaign"
+        subtitle="Members fund the Contingency kit for this cause"
+        submitLabel="Open campaign"
+        fields={[
+          {
+            key: "title",
+            label: "Campaign title",
+            defaultValue: "Emergency support",
+            required: true,
+          },
+          {
+            key: "target",
+            label: "Target amount (KES)",
+            type: "number",
+            defaultValue: "10000",
+          },
+        ]}
+        onSubmit={async (v) => {
+          const { data, error } = await supabase.rpc("create_contingency_campaign", {
+            p_chama_id: chamaId,
+            p_title: v.title,
+            p_target: Number(v.target) || 0,
+            p_notes: null,
+          });
+          if (error) throw error;
+          toast.success(
+            `Campaign opened: ${(data as { title?: string })?.title ?? v.title}`,
+          );
+        }}
+      />
+      <ChoiceModal
+        open={closeCampOpen}
+        onClose={() => setCloseCampOpen(false)}
+        title="Close contingency campaign"
+        subtitle="Select campaign, then enter payout amount"
+        options={campaignOptions}
+        confirmLabel="Next: amount"
+        onConfirm={async (id) => {
+          setSelectedCampId(id);
+          setCloseCampOpen(false);
+          setPayoutAmountOpen(true);
+        }}
+      />
+      <SimpleFieldsModal
+        open={payoutAmountOpen}
+        onClose={() => setPayoutAmountOpen(false)}
+        title="Contingency payout amount"
+        subtitle={
+          campaignOptions.find((o) => o.id === selectedCampId)?.label ??
+          "Selected campaign"
+        }
+        submitLabel="Pay & close"
+        fields={[
+          {
+            key: "amount",
+            label: "Amount (KES)",
+            type: "number",
+            defaultValue: String(
+              campaignOptions.find((o) => o.id === selectedCampId)?.target ?? "",
+            ),
+            required: true,
+          },
+        ]}
+        onSubmit={async (v) => {
+          if (!selectedCampId) throw new Error("No campaign selected");
+          const amount = Number(v.amount);
+          if (!amount || amount <= 0) throw new Error("Invalid amount");
+          const camp = campaignOptions.find((o) => o.id === selectedCampId);
+          const { error } = await supabase.rpc("close_contingency_campaign", {
+            p_campaign_id: selectedCampId,
+            p_amount: amount,
+            p_description: `Contingency payout: ${camp?.label ?? ""}`,
+            p_reference: "contingency",
+          });
+          if (error) throw error;
+          toast.success(`Campaign closed · paid ${amount}`);
+          window.location.reload();
+        }}
+      />
+      <ChoiceModal
+        open={wdOpen}
+        onClose={() => setWdOpen(false)}
+        title="Withdrawal requests"
+        subtitle="Approve pays the member and debits the kit"
+        options={wdOptions}
+        showApproveReject
+        onConfirm={async (id, approve) => {
+          const { error } = await supabase.rpc("decide_share_withdrawal", {
+            p_request_id: id,
+            p_approve: Boolean(approve),
+          });
+          if (error) throw error;
+          toast.success(approve ? "Withdrawal paid" : "Withdrawal rejected");
+          window.location.reload();
+        }}
+      />
+      <SimpleFieldsModal
+        open={lockOpen}
+        onClose={() => setLockOpen(false)}
+        title="Share lock rules"
+        subtitle="Chairperson only"
+        submitLabel="Save rules"
+        fields={[
+          {
+            key: "mode",
+            label: "Mode (locked | anniversary | break-up-only | exit-with-notice)",
+            defaultValue: chama.constitution?.shareWithdrawMode ?? "locked",
+            required: true,
+          },
+          {
+            key: "months",
+            label: "Lock months",
+            type: "number",
+            defaultValue: String(chama.constitution?.shareLockMonths ?? 12),
+          },
+        ]}
+        onSubmit={async (v) => {
+          const { error } = await supabase.rpc("update_share_lock_settings", {
+            p_chama_id: chamaId,
+            p_mode: v.mode.trim(),
+            p_lock_months: Math.max(1, Math.floor(Number(v.months) || 12)),
+          });
+          if (error) throw error;
+          toast.success(`Share lock: ${v.mode} · ${v.months} months`);
+        }}
+      />
+
   );
 }

@@ -6,6 +6,7 @@ import Navbar from "@/components/Navbar";
 import ChamaOverview from "@/components/ChamaOverview";
 import GovernanceVoting from "@/components/GovernanceVoting";
 import ContributionModal from "@/components/ContributionModal";
+import { LoanRequestModal, DisburseModal } from "@/components/FlowModals";
 import LoansAndLedger from "@/components/LoansAndLedger";
 import ChamaFinance from "@/components/ChamaFinance";
 import Members from "@/pages/Members";
@@ -338,6 +339,9 @@ export default function Dashboard() {
   const [tab, setTab] = useState<Tab>("overview");
   const [contribOpen, setContribOpen] = useState(false);
   const [contribKitLock, setContribKitLock] = useState<string | null>(null);
+  const [loanRequestOpen, setLoanRequestOpen] = useState(false);
+  const [disburseProposalId, setDisburseProposalId] = useState<string | null>(null);
+
   const [notifOpen, setNotifOpen] = useState(false);
   const [serverNotifs, setServerNotifs] = useState<
     { id: string; title: string; body: string; kind: string; createdAt: string }[]
@@ -629,7 +633,7 @@ export default function Dashboard() {
     if (passed) toast.success("Quorum reached — awaiting treasurer disbursement", { description: target.title });
   };
 
-  const handleDisburse = async (proposalId: string) => {
+  const handleDisburse = (proposalId: string) => {
     const target = proposals.find((proposal) => proposal.id === proposalId);
     const isOfficialTreasurer =
       Boolean(user?.id) &&
@@ -639,40 +643,19 @@ export default function Dashboard() {
       toast.error("Only the official treasurer can disburse an approved loan.");
       return;
     }
+    setDisburseProposalId(proposalId);
+  };
+
+  const executeDisburse = async (
+    proposalId: string,
+    method: "mobile-money" | "bank-transfer",
+    destination: string,
+    transferReference: string,
+  ) => {
+    const target = proposals.find((proposal) => proposal.id === proposalId);
+    if (!target) return;
     const applicant = displayMembers.find((member) => member.id === target.requesterId);
     const applicantName = applicant?.name ?? "the applicant";
-    const applicantConfirmed = window.confirm(
-      `Confirm applicant\n\nIs ${applicantName} the rightful applicant for ${fmtKsh(target.amount)}?`,
-    );
-    if (!applicantConfirmed) {
-      toast("Disbursement cancelled", { description: "Applicant confirmation is required." });
-      return;
-    }
-    const methodInput = window.prompt(
-      "Select payment method:\n1. Mobile money\n2. Bank transfer",
-      "1",
-    );
-    if (methodInput == null) return;
-    const method = methodInput.trim() === "2" ? "bank-transfer" : methodInput.trim() === "1" ? "mobile-money" : null;
-    if (!method) {
-      toast.error("Choose 1 for mobile money or 2 for bank transfer.");
-      return;
-    }
-    const destination = window.prompt(
-      method === "mobile-money"
-        ? `Enter ${applicantName}'s mobile money number:`
-        : `Enter ${applicantName}'s bank account or IBAN:`,
-      applicant?.phone ?? "",
-    )?.trim();
-    if (!destination) {
-      toast.error("A payment destination is required.");
-      return;
-    }
-    const transferReference = window.prompt(
-      "Enter the transfer reference/confirmation number (optional):",
-      `DISB-${target.id}`,
-    )?.trim();
-    if (transferReference == null) return;
     const confirmedAt = new Date().toISOString();
 
     const scheduleTotal =
@@ -1096,12 +1079,11 @@ export default function Dashboard() {
     );
   };
 
-  const handleProposeLoan = async () => {
+  const handleProposeLoan = () => {
     if (!activeChamaId || !user?.id) {
       toast.error("Select a chama and sign in first.");
       return;
     }
-
     const open = memberOpenLoans(proposals, user.id, activeChamaId);
     if (open.length > 0) {
       const labels = open
@@ -1114,46 +1096,20 @@ export default function Dashboard() {
       );
       return;
     }
+    setLoanRequestOpen(true);
+  };
 
-    const raw = window.prompt("Loan amount (KES)?");
-    if (raw == null) return;
-    const amount = Number(String(raw).replace(/[,\s]/g, ""));
-    if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error("Enter a valid amount greater than zero.");
-      return;
+  const handleProposeLoanSubmit = async (data: {
+    amount: number;
+    termMonths: number;
+    rate: number;
+  }) => {
+    if (!activeChamaId || !user?.id) {
+      throw new Error("Select a chama and sign in first.");
     }
-
-    const defaultRate = chama?.constitution?.loanInterestMonthlyPercent ?? 10;
-    const rateOptions = chama?.constitution?.loanInterestOptions?.length
-      ? chama.constitution.loanInterestOptions
-      : [{ label: "Standard", monthlyPercent: defaultRate }];
-
-    let monthlyRate = defaultRate;
-    if (rateOptions.length === 1) {
-      monthlyRate = rateOptions[0].monthlyPercent;
-    } else {
-      const menu = rateOptions
-        .map((o, i) => `${i + 1}. ${o.label} (${o.monthlyPercent}% / month flat)`)
-        .join("\n");
-      const pick = window.prompt(
-        `Choose interest rate for this loan:\n${menu}\n\nEnter number 1-${rateOptions.length}`,
-        "1",
-      );
-      if (pick == null) return;
-      const idx = Math.max(1, Math.min(rateOptions.length, Math.floor(Number(pick) || 1))) - 1;
-      monthlyRate = rateOptions[idx].monthlyPercent;
-    }
-
-    const termRaw = window.prompt(
-      `How many monthly installments? (1–24)\nInterest: ${monthlyRate}% of principal per month flat.`,
-      "3",
-    );
-    if (termRaw == null) return;
-    const months = Math.max(1, Math.min(24, Math.floor(Number(termRaw) || 0)));
-    if (!months) {
-      toast.error("Enter a valid number of installments.");
-      return;
-    }
+    const amount = data.amount;
+    const months = Math.max(1, Math.min(24, data.termMonths));
+    const monthlyRate = data.rate;
 
     const plan = buildFlatMonthlySchedule(amount, months, monthlyRate);
 
@@ -1671,6 +1627,39 @@ export default function Dashboard() {
           </>
         )}
       </AnimatePresence>
+
+
+      <LoanRequestModal
+        open={loanRequestOpen}
+        onClose={() => setLoanRequestOpen(false)}
+        maxAmount={availableLoanLimit}
+        defaultRate={chama?.constitution?.loanInterestMonthlyPercent ?? 10}
+        rateOptions={chama?.constitution?.loanInterestOptions}
+        onSubmit={handleProposeLoanSubmit}
+      />
+      <DisburseModal
+        open={Boolean(disburseProposalId)}
+        onClose={() => setDisburseProposalId(null)}
+        applicantName={
+          displayMembers.find(
+            (m) =>
+              m.id ===
+              proposals.find((p) => p.id === disburseProposalId)?.requesterId,
+          )?.name ?? "Applicant"
+        }
+        amount={
+          proposals.find((p) => p.id === disburseProposalId)?.amount ?? 0
+        }
+        onSubmit={async (data) => {
+          if (!disburseProposalId) return;
+          await executeDisburse(
+            disburseProposalId,
+            data.method,
+            data.destination,
+            data.transferReference,
+          );
+        }}
+      />
 
       <ContributionModal
         open={contribOpen}
