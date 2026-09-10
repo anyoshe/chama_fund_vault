@@ -19,7 +19,9 @@ export type ChamaActivity =
   | "education-fund"
   | "agribusiness"
   | "share-capital"
-  | "general-savings";
+  | "general-savings"
+  | "registration-fees"
+  | "contingency";
 
 export const CHAMA_ACTIVITIES: {
   value: ChamaActivity;

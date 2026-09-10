@@ -32,3 +32,11 @@
 ## Support line in app
 
 Set `VITE_SUPPORT_EMAIL` / `VITE_SUPPORT_PHONE` for footer and error screen.
+
+## Phase A–C kits (after go_live_remaining)
+Run: supabase/phase_a_c_kits_mgr.sql
+- registration-fees, contingency kits
+- contingency campaigns
+- record_expense_from_kit
+- mgr_payout
+

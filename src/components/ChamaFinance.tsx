@@ -869,6 +869,111 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                 Rotates next recipient among active members
               </span>
             </button>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const { data, error } = await supabase.rpc("mgr_payout", {
+                    p_chama_id: chamaId,
+                    p_beneficiary_id: null,
+                    p_amount: null,
+                  });
+                  if (error) throw error;
+                  const r = data as {
+                    beneficiaryName?: string;
+                    amount?: number;
+                  };
+                  toast.success(
+                    `MGR paid ${r.beneficiaryName ?? "member"} · Ksh ${r.amount ?? 0}`,
+                  );
+                  window.location.reload();
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "MGR payout failed");
+                }
+              }}
+              className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-left text-xs font-bold text-emerald-200 hover:bg-emerald-500/15"
+            >
+              Pay merry-go-round beneficiary
+              <span className="mt-1 block text-[10px] font-normal text-slate-400">
+                Debits MGR kit → audit trail + notify recipient
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                const kit = window.prompt(
+                  "Expense from which kit code?\n(e.g. registration-fees, contingency, group-reserve, welfare)",
+                  "registration-fees",
+                );
+                if (!kit) return;
+                const amtRaw = window.prompt("Amount (KES)?", "500");
+                if (amtRaw == null) return;
+                const amount = Number(amtRaw);
+                if (!amount || amount <= 0) {
+                  toast.error("Enter a valid amount");
+                  return;
+                }
+                const desc = window.prompt(
+                  "Description / purpose?",
+                  "Group expense",
+                );
+                if (desc == null) return;
+                try {
+                  const { error } = await supabase.rpc("record_expense_from_kit", {
+                    p_chama_id: chamaId,
+                    p_kit_code: kit.trim(),
+                    p_amount: amount,
+                    p_description: desc,
+                    p_reference: kit.trim(),
+                    p_campaign_id: null,
+                  });
+                  if (error) throw error;
+                  toast.success(`Expense ${amount} from ${kit}`);
+                  window.location.reload();
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Expense failed");
+                }
+              }}
+              className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-left text-xs font-bold text-rose-200 hover:bg-rose-500/15"
+            >
+              Record expense from a kit
+              <span className="mt-1 block text-[10px] font-normal text-slate-400">
+                Registration, contingency, reserve, welfare — full audit trail
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                const title = window.prompt(
+                  "Contingency campaign title?",
+                  "Emergency support",
+                );
+                if (!title) return;
+                const targetRaw = window.prompt("Target amount (KES)?", "10000");
+                const target = Number(targetRaw) || 0;
+                try {
+                  const { data, error } = await supabase.rpc(
+                    "create_contingency_campaign",
+                    {
+                      p_chama_id: chamaId,
+                      p_title: title,
+                      p_target: target,
+                      p_notes: null,
+                    },
+                  );
+                  if (error) throw error;
+                  toast.success(`Campaign opened: ${(data as { title?: string })?.title ?? title}`);
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Could not open campaign");
+                }
+              }}
+              className="rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-left text-xs font-bold text-violet-200 hover:bg-violet-500/15"
+            >
+              Open contingency campaign
+              <span className="mt-1 block text-[10px] font-normal text-slate-400">
+                Members contribute to Contingency kit for this cause
+              </span>
+            </button>
           </div>
 
           <CollapseSection

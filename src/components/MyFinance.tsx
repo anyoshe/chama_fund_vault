@@ -504,21 +504,18 @@ export default function MyFinance({
           history below if you already paid into the wrong pot.
         </p>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {(chama.constitution.activities?.length
-            ? Array.from(
-                new Set([
-                  ...chama.constitution.activities,
-                  "member-loans",
-                ]),
-              )
-            : [
-                "table-banking",
-                "share-capital",
-                "general-savings",
-                "member-loans",
-                "merry-go-round",
-                "welfare",
-              ]
+          {Array.from(
+            new Set([
+              ...(chama.constitution.activities ?? []),
+              "table-banking",
+              "share-capital",
+              "general-savings",
+              "member-loans",
+              "merry-go-round",
+              "registration-fees",
+              "contingency",
+              "welfare",
+            ]),
           ).map((code) => {
             const label =
               CHAMA_ACTIVITIES.find((a) => a.value === code)?.label ?? code;

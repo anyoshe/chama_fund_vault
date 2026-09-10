@@ -175,6 +175,8 @@ export default function ContributionModal({
                         new Set([
                           ...(chama.constitution.activities ?? ["general-savings"]),
                           "member-loans" as ChamaActivity,
+                          "registration-fees" as ChamaActivity,
+                          "contingency" as ChamaActivity,
                         ]),
                       ).map((activity) => {
                         const option = CHAMA_ACTIVITIES.find((item) => item.value === activity);
