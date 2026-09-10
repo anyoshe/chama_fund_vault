@@ -495,11 +495,13 @@ export default function MyFinance({
 
       {/* Kit cards — click to contribute to the right pot */}
       <div>
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-          Contribute to a kit
+        <p className="mb-1 text-sm font-bold text-white">
+          Contribute to a kit — pick the pot first
         </p>
-        <p className="mb-3 text-[11px] text-slate-500">
-          Tap the kit you mean to fund so you never credit the wrong pot.
+        <p className="mb-3 text-xs text-slate-400">
+          Tap a card to open contribution locked to that kit. Use{" "}
+          <span className="font-semibold text-amber-200">Move kit</span> in your
+          history below if you already paid into the wrong pot.
         </p>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {(chama.constitution.activities?.length
@@ -742,7 +744,7 @@ export default function MyFinance({
                             void onReallocateContribution(c.id, opts[idx]);
                           }}
                         >
-                          Move kit
+                          Move to correct kit
                         </button>
                       ) : null}
                     </td>
@@ -753,7 +755,9 @@ export default function MyFinance({
           </table>
         </div>
         <p className="mt-2 text-[11px] text-slate-500">
-          Lifetime deposited (contribution rows): {fmtKsh(totalContributed)}
+          Lifetime deposited (contribution rows): {fmtKsh(totalContributed)}.
+          Wrong pot? Use <span className="text-amber-200">Move to correct kit</span>{" "}
+          on that row (requires SQL: reallocate_contribution).
         </p>
       </div>
 
