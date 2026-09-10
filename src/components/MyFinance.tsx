@@ -20,6 +20,7 @@ import type {
   Proposal,
 } from "../types/chama";
 import { fmtKsh } from "../data/mockChamaData";
+import { CHAMA_ACTIVITIES, type ChamaActivity } from "../types/chama";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -90,6 +91,7 @@ interface MyFinanceProps {
   memberBalances: MemberBalance[];
   ledger: AuditEvent[];
   onContribute: () => void;
+  onContributeToKit?: (kitCode: string) => void;
   onProposeLoan: () => void;
   canRequestLoan?: boolean;
   availableLoanLimit?: number;
@@ -97,6 +99,10 @@ interface MyFinanceProps {
     proposalId: string,
     amount: number,
     method: string,
+  ) => void | Promise<void>;
+  onReallocateContribution?: (
+    contributionId: string,
+    newDestination: string,
   ) => void | Promise<void>;
 }
 
@@ -142,10 +148,12 @@ export default function MyFinance({
   memberBalances,
   ledger,
   onContribute,
+  onContributeToKit,
   onProposeLoan,
   canRequestLoan = true,
   availableLoanLimit,
   onPartialRepay,
+  onReallocateContribution,
 }: MyFinanceProps) {
   const [repayOpen, setRepayOpen] = useState(false);
   const [repayAmount, setRepayAmount] = useState("");
@@ -485,6 +493,61 @@ export default function MyFinance({
         />
       </div>
 
+      {/* Kit cards — click to contribute to the right pot */}
+      <div>
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          Contribute to a kit
+        </p>
+        <p className="mb-3 text-[11px] text-slate-500">
+          Tap the kit you mean to fund so you never credit the wrong pot.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {(chama.constitution.activities?.length
+            ? Array.from(
+                new Set([
+                  ...chama.constitution.activities,
+                  "member-loans",
+                ]),
+              )
+            : [
+                "table-banking",
+                "share-capital",
+                "general-savings",
+                "member-loans",
+                "merry-go-round",
+                "welfare",
+              ]
+          ).map((code) => {
+            const label =
+              CHAMA_ACTIVITIES.find((a) => a.value === code)?.label ?? code;
+            const bal =
+              memberBalances.find(
+                (b) => b.user_id === myId && b.kit_code === code,
+              )?.balance ?? 0;
+            return (
+              <button
+                key={code}
+                type="button"
+                onClick={() => {
+                  if (onContributeToKit) onContributeToKit(code);
+                  else onContribute();
+                }}
+                className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 text-left transition hover:border-emerald-500/40 hover:bg-slate-900"
+              >
+                <p className="text-xs font-bold text-white">{label}</p>
+                <p className="mt-1 font-mono text-sm text-emerald-300">
+                  {fmtKsh(Number(bal) || 0)}
+                </p>
+                <p className="mt-2 text-[10px] font-semibold text-slate-500">
+                  Tap to contribute here →
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Balances by kit */}
         <motion.div
@@ -621,12 +684,13 @@ export default function MyFinance({
                 <th className="pb-2 font-semibold">Kit</th>
                 <th className="pb-2 font-semibold">Method</th>
                 <th className="pb-2 text-right font-semibold">Amount</th>
+                    <th className="pb-2 text-right font-semibold text-slate-500">Fix</th>
               </tr>
             </thead>
             <tbody>
               {myContributions.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-4 text-slate-500">
+                  <td colSpan={5} className="py-4 text-slate-500">
                     No contributions recorded yet.
                   </td>
                 </tr>
@@ -640,6 +704,47 @@ export default function MyFinance({
                     <td className="py-2 text-slate-500">{c.method || "—"}</td>
                     <td className="py-2 text-right font-mono font-semibold text-emerald-300">
                       {fmtKsh(c.amount)}
+                    </td>
+                    <td className="py-2 text-right">
+                      {onReallocateContribution ? (
+                        <button
+                          type="button"
+                          className="rounded-lg border border-slate-700 px-2 py-1 text-[10px] font-semibold text-amber-200 hover:border-amber-500/40 hover:bg-amber-500/10"
+                          onClick={() => {
+                            const opts = Array.from(
+                              new Set([
+                                ...(chama.constitution.activities ?? []),
+                                "member-loans",
+                                "table-banking",
+                                "share-capital",
+                                "general-savings",
+                              ]),
+                            ).filter((x) => x !== c.destination);
+                            const labels = opts
+                              .map(
+                                (code, i) =>
+                                  `${i + 1}. ${kitLabel(code)}`,
+                              )
+                              .join("\n");
+                            const pick = window.prompt(
+                              `Move ${fmtKsh(c.amount)} from ${kitLabel(c.destination || "")} to which kit?\n\n${labels}\n\nEnter number 1-${opts.length}`,
+                              "1",
+                            );
+                            if (pick == null) return;
+                            const idx =
+                              Math.max(
+                                1,
+                                Math.min(
+                                  opts.length,
+                                  Math.floor(Number(pick) || 1),
+                                ),
+                              ) - 1;
+                            void onReallocateContribution(c.id, opts[idx]);
+                          }}
+                        >
+                          Move kit
+                        </button>
+                      ) : null}
                     </td>
                   </tr>
                 ))

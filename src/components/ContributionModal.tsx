@@ -31,6 +31,7 @@ export default function ContributionModal({
   chama,
   currentMember,
   onSubmit,
+  lockedDestination = null,
 }: ContributionModalProps) {
   const [step, setStep] = useState<Step>("method");
   const [method, setMethod] = useState<ContributionMethod>("M-Pesa STK Push");
@@ -46,13 +47,23 @@ export default function ContributionModal({
     if (open) {
       setStep("method");
       setMethod("M-Pesa STK Push");
-      setDestination(chama.constitution.activities?.[0] ?? "general-savings");
+      setDestination(
+        (lockedDestination as ChamaActivity) ||
+          chama.constitution.activities?.[0] ||
+          "general-savings",
+      );
       setPhone(currentMember.phone);
       setAmount(chama.constitution.minMonthlyContribution);
       setReference("");
       setPaymentDetails("");
     }
-  }, [open, currentMember.phone, chama.constitution.minMonthlyContribution]);
+  }, [
+    open,
+    currentMember.phone,
+    chama.constitution.minMonthlyContribution,
+    lockedDestination,
+    chama.constitution.activities,
+  ]);
 
   const quickAmounts = [
     chama.constitution.minMonthlyContribution,
@@ -147,10 +158,18 @@ export default function ContributionModal({
                   </p>
                   <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
                     Contributing to
+                    {lockedDestination ? (
+                      <span className="ml-2 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold normal-case tracking-normal text-emerald-300">
+                        Locked from kit card
+                      </span>
+                    ) : null}
                     <select
                       value={destination}
+                      disabled={!!lockedDestination}
                       onChange={(event) => setDestination(event.target.value as ChamaActivity)}
-                      className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none focus:border-emerald-500/60"
+                      className={`mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-3 text-sm text-white outline-none focus:border-emerald-500/60 ${
+                        lockedDestination ? "cursor-not-allowed opacity-80" : ""
+                      }`}
                     >
                       {Array.from(
                         new Set([

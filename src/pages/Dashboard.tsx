@@ -337,6 +337,7 @@ export default function Dashboard() {
   }, [user?.id]);
   const [tab, setTab] = useState<Tab>("overview");
   const [contribOpen, setContribOpen] = useState(false);
+  const [contribKitLock, setContribKitLock] = useState<string | null>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [serverNotifs, setServerNotifs] = useState<
     { id: string; title: string; body: string; kind: string; createdAt: string }[]
@@ -388,7 +389,56 @@ export default function Dashboard() {
     return [event, ...list];
   };
 
+  const handleReallocateContribution = async (
+    contributionId: string,
+    newDestination: string,
+  ) => {
+    const { error } = await supabase.rpc("reallocate_contribution", {
+      p_contribution_id: contributionId,
+      p_new_destination: newDestination,
+    });
+    if (error) {
+      toast.error(error.message || "Could not move contribution");
+      return;
+    }
+    toast.success("Contribution moved to the correct kit");
+    setContributions((prev) =>
+      prev.map((c) =>
+        c.id === contributionId
+          ? { ...c, destination: newDestination as Contribution["destination"] }
+          : c,
+      ),
+    );
+    // refresh kits
+    if (activeChamaId) {
+      const { data: kitRows } = await supabase.rpc("list_chama_kits", {
+        p_chama_id: activeChamaId,
+      });
+      if (kitRows) {
+        setKits(
+          kitRows.map((kit: ChamaKit) => ({
+            ...kit,
+            balance: Number(kit.balance) || 0,
+          })),
+        );
+      }
+      const { data: balRows } = await supabase.rpc("list_member_kit_balances", {
+        p_chama_id: activeChamaId,
+      });
+      if (balRows) {
+        setMemberBalances(
+          balRows.map((b: { user_id: string; kit_code: string; balance: number }) => ({
+            user_id: b.user_id,
+            kit_code: b.kit_code,
+            balance: Number(b.balance) || 0,
+          })),
+        );
+      }
+    }
+  };
+
   const handleContribute = async (contribution: Contribution) => {
+
     const { data, error } = await supabase.rpc("record_contribution", {
       p_chama_id: contribution.chamaId,
       p_amount: contribution.amount,
@@ -1318,7 +1368,10 @@ export default function Dashboard() {
                 kits={kits}
                 memberBalances={memberBalances}
                 currentMemberId={currentMemberId}
-                onContribute={() => setContribOpen(true)}
+                onContribute={() => {
+                  setContribKitLock(null);
+                  setContribOpen(true);
+                }}
                 onProposeLoan={handleProposeLoan}
                 canRequestLoan={canRequestLoan}
                 availableLoanLimit={availableLoanLimit}
@@ -1393,11 +1446,19 @@ export default function Dashboard() {
                 kits={kits}
                 memberBalances={memberBalances}
                 ledger={ledger}
-                onContribute={() => setContribOpen(true)}
+                onContribute={() => {
+                  setContribKitLock(null);
+                  setContribOpen(true);
+                }}
+                onContributeToKit={(kit) => {
+                  setContribKitLock(kit);
+                  setContribOpen(true);
+                }}
                 onProposeLoan={handleProposeLoan}
                 canRequestLoan={canRequestLoan}
                 availableLoanLimit={availableLoanLimit}
                 onPartialRepay={handlePartialRepay}
+                onReallocateContribution={handleReallocateContribution}
               />
             )}
             {tab === "members" && <Members />}
@@ -1516,7 +1577,11 @@ export default function Dashboard() {
 
       <ContributionModal
         open={contribOpen}
-        onClose={() => setContribOpen(false)}
+        onClose={() => {
+          setContribOpen(false);
+          setContribKitLock(null);
+        }}
+        lockedDestination={contribKitLock}
         chama={chama}
         currentMember={currentMember}
         onSubmit={handleContribute}
