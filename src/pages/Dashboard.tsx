@@ -1051,6 +1051,21 @@ export default function Dashboard() {
         });
       } catch (e) {
         console.warn("Could not persist repayment schedule/status", e);
+        toast.error(
+          e instanceof Error
+            ? e.message
+            : "Repayment posted to kits but proposal status may need SQL fix",
+        );
+      }
+      // Reload from DB so outstanding matches server (not only localStorage)
+      try {
+        const list = await fetchChamaProposals(activeChamaId);
+        setProposals((prev) => {
+          const others = prev.filter((p) => p.chamaId !== activeChamaId);
+          return [...list, ...others];
+        });
+      } catch (e) {
+        console.warn("reload proposals after repay", e);
       }
     }
     setLedger((prev) => {
