@@ -147,21 +147,36 @@ export default function ChamaOverview({
     availableLoanLimit != null ? availableLoanLimit : maxLoanFromShares;
   const maxBorrowable = Math.min(effectiveLimit, loaningPoolTotal);
   const chamaProposals = proposals.filter((proposal) => proposal.chamaId === chama.id);
-  const quorumVoterCount =
-    members.filter((member) => member.role !== "New Applicant").length || 1;
-  // Votes still needed to reach quorum on active loans (this chama only).
-  // Each cast vote (any choice) reduces the pending count by 1.
+  /** Eligible voters for a motion: active members except New Applicant and the requester */
+  const eligibleVoterCount = (requesterId: string) =>
+    members.filter(
+      (member) =>
+        member.role !== "New Applicant" && member.id !== requesterId,
+    ).length || 1;
+  /**
+   * Pending Votes = approve votes still needed to hit quorum across active loan motions.
+   * Uses approvals only (not rejects), excludes applicant from the pool — same rules as Voting Board.
+   */
   const pendingVotes = chamaProposals
     .filter((proposal) => proposal.type === "loan" && proposal.status === "active")
     .reduce((remaining, proposal) => {
-      const required = Math.ceil(quorumVoterCount * (proposal.quorumThreshold || 0.6));
-      const cast = Object.keys(proposal.votes || {}).length;
-      return remaining + Math.max(0, required - cast);
+      const required = Math.ceil(
+        eligibleVoterCount(proposal.requesterId) * proposal.quorumThreshold,
+      );
+      const approvals = Object.values(proposal.votes || {}).filter(
+        (vote) => vote === "approve",
+      ).length;
+      return remaining + Math.max(0, required - approvals);
     }, 0);
   const approvedLoans = chamaProposals.filter((proposal) => {
     if (proposal.type !== "loan" || proposal.status !== "approved") return false;
-    const required = Math.ceil(quorumVoterCount * proposal.quorumThreshold);
-    return Object.values(proposal.votes).filter((vote) => vote === "approve").length >= required;
+    const required = Math.ceil(
+      eligibleVoterCount(proposal.requesterId) * proposal.quorumThreshold,
+    );
+    return (
+      Object.values(proposal.votes || {}).filter((vote) => vote === "approve")
+        .length >= required
+    );
   });
   const approvedBorrowers = approvedLoans
     .map((proposal) => members.find((member) => member.id === proposal.requesterId)?.name ?? "Unknown member")
