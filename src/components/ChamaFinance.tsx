@@ -586,10 +586,12 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
     let cancelled = false;
     (async () => {
       try {
-        const [plansRes, welfareRes, penRes] = await Promise.all([
+        const [plansRes, welfareRes, penRes, buckRes, expRes] = await Promise.all([
           supabase.rpc("list_contribution_plans", { p_chama_id: chamaId }),
           supabase.rpc("list_welfare_events", { p_chama_id: chamaId }),
           supabase.rpc("list_chama_penalties", { p_chama_id: chamaId }),
+          supabase.rpc("list_welfare_buckets", { p_chama_id: chamaId }),
+          supabase.rpc("list_welfare_expense_requests", { p_chama_id: chamaId }),
         ]);
         if (!cancelled) {
           if (!plansRes.error) {
@@ -603,6 +605,16 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
           if (!penRes.error) {
             setPenaltyList(
               (Array.isArray(penRes.data) ? penRes.data : []) as typeof penaltyList,
+            );
+          }
+          if (!buckRes.error) {
+            setWelfareBuckets(
+              (Array.isArray(buckRes.data) ? buckRes.data : []) as typeof welfareBuckets,
+            );
+          }
+          if (!expRes.error) {
+            setWelfareExpReqs(
+              (Array.isArray(expRes.data) ? expRes.data : []) as typeof welfareExpReqs,
             );
           }
         }
@@ -656,6 +668,21 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
   const [pendingObligations, setPendingObligations] = useState<
     { id: string; label: string; description?: string; outstanding?: number }[]
   >([]);
+  const [welfareBuckets, setWelfareBuckets] = useState<
+    { bucketCode: string; label: string; balance: number }[]
+  >([]);
+  const [welfareExpReqs, setWelfareExpReqs] = useState<
+    {
+      id: string;
+      title: string;
+      amount: number;
+      bucketCode: string;
+      status: string;
+      approvalMode: string;
+      proposalId?: string;
+    }[]
+  >([]);
+  const [welfareExpFormOpen, setWelfareExpFormOpen] = useState(false);
   const [penaltyList, setPenaltyList] = useState<
     { id: string; memberId: string; amount: number; status: string; reason?: string }[]
   >([]);
@@ -1001,7 +1028,198 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
           </div>
 
 
-          {/* Phase 2–4 — Treasurer, penalties, welfare */}
+          
+          {/* Welfare kitty sub-funds + expense approval */}
+          <div className="rounded-2xl border border-teal-500/25 bg-slate-900/70 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-bold text-white">Welfare / emergency kitty</p>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Monthly and registration tracked separately. Expenses debit the chosen bucket after approval.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="rounded-xl border border-teal-500/40 px-2.5 py-1 text-[10px] font-bold text-teal-200"
+                  onClick={async () => {
+                    try {
+                      await supabase.rpc("set_channel_contributions_to_welfare", {
+                        p_chama_id: chamaId,
+                        p_enabled: true,
+                      });
+                      toast.success("New obligation payments can channel into welfare kitty");
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Failed");
+                    }
+                  }}
+                >
+                  Channel contributions → welfare
+                </button>
+                <button
+                  type="button"
+                  className="rounded-xl border border-slate-600 px-2.5 py-1 text-[10px] font-bold text-slate-300"
+                  onClick={async () => {
+                    const mode = window.prompt(
+                      "Expense approval: officials OR member_quorum?",
+                      chama.constitution?.welfareExpenseApproval ?? "officials",
+                    );
+                    if (!mode) return;
+                    try {
+                      await supabase.rpc("set_welfare_expense_approval_mode", {
+                        p_chama_id: chamaId,
+                        p_mode: mode.trim(),
+                      });
+                      toast.success(`Approval mode: ${mode}`);
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Failed");
+                    }
+                  }}
+                >
+                  Set approval mode
+                </button>
+                <button
+                  type="button"
+                  className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold text-amber-200"
+                  onClick={() => setWelfareExpFormOpen(true)}
+                >
+                  Request expense
+                </button>
+              </div>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              {(welfareBuckets.length
+                ? welfareBuckets
+                : [
+                    { bucketCode: "monthly_contribution", label: "Monthly", balance: 0 },
+                    { bucketCode: "registration", label: "Registration", balance: 0 },
+                    { bucketCode: "other", label: "Other", balance: 0 },
+                  ]
+              ).map((b) => (
+                <div
+                  key={b.bucketCode}
+                  className="rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2"
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                    {b.label || b.bucketCode}
+                  </p>
+                  <p className="mt-1 font-mono text-sm font-bold text-teal-200">
+                    {fmtKsh(Number(b.balance) || 0)}
+                  </p>
+                </div>
+              ))}
+            </div>
+            {welfareExpReqs.filter((r) => r.status === "pending").length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                <p className="text-[11px] font-bold text-slate-400">Pending expenses</p>
+                {welfareExpReqs
+                  .filter((r) => r.status === "pending")
+                  .map((r) => (
+                    <div
+                      key={r.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 px-2.5 py-1.5 text-[11px]"
+                    >
+                      <span className="text-slate-300">
+                        {r.title} · {r.bucketCode} · {fmtKsh(Number(r.amount))} ·{" "}
+                        {r.approvalMode}
+                      </span>
+                      <div className="flex gap-2">
+                        {r.approvalMode === "officials" ? (
+                          <>
+                            <button
+                              type="button"
+                              className="font-bold text-emerald-300"
+                              onClick={async () => {
+                                try {
+                                  const { error } = await supabase.rpc(
+                                    "decide_welfare_expense_official",
+                                    { p_request_id: r.id, p_approve: true },
+                                  );
+                                  if (error) throw error;
+                                  toast.success("Expense approved & paid from bucket");
+                                  const { data } = await supabase.rpc(
+                                    "list_welfare_buckets",
+                                    { p_chama_id: chamaId },
+                                  );
+                                  setWelfareBuckets(
+                                    (Array.isArray(data) ? data : []) as typeof welfareBuckets,
+                                  );
+                                  setWelfareExpReqs((prev) =>
+                                    prev.map((x) =>
+                                      x.id === r.id ? { ...x, status: "paid" } : x,
+                                    ),
+                                  );
+                                } catch (e) {
+                                  toast.error(
+                                    e instanceof Error ? e.message : "Failed",
+                                  );
+                                }
+                              }}
+                            >
+                              Approve & pay
+                            </button>
+                            <button
+                              type="button"
+                              className="font-bold text-rose-300"
+                              onClick={async () => {
+                                await supabase.rpc("decide_welfare_expense_official", {
+                                  p_request_id: r.id,
+                                  p_approve: false,
+                                });
+                                setWelfareExpReqs((prev) =>
+                                  prev.map((x) =>
+                                    x.id === r.id ? { ...x, status: "rejected" } : x,
+                                  ),
+                                );
+                              }}
+                            >
+                              Reject
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            className="font-bold text-sky-300"
+                            onClick={async () => {
+                              try {
+                                const { error } = await supabase.rpc(
+                                  "execute_welfare_expense_after_vote",
+                                  { p_request_id: r.id },
+                                );
+                                if (error) throw error;
+                                toast.success("Quorum expense executed");
+                                const { data } = await supabase.rpc(
+                                  "list_welfare_buckets",
+                                  { p_chama_id: chamaId },
+                                );
+                                setWelfareBuckets(
+                                  (Array.isArray(data) ? data : []) as typeof welfareBuckets,
+                                );
+                                setWelfareExpReqs((prev) =>
+                                  prev.map((x) =>
+                                    x.id === r.id ? { ...x, status: "paid" } : x,
+                                  ),
+                                );
+                              } catch (e) {
+                                toast.error(
+                                  e instanceof Error
+                                    ? e.message
+                                    : "Vote on Voting Board first, then execute",
+                                );
+                              }
+                            }}
+                          >
+                            Execute after quorum
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+
+{/* Phase 2–4 — Treasurer, penalties, welfare */}
           <div className="grid gap-3 sm:grid-cols-2">
             <button
               type="button"
@@ -2044,6 +2262,48 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             p_chama_id: chamaId,
           });
           setWelfareEvents((Array.isArray(list) ? list : []) as typeof welfareEvents);
+        }}
+      />
+
+
+      <SimpleFieldsModal
+        open={welfareExpFormOpen}
+        onClose={() => setWelfareExpFormOpen(false)}
+        title="Request welfare expense"
+        subtitle="Debits monthly_contribution, registration, or other bucket after approval"
+        submitLabel="Submit request"
+        fields={[
+          { key: "title", label: "Title", defaultValue: "Welfare expense", required: true },
+          { key: "amount", label: "Amount (KES)", type: "number", required: true },
+          {
+            key: "bucket",
+            label: "Bucket (monthly_contribution | registration | other)",
+            defaultValue: "monthly_contribution",
+            required: true,
+          },
+          { key: "description", label: "Description", defaultValue: "" },
+        ]}
+        onSubmit={async (v) => {
+          const amount = Number(v.amount);
+          if (!amount || amount <= 0) throw new Error("Invalid amount");
+          const { data, error } = await supabase.rpc("request_welfare_expense", {
+            p_chama_id: chamaId,
+            p_title: v.title,
+            p_amount: amount,
+            p_bucket_code: v.bucket.trim(),
+            p_description: v.description || null,
+          });
+          if (error) throw error;
+          const mode = (data as { approvalMode?: string })?.approvalMode;
+          toast.success(
+            mode === "member_quorum"
+              ? "Expense sent to Voting Board for member quorum"
+              : "Expense pending official approval",
+          );
+          const { data: list } = await supabase.rpc("list_welfare_expense_requests", {
+            p_chama_id: chamaId,
+          });
+          setWelfareExpReqs((Array.isArray(list) ? list : []) as typeof welfareExpReqs);
         }}
       />
 

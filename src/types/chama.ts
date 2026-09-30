@@ -216,6 +216,11 @@ export interface Chama {
     tableBankingMandatory?: boolean;
     shareWithdrawMode?: "locked" | "anniversary" | "break-up-only" | "exit-with-notice";
     shareLockMonths?: number;
+    /** Channel obligation payments into welfare kitty buckets */
+    channelContributionsToWelfare?: boolean;
+    /** officials = leaders only; member_quorum = vote then execute */
+    welfareExpenseApproval?: "officials" | "member_quorum";
+
   };
   nextPayout: {
     recipientName: string;
