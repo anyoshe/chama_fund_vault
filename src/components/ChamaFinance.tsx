@@ -1019,6 +1019,33 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                     </div>
                     <button
                       type="button"
+                      className="rounded-lg border border-rose-500/40 px-2.5 py-1 text-[11px] font-bold text-rose-300"
+                      onClick={async () => {
+                        if (
+                          !window.confirm(
+                            `Delete plan "${p.name}" and all its obligations/penalties? Payments history is kept.`,
+                          )
+                        )
+                          return;
+                        try {
+                          const { error } = await supabase.rpc(
+                            "delete_contribution_plan",
+                            { p_plan_id: p.id, p_hard_delete: true },
+                          );
+                          if (error) throw error;
+                          toast.success("Plan deleted");
+                          setPlans((prev) => prev.filter((x) => x.id !== p.id));
+                        } catch (e) {
+                          toast.error(
+                            e instanceof Error ? e.message : "Delete failed",
+                          );
+                        }
+                      }}
+                    >
+                      Delete
+                    </button>
+                    <button
+                      type="button"
                       className="rounded-lg border border-slate-600 px-2.5 py-1 text-[11px] font-bold text-slate-300"
                       onClick={async () => {
                         const mode = window.confirm(
