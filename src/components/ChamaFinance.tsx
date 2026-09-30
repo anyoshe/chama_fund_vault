@@ -1023,26 +1023,26 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                       onClick={async () => {
                         if (
                           !window.confirm(
-                            `Delete plan "${p.name}" and all its obligations/penalties? Payments history is kept.`,
+                            `Deactivate plan "${p.name}"? Only allowed if no money has been received. Paid history is never deleted.`,
                           )
                         )
                           return;
                         try {
                           const { error } = await supabase.rpc(
-                            "delete_contribution_plan",
-                            { p_plan_id: p.id, p_hard_delete: true },
+                            "deactivate_contribution_plan",
+                            { p_plan_id: p.id },
                           );
                           if (error) throw error;
-                          toast.success("Plan deleted");
+                          toast.success("Plan deactivated");
                           setPlans((prev) => prev.filter((x) => x.id !== p.id));
                         } catch (e) {
                           toast.error(
-                            e instanceof Error ? e.message : "Delete failed",
+                            e instanceof Error ? e.message : "Cannot deactivate",
                           );
                         }
                       }}
                     >
-                      Delete
+                      Deactivate
                     </button>
                     <button
                       type="button"
@@ -1200,33 +1200,34 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                   className="rounded-lg border border-rose-500/40 px-2.5 py-1 text-[10px] font-bold text-rose-300"
                   onClick={async () => {
                     const code = window.prompt(
-                      "Kit code to DELETE (e.g. from kits list). Balance will be discarded.",
+                      "Kit code to remove (only if EMPTY and never funded). Standard kits cannot be removed.",
                     );
                     if (!code?.trim()) return;
                     if (
                       !window.confirm(
-                        `Delete kit "${code.trim()}" and lose its balance? This cannot be undone.`,
+                        `Remove empty kit "${code.trim()}"? Blocked if it has balance or payment history.`,
                       )
                     )
                       return;
                     try {
-                      const { data, error } = await supabase.rpc("delete_chama_kit", {
+                      const { error } = await supabase.rpc("delete_chama_kit", {
                         p_chama_id: chamaId,
                         p_kit_code: code.trim(),
-                        p_force: true,
+                        p_force: false,
                       });
                       if (error) throw error;
-                      const d = data as { discardedBalance?: number };
-                      toast.success(
-                        `Kit deleted · discarded ${fmtKsh(Number(d?.discardedBalance) || 0)}`,
-                      );
+                      toast.success("Empty kit removed");
                       onRefresh?.();
                     } catch (e) {
-                      toast.error(e instanceof Error ? e.message : "Delete failed");
+                      toast.error(
+                        e instanceof Error
+                          ? e.message
+                          : "Cannot remove — money or history exists",
+                      );
                     }
                   }}
                 >
-                  Delete kit / account
+                  Remove empty kit
                 </button>
                 <button
                   type="button"
