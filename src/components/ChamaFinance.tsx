@@ -586,15 +586,28 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
     let cancelled = false;
     (async () => {
       try {
-        const { data, error } = await supabase.rpc("list_contribution_plans", {
-          p_chama_id: chamaId,
-        });
-        if (error) throw error;
+        const [plansRes, welfareRes, penRes] = await Promise.all([
+          supabase.rpc("list_contribution_plans", { p_chama_id: chamaId }),
+          supabase.rpc("list_welfare_events", { p_chama_id: chamaId }),
+          supabase.rpc("list_chama_penalties", { p_chama_id: chamaId }),
+        ]);
         if (!cancelled) {
-          setPlans((Array.isArray(data) ? data : []) as ContributionPlan[]);
+          if (!plansRes.error) {
+            setPlans((Array.isArray(plansRes.data) ? plansRes.data : []) as ContributionPlan[]);
+          }
+          if (!welfareRes.error) {
+            setWelfareEvents(
+              (Array.isArray(welfareRes.data) ? welfareRes.data : []) as typeof welfareEvents,
+            );
+          }
+          if (!penRes.error) {
+            setPenaltyList(
+              (Array.isArray(penRes.data) ? penRes.data : []) as typeof penaltyList,
+            );
+          }
         }
       } catch {
-        if (!cancelled) setPlans([]);
+        /* optional until SQL applied */
       }
     })();
     return () => {
@@ -622,6 +635,31 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
   const [lockOpen, setLockOpen] = useState(false);
   const [plans, setPlans] = useState<ContributionPlan[]>([]);
   const [planFormOpen, setPlanFormOpen] = useState(false);
+  const [welfareEvents, setWelfareEvents] = useState<
+    {
+      id: string;
+      title: string;
+      category: string;
+      requiredAmount: number;
+      totalCollected: number;
+      totalExpected: number;
+      totalOutstanding: number;
+      totalExpenses: number;
+      totalPayout: number;
+      balance: number;
+      status: string;
+      beneficiaryName?: string;
+    }[]
+  >([]);
+  const [welfareFormOpen, setWelfareFormOpen] = useState(false);
+  const [treasurerPayOpen, setTreasurerPayOpen] = useState(false);
+  const [pendingObligations, setPendingObligations] = useState<
+    { id: string; label: string; description?: string; outstanding?: number }[]
+  >([]);
+  const [penaltyList, setPenaltyList] = useState<
+    { id: string; memberId: string; amount: number; status: string; reason?: string }[]
+  >([]);
+
 
 
   const [openSettled, setOpenSettled] = useState(false);
@@ -961,6 +999,269 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
               )}
             </div>
           </div>
+
+
+          {/* Phase 2–4 — Treasurer, penalties, welfare */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              className="rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-left text-xs font-bold text-sky-200 hover:bg-sky-500/15"
+              onClick={async () => {
+                try {
+                  const { data, error } = await supabase.rpc("list_chama_obligations", {
+                    p_chama_id: chamaId,
+                    p_plan_id: null,
+                    p_period_key: null,
+                  });
+                  if (error) throw error;
+                  const rows = (Array.isArray(data) ? data : []) as {
+                    id: string;
+                    planName: string;
+                    memberId: string;
+                    outstanding: number;
+                    periodKey: string;
+                    status: string;
+                  }[];
+                  const open = rows.filter(
+                    (r) =>
+                      (r.status === "pending" || r.status === "partial") &&
+                      Number(r.outstanding) > 0,
+                  );
+                  if (!open.length) {
+                    toast.message("No open obligations to record");
+                    return;
+                  }
+                  setPendingObligations(
+                    open.map((r) => {
+                      const who =
+                        members.find((m) => m.id === r.memberId)?.name ?? "Member";
+                      return {
+                        id: r.id,
+                        label: `${who} · ${r.planName}`,
+                        description: `${r.periodKey} · owing ${r.outstanding}`,
+                        outstanding: Number(r.outstanding),
+                      };
+                    }),
+                  );
+                  setTreasurerPayOpen(true);
+                } catch (e) {
+                  toast.error(
+                    e instanceof Error ? e.message : "Could not load obligations",
+                  );
+                }
+              }}
+            >
+              Record member payment (treasurer)
+              <span className="mt-1 block text-[10px] font-normal text-slate-400">
+                Cash / offline — marks obligation paid for that member
+              </span>
+            </button>
+            <button
+              type="button"
+              className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-left text-xs font-bold text-rose-200 hover:bg-rose-500/15"
+              onClick={async () => {
+                try {
+                  const { data, error } = await supabase.rpc("assess_overdue_penalties", {
+                    p_chama_id: chamaId,
+                  });
+                  if (error) throw error;
+                  const n = (data as { assessed?: number })?.assessed ?? 0;
+                  toast.success(`Assessed ${n} late penalties`);
+                  const { data: pen } = await supabase.rpc("list_chama_penalties", {
+                    p_chama_id: chamaId,
+                  });
+                  setPenaltyList(
+                    (Array.isArray(pen) ? pen : []) as typeof penaltyList,
+                  );
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Assess failed");
+                }
+              }}
+            >
+              Assess overdue penalties
+              <span className="mt-1 block text-[10px] font-normal text-slate-400">
+                Uses plan penalty rules (fixed / % + grace days)
+              </span>
+            </button>
+            <button
+              type="button"
+              className="rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-left text-xs font-bold text-violet-200 hover:bg-violet-500/15"
+              onClick={() => setWelfareFormOpen(true)}
+            >
+              Create welfare event
+              <span className="mt-1 block text-[10px] font-normal text-slate-400">
+                Bereavement, medical, emergency — generates obligations
+              </span>
+            </button>
+          </div>
+
+          {welfareEvents.length > 0 && (
+            <div className="rounded-2xl border border-violet-500/20 bg-slate-900/70 p-4">
+              <p className="text-sm font-bold text-white">Welfare events</p>
+              <div className="mt-3 space-y-2">
+                {welfareEvents.map((e) => (
+                  <div
+                    key={e.id}
+                    className="rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2.5"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-white">{e.title}</p>
+                        <p className="text-[11px] text-slate-500">
+                          {e.category}
+                          {e.beneficiaryName ? ` · ${e.beneficiaryName}` : ""} ·{" "}
+                          {e.status}
+                        </p>
+                      </div>
+                      <p className="font-mono text-xs text-violet-200">
+                        Bal {fmtKsh(Number(e.balance) || 0)}
+                      </p>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-1 text-[10px] text-slate-400 sm:grid-cols-4">
+                      <span>Expected {fmtKsh(Number(e.totalExpected) || 0)}</span>
+                      <span>Collected {fmtKsh(Number(e.totalCollected) || 0)}</span>
+                      <span>Out {fmtKsh(Number(e.totalOutstanding) || 0)}</span>
+                      <span>
+                        Exp {fmtKsh(Number(e.totalExpenses) || 0)} · Pay{" "}
+                        {fmtKsh(Number(e.totalPayout) || 0)}
+                      </span>
+                    </div>
+                    {e.status !== "closed" && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="rounded-lg border border-slate-600 px-2 py-1 text-[10px] font-bold text-slate-300"
+                          onClick={async () => {
+                            const amt = window.prompt("Expense amount (KES)?");
+                            if (amt == null) return;
+                            const desc =
+                              window.prompt("Description?", "Welfare expense") ||
+                              "Welfare expense";
+                            try {
+                              const { error } = await supabase.rpc(
+                                "record_welfare_expense",
+                                {
+                                  p_event_id: e.id,
+                                  p_amount: Number(amt),
+                                  p_description: desc,
+                                },
+                              );
+                              if (error) throw error;
+                              toast.success("Expense recorded");
+                              const { data } = await supabase.rpc(
+                                "list_welfare_events",
+                                { p_chama_id: chamaId },
+                              );
+                              setWelfareEvents(
+                                (Array.isArray(data) ? data : []) as typeof welfareEvents,
+                              );
+                            } catch (err) {
+                              toast.error(
+                                err instanceof Error ? err.message : "Failed",
+                              );
+                            }
+                          }}
+                        >
+                          Add expense
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-lg border border-emerald-500/40 px-2 py-1 text-[10px] font-bold text-emerald-200"
+                          onClick={async () => {
+                            const amt = window.prompt(
+                              "Payout to beneficiary (KES)?",
+                              String(Math.max(0, Number(e.balance) || 0)),
+                            );
+                            if (amt == null) return;
+                            try {
+                              const { error } = await supabase.rpc(
+                                "record_welfare_payout",
+                                {
+                                  p_event_id: e.id,
+                                  p_amount: Number(amt),
+                                  p_description: null,
+                                },
+                              );
+                              if (error) throw error;
+                              toast.success("Payout recorded");
+                              const { data } = await supabase.rpc(
+                                "list_welfare_events",
+                                { p_chama_id: chamaId },
+                              );
+                              setWelfareEvents(
+                                (Array.isArray(data) ? data : []) as typeof welfareEvents,
+                              );
+                            } catch (err) {
+                              toast.error(
+                                err instanceof Error ? err.message : "Failed",
+                              );
+                            }
+                          }}
+                        >
+                          Payout beneficiary
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {penaltyList.filter((p) => p.status === "assessed").length > 0 && (
+            <div className="rounded-2xl border border-rose-500/20 bg-slate-900/70 p-4">
+              <p className="text-sm font-bold text-white">Open penalties</p>
+              <div className="mt-2 space-y-1.5">
+                {penaltyList
+                  .filter((p) => p.status === "assessed")
+                  .slice(0, 12)
+                  .map((p) => (
+                    <div
+                      key={p.id}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-slate-800 px-2.5 py-1.5 text-[11px]"
+                    >
+                      <span className="text-slate-400">
+                        {members.find((m) => m.id === p.memberId)?.name ?? "Member"}
+                        {" · "}
+                        {p.reason || "Late penalty"}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-rose-300">
+                          {fmtKsh(Number(p.amount))}
+                        </span>
+                        <button
+                          type="button"
+                          className="text-[10px] font-bold text-amber-300"
+                          onClick={async () => {
+                            const reason =
+                              window.prompt("Waiver reason?") || "Waived by official";
+                            try {
+                              const { error } = await supabase.rpc("waive_penalty", {
+                                p_penalty_id: p.id,
+                                p_reason: reason,
+                              });
+                              if (error) throw error;
+                              toast.success("Penalty waived");
+                              setPenaltyList((prev) =>
+                                prev.map((x) =>
+                                  x.id === p.id ? { ...x, status: "waived" } : x,
+                                ),
+                              );
+                            } catch (e) {
+                              toast.error(
+                                e instanceof Error ? e.message : "Waive failed",
+                              );
+                            }
+                          }}
+                        >
+                          Waive
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
 
 <div className="grid gap-3 sm:grid-cols-2">
             <button
@@ -1652,6 +1953,95 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             p_chama_id: chamaId,
           });
           setPlans((Array.isArray(data) ? data : []) as ContributionPlan[]);
+        }}
+      />
+
+
+      <ChoiceModal
+        open={treasurerPayOpen}
+        onClose={() => setTreasurerPayOpen(false)}
+        title="Record payment for member"
+        subtitle="Select obligation, then enter amount received"
+        options={pendingObligations}
+        confirmLabel="Enter amount"
+        onConfirm={async (id) => {
+          const row = pendingObligations.find((o) => o.id === id);
+          const amtRaw = window.prompt(
+            "Amount received (KES)?",
+            String(row?.outstanding ?? ""),
+          );
+          if (amtRaw == null) return;
+          const amount = Number(amtRaw);
+          if (!amount || amount <= 0) throw new Error("Invalid amount");
+          const method =
+            window.prompt("Method (Cash / M-Pesa / Bank)?", "Cash") || "Cash";
+          const { error } = await supabase.rpc(
+            "record_obligation_payment_for_member",
+            {
+              p_obligation_id: id,
+              p_amount: amount,
+              p_method: method,
+              p_reference: null,
+              p_notes: "Treasurer recorded",
+            },
+          );
+          if (error) throw error;
+          toast.success(`Recorded ${amount} for member`);
+        }}
+      />
+      <SimpleFieldsModal
+        open={welfareFormOpen}
+        onClose={() => setWelfareFormOpen(false)}
+        title="Create welfare event"
+        subtitle="Generates a contribution obligation for each active member"
+        submitLabel="Create event"
+        fields={[
+          {
+            key: "title",
+            label: "Title",
+            defaultValue: "Bereavement support",
+            required: true,
+          },
+          {
+            key: "category",
+            label: "Category (death|family_death|sickness|hospitalization|accident|emergency|education|other)",
+            defaultValue: "death",
+            required: true,
+          },
+          {
+            key: "amount",
+            label: "Required per member (KES)",
+            type: "number",
+            defaultValue: "500",
+            required: true,
+          },
+          {
+            key: "beneficiary",
+            label: "Beneficiary name",
+            defaultValue: "",
+          },
+        ]}
+        onSubmit={async (v) => {
+          const amount = Number(v.amount);
+          if (!amount || amount <= 0) throw new Error("Invalid amount");
+          const { data, error } = await supabase.rpc("create_welfare_event", {
+            p_chama_id: chamaId,
+            p_title: v.title,
+            p_category: v.category.trim(),
+            p_required_amount: amount,
+            p_beneficiary_id: null,
+            p_beneficiary_name: v.beneficiary || null,
+            p_notes: null,
+            p_generate_obligations: true,
+          });
+          if (error) throw error;
+          toast.success(
+            `Event created · ${(data as { obligationCount?: number })?.obligationCount ?? 0} obligations`,
+          );
+          const { data: list } = await supabase.rpc("list_welfare_events", {
+            p_chama_id: chamaId,
+          });
+          setWelfareEvents((Array.isArray(list) ? list : []) as typeof welfareEvents);
         }}
       />
 

@@ -54,3 +54,9 @@ Run: supabase/phase1_contribution_plans.sql
 - Officials: seed/create plan, generate obligations
 - Members: My Finance → What I owe → Pay
 
+
+## Phase 2–4
+Run after phase1: `supabase/phase2_4_treasurer_penalties_welfare.sql`
+- Treasurer payment for member obligations
+- Assess/waive penalties (set plan penalty rules via SQL/set_plan_penalty_rules)
+- Welfare events: create, collect (via obligations), expense, payout
