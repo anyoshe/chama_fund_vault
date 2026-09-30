@@ -66,3 +66,6 @@ Run: supabase/fix_plans_obligations_auth.sql
 - Creating a plan auto-generates obligations for ALL active members (current period)
 - Generate obligations also adds missing rows for members who joined later
 - Officials only (server-side)
+
+## Remaining (phase5-8)
+Run: supabase/phase5_8_remaining.sql

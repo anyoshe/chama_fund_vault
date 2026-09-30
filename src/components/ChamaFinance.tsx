@@ -586,12 +586,14 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
     let cancelled = false;
     (async () => {
       try {
-        const [plansRes, welfareRes, penRes, buckRes, expRes] = await Promise.all([
+        const [plansRes, welfareRes, penRes, buckRes, expRes, dashRes, arrRes] = await Promise.all([
           supabase.rpc("list_contribution_plans", { p_chama_id: chamaId }),
           supabase.rpc("list_welfare_events", { p_chama_id: chamaId }),
           supabase.rpc("list_chama_penalties", { p_chama_id: chamaId }),
           supabase.rpc("list_welfare_buckets", { p_chama_id: chamaId }),
           supabase.rpc("list_welfare_expense_requests", { p_chama_id: chamaId }),
+          supabase.rpc("chama_obligation_dashboard", { p_chama_id: chamaId }),
+          supabase.rpc("chama_arrears_report", { p_chama_id: chamaId }),
         ]);
         if (!cancelled) {
           if (!plansRes.error) {
@@ -616,6 +618,12 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             setWelfareExpReqs(
               (Array.isArray(expRes.data) ? expRes.data : []) as typeof welfareExpReqs,
             );
+          }
+          if (!dashRes.error && dashRes.data) {
+            setOblDash(dashRes.data as typeof oblDash);
+          }
+          if (!arrRes.error) {
+            setArrears((Array.isArray(arrRes.data) ? arrRes.data : []) as typeof arrears);
           }
         }
       } catch {
@@ -683,6 +691,25 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
     }[]
   >([]);
   const [welfareExpFormOpen, setWelfareExpFormOpen] = useState(false);
+  const [oblDash, setOblDash] = useState<{
+    expectedContributions?: number;
+    collectedContributions?: number;
+    outstandingContributions?: number;
+    penaltiesAssessed?: number;
+    penaltiesWaived?: number;
+    groupExpenses?: number;
+    activeMembers?: number;
+  } | null>(null);
+  const [arrears, setArrears] = useState<
+    {
+      memberId: string;
+      planName: string;
+      periodKey: string;
+      outstanding: number;
+      dueDate?: string;
+    }[]
+  >([]);
+
   const [penaltyList, setPenaltyList] = useState<
     { id: string; memberId: string; amount: number; status: string; reason?: string }[]
   >([]);
@@ -992,6 +1019,39 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                     </div>
                     <button
                       type="button"
+                      className="rounded-lg border border-slate-600 px-2.5 py-1 text-[11px] font-bold text-slate-300"
+                      onClick={async () => {
+                        const mode = window.confirm(
+                          "Apply to ALL members? OK = all, Cancel = selected only (enter user IDs next)",
+                        );
+                        if (mode) {
+                          await supabase.rpc("set_plan_members", {
+                            p_plan_id: p.id,
+                            p_member_ids: null,
+                          });
+                          toast.success("Plan applies to all members");
+                          return;
+                        }
+                        const raw = window.prompt(
+                          "Member user IDs (comma-separated UUIDs)",
+                        );
+                        if (!raw) return;
+                        const ids = raw.split(",").map((s) => s.trim()).filter(Boolean);
+                        try {
+                          await supabase.rpc("set_plan_members", {
+                            p_plan_id: p.id,
+                            p_member_ids: ids,
+                          });
+                          toast.success(`Plan limited to ${ids.length} members`);
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : "Failed");
+                        }
+                      }}
+                    >
+                      Who pays
+                    </button>
+                    <button
+                      type="button"
                       className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] font-bold text-amber-200"
                       onClick={async () => {
                         try {
@@ -1033,7 +1093,138 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
           <div className="rounded-2xl border border-teal-500/25 bg-slate-900/70 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <p className="text-sm font-bold text-white">Welfare / emergency kitty</p>
+                <p className="text-sm font-bold text-white">
+          {/* Obligation-based dashboard + arrears */}
+          {oblDash && (
+            <div className="rounded-2xl border border-emerald-500/20 bg-slate-900/70 p-4">
+              <p className="text-sm font-bold text-white">Contributions dashboard (from obligations)</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                {[
+                  ["Members", oblDash.activeMembers],
+                  ["Expected", oblDash.expectedContributions],
+                  ["Collected", oblDash.collectedContributions],
+                  ["Outstanding", oblDash.outstandingContributions],
+                  ["Penalties", oblDash.penaltiesAssessed],
+                  ["Expenses", oblDash.groupExpenses],
+                ].map(([label, val]) => (
+                  <div
+                    key={String(label)}
+                    className="rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2"
+                  >
+                    <p className="text-[10px] font-semibold uppercase text-slate-500">
+                      {label}
+                    </p>
+                    <p className="mt-1 font-mono text-sm font-bold text-emerald-200">
+                      {label === "Members"
+                        ? String(val ?? 0)
+                        : fmtKsh(Number(val) || 0)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-600 px-2.5 py-1 text-[10px] font-bold text-slate-300"
+                  onClick={async () => {
+                    const pol = window.prompt(
+                      "Spending policy: officials | member_quorum | leader_report",
+                      "officials",
+                    );
+                    if (!pol) return;
+                    try {
+                      await supabase.rpc("set_spending_policy", {
+                        p_chama_id: chamaId,
+                        p_policy: pol.trim(),
+                      });
+                      toast.success(`Spending policy: ${pol}`);
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Failed");
+                    }
+                  }}
+                >
+                  Set spending policy
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-600 px-2.5 py-1 text-[10px] font-bold text-slate-300"
+                  onClick={async () => {
+                    const raw = window.prompt(
+                      "Allowed methods (comma-separated)",
+                      "Cash,M-Pesa,Bank,Other",
+                    );
+                    if (!raw) return;
+                    const methods = raw.split(",").map((s) => s.trim()).filter(Boolean);
+                    try {
+                      await supabase.rpc("set_allowed_payment_methods", {
+                        p_chama_id: chamaId,
+                        p_methods: methods,
+                      });
+                      toast.success("Payment methods updated");
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Failed");
+                    }
+                  }}
+                >
+                  Set payment methods
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-amber-500/40 px-2.5 py-1 text-[10px] font-bold text-amber-200"
+                  onClick={async () => {
+                    const cat = window.prompt("Category?", "stationery") || "other";
+                    const amt = window.prompt("Amount (KES)?");
+                    if (amt == null) return;
+                    const desc = window.prompt("Description?", cat) || cat;
+                    try {
+                      await supabase.rpc("record_group_expense", {
+                        p_chama_id: chamaId,
+                        p_category: cat,
+                        p_description: desc,
+                        p_amount: Number(amt),
+                        p_kit_code: "group-reserve",
+                        p_payment_method: "Other",
+                        p_notes: null,
+                      });
+                      toast.success("Group expense recorded");
+                      const { data } = await supabase.rpc("chama_obligation_dashboard", {
+                        p_chama_id: chamaId,
+                      });
+                      if (data) setOblDash(data as typeof oblDash);
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Failed");
+                    }
+                  }}
+                >
+                  Record group expense
+                </button>
+              </div>
+              {arrears.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-[11px] font-bold text-rose-300/90">Arrears</p>
+                  <div className="mt-2 max-h-40 space-y-1 overflow-y-auto">
+                    {arrears.slice(0, 30).map((a, i) => (
+                      <div
+                        key={i}
+                        className="flex justify-between gap-2 rounded-lg border border-slate-800 px-2 py-1 text-[11px]"
+                      >
+                        <span className="truncate text-slate-400">
+                          {members.find((m) => m.id === a.memberId)?.name ?? "Member"}
+                          {" · "}
+                          {a.planName} ({a.periodKey})
+                        </span>
+                        <span className="shrink-0 font-mono text-rose-300">
+                          {fmtKsh(Number(a.outstanding) || 0)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+Welfare / emergency kitty</p>
                 <p className="mt-1 text-[11px] text-slate-500">
                   Monthly and registration tracked separately. Expenses debit the chosen bucket after approval.
                 </p>

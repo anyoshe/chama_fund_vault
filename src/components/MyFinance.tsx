@@ -167,6 +167,19 @@ export default function MyFinance({
   const [obligations, setObligations] = useState<ContributionObligation[]>([]);
   const [oblLoading, setOblLoading] = useState(false);
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [statementRows, setStatementRows] = useState<
+    {
+      date?: string;
+      description?: string;
+      expected?: number;
+      paid?: number;
+      balance?: number;
+      status?: string;
+      type?: string;
+      reference?: string;
+    }[]
+  >([]);
+
 
   const [moveKitId, setMoveKitId] = useState<string | null>(null);
 
@@ -224,13 +237,30 @@ export default function MyFinance({
     (async () => {
       setOblLoading(true);
       try {
-        const { data, error } = await supabase.rpc("list_my_obligations", {
-          p_chama_id: chama.id,
-        });
-        if (error) throw error;
+        const [oblRes, stmtRes] = await Promise.all([
+          supabase.rpc("list_my_obligations", { p_chama_id: chama.id }),
+          supabase.rpc("member_financial_statement", {
+            p_chama_id: chama.id,
+            p_member_id: null,
+          }),
+        ]);
+        if (oblRes.error) throw oblRes.error;
         if (!cancelled) {
-          const rows = (Array.isArray(data) ? data : []) as ContributionObligation[];
-          setObligations(rows);
+          setObligations(
+            (Array.isArray(oblRes.data) ? oblRes.data : []) as ContributionObligation[],
+          );
+          if (!stmtRes.error && stmtRes.data) {
+            const s = stmtRes.data as {
+              obligations?: unknown[];
+              penalties?: unknown[];
+              payments?: unknown[];
+            };
+            const rows = [
+              ...((s.obligations as typeof statementRows) || []),
+              ...((s.penalties as typeof statementRows) || []),
+            ];
+            setStatementRows(rows);
+          }
         }
       } catch {
         if (!cancelled) setObligations([]);
@@ -534,6 +564,60 @@ export default function MyFinance({
       </div>
 
       
+
+      {/* Full member statement */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+        <p className="text-sm font-bold text-white">My statement</p>
+        <p className="mt-1 text-[11px] text-slate-500">
+          Expected vs paid vs balance (obligations and penalties)
+        </p>
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[28rem] text-left text-[11px]">
+            <thead>
+              <tr className="border-b border-slate-800 text-slate-500">
+                <th className="py-1.5 pr-2 font-semibold">Date</th>
+                <th className="py-1.5 pr-2 font-semibold">Description</th>
+                <th className="py-1.5 pr-2 font-semibold text-right">Expected</th>
+                <th className="py-1.5 pr-2 font-semibold text-right">Paid</th>
+                <th className="py-1.5 font-semibold text-right">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {statementRows.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-3 text-slate-500">
+                    No statement rows yet. Pay obligations or wait for plans to be generated.
+                  </td>
+                </tr>
+              ) : (
+                statementRows.slice(0, 40).map((r, i) => (
+                  <tr key={i} className="border-b border-slate-800/60">
+                    <td className="py-1.5 pr-2 text-slate-500">
+                      {r.date ? String(r.date).slice(0, 10) : "—"}
+                    </td>
+                    <td className="py-1.5 pr-2 text-slate-300">
+                      {r.description}
+                      {r.status ? (
+                        <span className="ml-1 text-slate-600">({r.status})</span>
+                      ) : null}
+                    </td>
+                    <td className="py-1.5 pr-2 text-right font-mono text-slate-400">
+                      {fmtKsh(Number(r.expected) || 0)}
+                    </td>
+                    <td className="py-1.5 pr-2 text-right font-mono text-emerald-300/90">
+                      {fmtKsh(Number(r.paid) || 0)}
+                    </td>
+                    <td className="py-1.5 text-right font-mono text-amber-200">
+                      {fmtKsh(Number(r.balance) || 0)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Phase 1 — What I owe (from contribution plans) */}
       <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-br from-slate-900 to-amber-950/30 p-4 sm:p-5">
         <div className="flex items-center justify-between gap-2">
