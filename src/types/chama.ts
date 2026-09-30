@@ -237,3 +237,44 @@ export interface AuditEvent {
   timestamp: string; // ISO
   reference: string; // tamper-proof-ish reference like CV-2025-00042
 }
+
+/** Phase 1 — configurable contribution plans & obligations */
+export type ContributionFrequency =
+  | "one_off"
+  | "weekly"
+  | "monthly"
+  | "quarterly"
+  | "annually";
+
+export interface ContributionPlan {
+  id: string;
+  chamaId: string;
+  name: string;
+  description?: string | null;
+  amount: number;
+  currency: string;
+  frequency: ContributionFrequency;
+  destinationKit: string;
+  isMandatory: boolean;
+  allowPartial: boolean;
+  allowEarly?: boolean;
+  dueDay?: number | null;
+  isActive: boolean;
+  createdAt?: string;
+}
+
+export interface ContributionObligation {
+  id: string;
+  planId: string;
+  planName: string;
+  destinationKit?: string;
+  frequency?: ContributionFrequency;
+  periodKey: string;
+  dueDate?: string | null;
+  expectedAmount: number;
+  paidAmount: number;
+  outstanding: number;
+  status: "pending" | "partial" | "paid" | "waived" | "cancelled";
+  allowPartial?: boolean;
+  memberId?: string;
+}

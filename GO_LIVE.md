@@ -47,3 +47,10 @@ Run: supabase/phase_d_e_locks_contingency.sql
 - close contingency campaign
 - chair share lock settings
 
+
+## Phase 1 contribution plans
+Run: supabase/phase1_contribution_plans.sql
+- contribution_plans, contribution_obligations
+- Officials: seed/create plan, generate obligations
+- Members: My Finance → What I owe → Pay
+

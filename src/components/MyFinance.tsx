@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ChartLineUp,
   Coins,
@@ -16,6 +16,7 @@ import type {
   Chama,
   ChamaKit,
   Contribution,
+  ContributionObligation,
   Member,
   Proposal,
 } from "../types/chama";
@@ -163,6 +164,10 @@ export default function MyFinance({
   const [repayMethod, setRepayMethod] = useState("M-Pesa STK Push");
   const [repayBusy, setRepayBusy] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [obligations, setObligations] = useState<ContributionObligation[]>([]);
+  const [oblLoading, setOblLoading] = useState(false);
+  const [payingId, setPayingId] = useState<string | null>(null);
+
   const [moveKitId, setMoveKitId] = useState<string | null>(null);
 
   const myId = me?.id ?? "";
@@ -212,6 +217,31 @@ export default function MyFinance({
   const loaningPool = kits
     .filter((k) => liquidityCodes.has(k.kit_code))
     .reduce((s, k) => s + (Number(k.balance) || 0), 0);
+
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setOblLoading(true);
+      try {
+        const { data, error } = await supabase.rpc("list_my_obligations", {
+          p_chama_id: chama.id,
+        });
+        if (error) throw error;
+        if (!cancelled) {
+          const rows = (Array.isArray(data) ? data : []) as ContributionObligation[];
+          setObligations(rows);
+        }
+      } catch {
+        if (!cancelled) setObligations([]);
+      } finally {
+        if (!cancelled) setOblLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [chama.id]);
 
   const myLoans = proposals.filter(
     (p) =>
@@ -503,7 +533,109 @@ export default function MyFinance({
         />
       </div>
 
-      {/* Kit cards — click to contribute to the right pot */}
+      
+      {/* Phase 1 — What I owe (from contribution plans) */}
+      <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-br from-slate-900 to-amber-950/30 p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-300/90">
+              What I owe
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
+              From group contribution plans (monthly, registration, one-offs)
+            </p>
+          </div>
+          {oblLoading ? (
+            <span className="text-[10px] text-slate-500">Loading…</span>
+          ) : null}
+        </div>
+        {obligations.length === 0 && !oblLoading ? (
+          <p className="mt-3 text-xs text-slate-500">
+            No open obligations. Officials generate these from contribution plans in Chama Finance.
+          </p>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {obligations.map((o) => (
+              <div
+                key={o.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5"
+              >
+                <div>
+                  <p className="text-sm font-semibold text-white">{o.planName}</p>
+                  <p className="text-[11px] text-slate-500">
+                    {o.periodKey}
+                    {o.dueDate ? ` · due ${o.dueDate}` : ""}
+                    {" · "}
+                    {o.status}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="text-right">
+                    <p className="font-mono text-sm font-bold text-amber-200">
+                      {fmtKsh(o.outstanding)}
+                    </p>
+                    <p className="text-[10px] text-slate-500">
+                      of {fmtKsh(o.expectedAmount)}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={payingId === o.id || o.outstanding <= 0}
+                    className="rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 text-[11px] font-bold text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-50"
+                    onClick={async () => {
+                      setPayingId(o.id);
+                      try {
+                        const ref = `OBL${Date.now().toString().slice(-8)}`;
+                        const { data, error } = await supabase.rpc(
+                          "pay_contribution_obligation",
+                          {
+                            p_obligation_id: o.id,
+                            p_amount: o.outstanding,
+                            p_method: "Other",
+                            p_reference: ref,
+                            p_phone: null,
+                            p_payment_details: "Phase1 self-pay",
+                          },
+                        );
+                        if (error) throw error;
+                        toast.success(
+                          `Paid ${fmtKsh(o.outstanding)} · ${o.planName}`,
+                        );
+                        const st = data as { status?: string; outstanding?: number };
+                        setObligations((prev) =>
+                          prev
+                            .map((x) =>
+                              x.id === o.id
+                                ? {
+                                    ...x,
+                                    paidAmount: x.expectedAmount,
+                                    outstanding: 0,
+                                    status: "paid" as const,
+                                  }
+                                : x,
+                            )
+                            .filter((x) => x.status === "pending" || x.status === "partial"),
+                        );
+                        void st;
+                      } catch (e) {
+                        toast.error(
+                          e instanceof Error ? e.message : "Payment failed",
+                        );
+                      } finally {
+                        setPayingId(null);
+                      }
+                    }}
+                  >
+                    {payingId === o.id ? "…" : "Pay"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+{/* Kit cards — click to contribute to the right pot */}
       <div>
         <p className="mb-1 text-sm font-bold text-white">
           Contribute to a kit — pick the pot first

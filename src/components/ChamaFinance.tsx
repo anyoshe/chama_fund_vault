@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bank,
   CaretDown,
@@ -18,6 +18,7 @@ import type {
   Chama,
   ChamaKit,
   Contribution,
+  ContributionPlan,
   Member,
   Proposal,
 } from "../types/chama";
@@ -580,6 +581,27 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
     me?.role === "Chairperson" ||
     me?.role === "Treasurer" ||
     me?.role === "Secretary";
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase.rpc("list_contribution_plans", {
+          p_chama_id: chamaId,
+        });
+        if (error) throw error;
+        if (!cancelled) {
+          setPlans((Array.isArray(data) ? data : []) as ContributionPlan[]);
+        }
+      } catch {
+        if (!cancelled) setPlans([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [chamaId]);
+
   const isChair = me?.role === "Chairperson";
   const isTreasurer = me?.role === "Treasurer";
 
@@ -598,6 +620,9 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
     { id: string; label: string; description?: string }[]
   >([]);
   const [lockOpen, setLockOpen] = useState(false);
+  const [plans, setPlans] = useState<ContributionPlan[]>([]);
+  const [planFormOpen, setPlanFormOpen] = useState(false);
+
 
   const [openSettled, setOpenSettled] = useState(false);
   const [openMembers, setOpenMembers] = useState(false);
@@ -839,7 +864,105 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          
+          {/* Phase 1 — Contribution plans */}
+          <div className="rounded-2xl border border-emerald-500/25 bg-slate-900/70 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-bold text-white">Contribution plans</p>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Define monthly / registration / one-off amounts. Generate obligations, then members pay from My Finance.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="rounded-xl border border-slate-600 px-3 py-1.5 text-[11px] font-bold text-slate-200 hover:bg-slate-800"
+                  onClick={async () => {
+                    try {
+                      const { error } = await supabase.rpc(
+                        "seed_default_contribution_plans",
+                        { p_chama_id: chamaId },
+                      );
+                      if (error) throw error;
+                      toast.success("Default plans seeded");
+                      const { data } = await supabase.rpc("list_contribution_plans", {
+                        p_chama_id: chamaId,
+                      });
+                      setPlans((Array.isArray(data) ? data : []) as ContributionPlan[]);
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Seed failed");
+                    }
+                  }}
+                >
+                  Seed defaults
+                </button>
+                <button
+                  type="button"
+                  className="rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 text-[11px] font-bold text-emerald-200"
+                  onClick={() => setPlanFormOpen(true)}
+                >
+                  New plan
+                </button>
+              </div>
+            </div>
+            <div className="mt-3 space-y-2">
+              {plans.length === 0 ? (
+                <p className="text-xs text-slate-500">
+                  No plans yet. Seed defaults or create a plan.
+                </p>
+              ) : (
+                plans.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-white">{p.name}</p>
+                      <p className="text-[11px] text-slate-500">
+                        {p.frequency} · {fmtKsh(Number(p.amount))} · kit{" "}
+                        {p.destinationKit}
+                        {p.dueDay ? ` · due day ${p.dueDay}` : ""}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] font-bold text-amber-200"
+                      onClick={async () => {
+                        try {
+                          const { data, error } = await supabase.rpc(
+                            "generate_plan_obligations",
+                            {
+                              p_chama_id: chamaId,
+                              p_plan_id: p.id,
+                              p_period_key: null,
+                              p_due_date: null,
+                            },
+                          );
+                          if (error) throw error;
+                          const r = data as {
+                            obligationCount?: number;
+                            periodKey?: string;
+                          };
+                          toast.success(
+                            `Generated ${r.obligationCount ?? 0} obligations · ${r.periodKey ?? ""}`,
+                          );
+                        } catch (e) {
+                          toast.error(
+                            e instanceof Error ? e.message : "Generate failed",
+                          );
+                        }
+                      }}
+                    >
+                      Generate obligations
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+<div className="grid gap-3 sm:grid-cols-2">
             <button
               type="button"
               onClick={async () => {
@@ -1481,6 +1604,54 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
           });
           if (error) throw error;
           toast.success(`Share lock: ${v.mode} · ${v.months} months`);
+        }}
+      />
+
+
+      <SimpleFieldsModal
+        open={planFormOpen}
+        onClose={() => setPlanFormOpen(false)}
+        title="New contribution plan"
+        subtitle="Members will owe this when you generate obligations"
+        submitLabel="Save plan"
+        fields={[
+          { key: "name", label: "Name", defaultValue: "Monthly contribution", required: true },
+          { key: "amount", label: "Amount (KES)", type: "number", required: true },
+          {
+            key: "frequency",
+            label: "Frequency (one_off | weekly | monthly | quarterly | annually)",
+            defaultValue: "monthly",
+            required: true,
+          },
+          {
+            key: "kit",
+            label: "Destination kit",
+            defaultValue: "table-banking",
+            required: true,
+          },
+          { key: "dueDay", label: "Due day of month (1-28)", type: "number", defaultValue: "5" },
+        ]}
+        onSubmit={async (v) => {
+          const amount = Number(v.amount);
+          if (!amount || amount <= 0) throw new Error("Invalid amount");
+          const { error } = await supabase.rpc("upsert_contribution_plan", {
+            p_chama_id: chamaId,
+            p_name: v.name,
+            p_amount: amount,
+            p_frequency: v.frequency.trim(),
+            p_destination_kit: v.kit.trim(),
+            p_due_day: Math.min(28, Math.max(1, Math.floor(Number(v.dueDay) || 5))),
+            p_is_mandatory: true,
+            p_allow_partial: false,
+            p_description: null,
+            p_plan_id: null,
+          });
+          if (error) throw error;
+          toast.success("Plan saved");
+          const { data } = await supabase.rpc("list_contribution_plans", {
+            p_chama_id: chamaId,
+          });
+          setPlans((Array.isArray(data) ? data : []) as ContributionPlan[]);
         }}
       />
 
