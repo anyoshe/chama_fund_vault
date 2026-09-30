@@ -1197,6 +1197,39 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                 </button>
                 <button
                   type="button"
+                  className="rounded-lg border border-rose-500/40 px-2.5 py-1 text-[10px] font-bold text-rose-300"
+                  onClick={async () => {
+                    const code = window.prompt(
+                      "Kit code to DELETE (e.g. from kits list). Balance will be discarded.",
+                    );
+                    if (!code?.trim()) return;
+                    if (
+                      !window.confirm(
+                        `Delete kit "${code.trim()}" and lose its balance? This cannot be undone.`,
+                      )
+                    )
+                      return;
+                    try {
+                      const { data, error } = await supabase.rpc("delete_chama_kit", {
+                        p_chama_id: chamaId,
+                        p_kit_code: code.trim(),
+                        p_force: true,
+                      });
+                      if (error) throw error;
+                      const d = data as { discardedBalance?: number };
+                      toast.success(
+                        `Kit deleted · discarded ${fmtKsh(Number(d?.discardedBalance) || 0)}`,
+                      );
+                      onRefresh?.();
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Delete failed");
+                    }
+                  }}
+                >
+                  Delete kit / account
+                </button>
+                <button
+                  type="button"
                   className="rounded-lg border border-amber-500/40 px-2.5 py-1 text-[10px] font-bold text-amber-200"
                   onClick={async () => {
                     const cat = window.prompt("Category?", "stationery") || "other";
