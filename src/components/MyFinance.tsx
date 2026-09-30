@@ -542,7 +542,10 @@ export default function MyFinance({
               What I owe
             </p>
             <p className="mt-1 text-xs text-slate-400">
-              From group contribution plans (monthly, registration, one-offs)
+              Open amounts you still owe. <strong className="text-slate-300">Pay</strong> =
+              you pay yourself (Method A). If you gave cash to the treasurer, they must
+              use <strong className="text-slate-300">Chama Finance → Record member payment</strong>
+              — that clears this row and updates the kit (you should not need to Pay again).
             </p>
           </div>
           {oblLoading ? (

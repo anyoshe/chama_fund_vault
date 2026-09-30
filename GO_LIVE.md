@@ -60,3 +60,9 @@ Run after phase1: `supabase/phase2_4_treasurer_penalties_welfare.sql`
 - Treasurer payment for member obligations
 - Assess/waive penalties (set plan penalty rules via SQL/set_plan_penalty_rules)
 - Welfare events: create, collect (via obligations), expense, payout
+
+## Fix plans → all members
+Run: supabase/fix_plans_obligations_auth.sql
+- Creating a plan auto-generates obligations for ALL active members (current period)
+- Generate obligations also adds missing rows for members who joined later
+- Officials only (server-side)

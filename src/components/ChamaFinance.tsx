@@ -983,7 +983,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                             periodKey?: string;
                           };
                           toast.success(
-                            `Generated ${r.obligationCount ?? 0} obligations · ${r.periodKey ?? ""}`,
+                            `Period ${r.periodKey ?? ""} · ${r.obligationCount ?? 0} members (${(r as { newlyCreated?: number }).newlyCreated ?? 0} new)`,
                           );
                         } catch (e) {
                           toast.error(
@@ -1948,7 +1948,9 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             p_plan_id: null,
           });
           if (error) throw error;
-          toast.success("Plan saved");
+          toast.success(
+            "Plan saved — obligations created for all active members this period",
+          );
           const { data } = await supabase.rpc("list_contribution_plans", {
             p_chama_id: chamaId,
           });
