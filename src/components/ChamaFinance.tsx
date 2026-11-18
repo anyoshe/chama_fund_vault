@@ -27,6 +27,13 @@ import { LoanRatesChairPanel } from "./LoansAndLedger";
 import { SimpleFieldsModal, ChoiceModal } from "./FlowModals";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import {
+  buildMonthlyPotMatrix,
+  downloadTextFile,
+  monthlyPotMatrixToCsv,
+  potLabel,
+} from "@/lib/monthlyPotReport";
+
 
 type MemberBalance = { user_id: string; kit_code: string; balance: number };
 
@@ -638,6 +645,16 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
   const isChair = me?.role === "Chairperson";
   const isTreasurer = me?.role === "Treasurer";
 
+  const [reportFromYm, setReportFromYm] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 5);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [reportToYm, setReportToYm] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [reportPot, setReportPot] = useState<string>("all");
   const [section, setSection] = useState<"command" | "operations">("command");
   const [openOut, setOpenOut] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
@@ -933,7 +950,95 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
         </div>
       </div>
 
-      {section === "command" ? (
+      
+      <div className="rounded-2xl border border-emerald-500/30 bg-slate-900/80 p-4">
+        <p className="text-sm font-bold text-white">Monthly pot report (Excel)</p>
+        <p className="mt-1 text-xs text-slate-400">
+          Download a spreadsheet of who paid into each pot by month. Share with members to see months paid and not paid.
+          Opens in Excel or Google Sheets.
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="text-xs text-slate-400">
+            From month
+            <input
+              type="month"
+              value={reportFromYm}
+              onChange={(e) => setReportFromYm(e.target.value)}
+              className="mt-1 block rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-white"
+            />
+          </label>
+          <label className="text-xs text-slate-400">
+            To month
+            <input
+              type="month"
+              value={reportToYm}
+              onChange={(e) => setReportToYm(e.target.value)}
+              className="mt-1 block rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-white"
+            />
+          </label>
+          <label className="text-xs text-slate-400">
+            Pot
+            <select
+              value={reportPot}
+              onChange={(e) => setReportPot(e.target.value)}
+              className="mt-1 block rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-white"
+            >
+              <option value="all">All pots combined</option>
+              <option value="table-banking">Table banking</option>
+              <option value="share-capital">Share capital</option>
+              <option value="merry-go-round">Merry-go-round</option>
+              <option value="general-savings">General savings</option>
+              <option value="welfare">Welfare</option>
+              <option value="registration-fees">Registration</option>
+              <option value="member-loans">Member loans fund</option>
+              <option value="contingency">Contingency</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-400"
+            onClick={() => {
+              try {
+                const from = reportFromYm;
+                const to = reportToYm;
+                if (!from || !to || from > to) {
+                  toast.error("Choose a valid from / to month range");
+                  return;
+                }
+                const { months, totals } = buildMonthlyPotMatrix({
+                  members,
+                  contributions,
+                  potCode: reportPot === "all" ? "all" : reportPot,
+                  fromYm: from,
+                  toYm: to,
+                });
+                if (months.length === 0) {
+                  toast.error("No months in that range");
+                  return;
+                }
+                const csv = monthlyPotMatrixToCsv({
+                  chamaName: chama.name,
+                  potCode: reportPot === "all" ? "all" : reportPot,
+                  members,
+                  months,
+                  totals,
+                });
+                const potPart =
+                  reportPot === "all" ? "all-pots" : reportPot;
+                const fname = `chamavault-${chama.name.replace(/[^a-zA-Z0-9]+/g, "-").slice(0, 24)}-${potPart}-${from}_${to}.csv`;
+                downloadTextFile(fname, csv);
+                toast.success("Report downloaded — open in Excel to print or share");
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Export failed");
+              }
+            }}
+          >
+            Download Excel report
+          </button>
+        </div>
+      </div>
+
+{section === "command" ? (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
