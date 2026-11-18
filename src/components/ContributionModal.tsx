@@ -21,6 +21,9 @@ interface ContributionModalProps {
   chama: Chama;
   currentMember: Member;
   onSubmit: (contribution: Contribution) => Promise<void>;
+  lockedDestination?: string | null;
+  paymentMode?: string | null;
+  payToLabel?: string | null;
 }
 
 type Step = "method" | "pay" | "confirm" | "processing" | "receipt";
@@ -32,6 +35,9 @@ export default function ContributionModal({
   currentMember,
   onSubmit,
   lockedDestination = null,
+  paymentMode = null as string | null,
+  payToLabel = null as string | null,
+
 }: ContributionModalProps) {
   const [step, setStep] = useState<Step>("method");
   const [method, setMethod] = useState<ContributionMethod>("M-Pesa STK Push");
@@ -43,10 +49,16 @@ export default function ContributionModal({
   const [reference, setReference] = useState("");
   const [paymentDetails, setPaymentDetails] = useState("");
 
+  const effectiveMode =
+    paymentMode || chama.constitution?.paymentMode || null;
+
   useEffect(() => {
     if (open) {
       setStep("method");
-      setMethod("M-Pesa STK Push");
+      const mode = paymentMode || chama.constitution?.paymentMode;
+      if (mode === "mpesa_stk") setMethod("M-Pesa STK Push");
+      else if (mode === "manual_confirm") setMethod("Cash");
+      else setMethod("M-Pesa STK Push");
       setDestination(
         (lockedDestination as ChamaActivity) ||
           chama.constitution.activities?.[0] ||
@@ -88,10 +100,18 @@ export default function ContributionModal({
         destination,
         paymentDetails,
         reference: ref,
-        status: "completed",
+        status: "pending",
         date: new Date().toISOString(),
+        paymentDetails:
+          method === "M-Pesa STK Push" || method === "Airtel Money"
+            ? phone
+            : paymentDetails,
       }).then(() => {
-        toast.success("Contribution confirmed — funds settled to group account", {
+        toast.success(
+          method === "M-Pesa STK Push"
+            ? "Check your phone for M-Pesa PIN"
+            : "Sent for treasurer confirmation",
+          {
           description: `${CHAMA_ACTIVITIES.find((activity) => activity.value === destination)?.label ?? destination} · ${method} · ${fmtKsh(amount)} · Ref ${ref}`,
           icon: <CheckCircle className="text-emerald-400" />,
         });
@@ -147,6 +167,21 @@ export default function ContributionModal({
             </div>
 
             <div className="max-h-[70vh] overflow-y-auto p-5">
+              {!effectiveMode && (
+                <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-100">
+                  Leaders have not set how this chama receives money yet. Ask the
+                  treasurer to open <strong>Chama Finance → How members pay</strong> and
+                  choose Manual confirmation or M-Pesa STK.
+                </div>
+              )}
+              {(payToLabel || chama.constitution?.payToLabel) &&
+                effectiveMode === "manual_confirm" && (
+                <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-100">
+                  Pay to:{" "}
+                  <strong>{payToLabel || chama.constitution?.payToLabel}</strong>
+                  , then record pot, amount, reference and date here.
+                </div>
+              )}
               {step === "method" && (
                 <div className="space-y-4">
                   <p className="text-xs leading-relaxed text-slate-400">

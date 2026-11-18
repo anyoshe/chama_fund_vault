@@ -14,6 +14,7 @@ import MyFinance from "@/components/MyFinance";
 import SimpleMemberHome from "@/components/SimpleMemberHome";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
+import { initiateMpesaStk } from "@/lib/mpesa";
 import {
   appendAudit,
   castVoteOnServer,
@@ -453,111 +454,103 @@ export default function Dashboard() {
   };
 
   const handleContribute = async (contribution: Contribution) => {
-    const mode = chama?.constitution?.paymentMode || "manual_confirm";
-    const useStk =
-      (mode === "mpesa_stk" || mode === "both") &&
-      (contribution.method === "M-Pesa STK Push" || contribution.method === "Airtel Money");
-    const usePending =
-      mode === "manual_confirm" ||
-      (mode === "both" && !useStk) ||
-      mode === "mpesa_stk"; // STK also starts pending until callback
-
-    if (usePending && !useStk) {
-      const { data, error } = await supabase.rpc("submit_pending_contribution", {
-        p_chama_id: contribution.chamaId,
-        p_amount: contribution.amount,
-        p_destination: contribution.destination ?? "general-savings",
-        p_method: contribution.method,
-        p_reference: contribution.reference,
-        p_payment_date: (contribution.date || new Date().toISOString()).slice(0, 10),
-        p_payment_details: contribution.paymentDetails || null,
-        p_phone: null,
-      });
-      if (error) throw error;
-      toast.success("Submitted for treasurer approval — pots update after confirm");
-      const saved: Contribution = {
-        ...contribution,
-        id: (data as { id?: string })?.id || contribution.id,
-        status: "pending",
-      };
-      setContributions((prev) => [saved, ...prev]);
-      return;
-    }
-
-    if (useStk) {
-      const { data, error } = await supabase.rpc("request_mpesa_stk_contribution", {
-        p_chama_id: contribution.chamaId,
-        p_amount: contribution.amount,
-        p_destination: contribution.destination ?? "general-savings",
-        p_phone: contribution.paymentDetails || "",
-      });
-      if (error) throw error;
-      toast.message(
-        (data as { message?: string })?.message ||
-          "STK pending — complete M-Pesa prompt when connected",
+    const mode = chama?.constitution?.paymentMode;
+    if (!mode) {
+      toast.error(
+        "Leaders must set how this chama receives money first (Chama Finance → How members pay).",
       );
-      const saved: Contribution = {
-        ...contribution,
-        id: (data as { id?: string })?.id || contribution.id,
-        reference: (data as { reference?: string })?.reference || contribution.reference,
-        status: "pending",
-      };
-      setContributions((prev) => [saved, ...prev]);
+      throw new Error("Payment mode not configured");
+    }
+
+    const dest = contribution.destination ?? "general-savings";
+    const wantsStk =
+      contribution.method === "M-Pesa STK Push" ||
+      contribution.method === "Airtel Money";
+
+    // Mode: mpesa_stk only allows STK; manual only allows offline record → approve
+    if (mode === "mpesa_stk" && !wantsStk) {
+      toast.error("This chama only accepts M-Pesa STK. Choose M-Pesa STK Push.");
+      throw new Error("STK required");
+    }
+    if (mode === "manual_confirm" && wantsStk) {
+      toast.error(
+        "This chama uses manual confirmation. Pay the designated account, then record with reference.",
+      );
+      throw new Error("Manual mode only");
+    }
+
+    if (mode === "mpesa_stk" || (mode === "both" && wantsStk)) {
+      const phone = (contribution.paymentDetails || "").replace(/\s/g, "");
+      if (phone.length < 9) {
+        toast.error("Enter the M-Pesa phone number that will receive the PIN prompt");
+        throw new Error("Phone required");
+      }
+      const stk = await initiateMpesaStk({
+        chamaId: contribution.chamaId,
+        amount: contribution.amount,
+        destination: dest,
+        phone,
+      });
+      if (!stk.ok) {
+        // Fallback: create pending via RPC if edge not deployed yet
+        const { data, error } = await supabase.rpc("request_mpesa_stk_contribution", {
+          p_chama_id: contribution.chamaId,
+          p_amount: contribution.amount,
+          p_destination: dest,
+          p_phone: phone,
+        });
+        if (error) {
+          toast.error(stk.error || error.message);
+          throw error;
+        }
+        toast.message(
+          "STK pending — add Safaricom credentials to Edge Functions to prompt the phone",
+        );
+        setContributions((prev) => [
+          {
+            ...contribution,
+            id: (data as { id?: string })?.id || contribution.id,
+            reference: (data as { reference?: string })?.reference || contribution.reference,
+            status: "pending",
+          },
+          ...prev,
+        ]);
+        return;
+      }
+      toast.success(stk.customerMessage || "Enter M-Pesa PIN on your phone");
+      setContributions((prev) => [
+        {
+          ...contribution,
+          id: stk.contributionId || contribution.id,
+          status: "pending",
+        },
+        ...prev,
+      ]);
       return;
     }
 
-    const { data, error } = await supabase.rpc("record_contribution", {
+    // manual_confirm or both without STK → pending until treasurer approves
+    const { data, error } = await supabase.rpc("submit_pending_contribution", {
       p_chama_id: contribution.chamaId,
       p_amount: contribution.amount,
-      p_destination: contribution.destination ?? "general-savings",
+      p_destination: dest,
       p_method: contribution.method,
-      p_phone: contribution.method === "M-Pesa STK Push" || contribution.method === "Airtel Money"
-        ? contribution.paymentDetails
-        : null,
-      p_payment_details: contribution.method === "M-Pesa STK Push" || contribution.method === "Airtel Money"
-        ? null
-        : contribution.paymentDetails,
       p_reference: contribution.reference,
+      p_payment_date: (contribution.date || new Date().toISOString()).slice(0, 10),
+      p_payment_details: contribution.paymentDetails || null,
+      p_phone: null,
     });
     if (error) throw error;
-    if (!data) throw new Error("The payment was confirmed but no record was returned.");
-
-    const saved: Contribution = {
-      ...contribution,
-      id: data.id,
-      date: data.confirmed_at ?? data.created_at,
-      confirmedAt: data.confirmed_at ?? undefined,
-      status: data.status,
-    };
-    const { data: membership, error: membershipError } = await supabase
-      .from("chama_members")
-      .select("total_paid")
-      .eq("chama_id", saved.chamaId)
-      .eq("user_id", saved.memberId)
-      .maybeSingle();
-    if (membershipError) throw membershipError;
-    setContributions((prev) => [saved, ...prev]);
-    setDisplayMembers((prev) =>
-      prev.map((member) =>
-        member.id === saved.memberId
-          ? { ...member, totalPaid: membership ? Number(membership.total_paid) : member.totalPaid + saved.amount }
-          : member,
-      ),
-    );
-    setLedger((prev) =>
-      [{
-        id: `e-${saved.id}`,
-        chamaId: saved.chamaId,
-        memberId: saved.memberId,
-        type: "contribution",
-        description: `Contribution to ${saved.destination} via ${saved.method}${saved.paymentDetails ? ` (${saved.paymentDetails})` : ""}`,
-        amount: saved.amount,
-        timestamp: saved.date,
-        reference: saved.reference,
-      }, ...prev],
-    );
+    toast.success("Submitted — treasurer must confirm before pots update");
+    setContributions((prev) => [
+      {
+        ...contribution,
+        id: (data as { id?: string })?.id || contribution.id,
+        status: "pending",
+      },
+      ...prev,
+    ]);
   };
-
 
   // Server proposals + audit (source of truth when SQL applied)
   useEffect(() => {
@@ -1791,6 +1784,9 @@ export default function Dashboard() {
       />
 
       <ContributionModal
+        paymentMode={chama?.constitution?.paymentMode ?? null}
+        payToLabel={chama?.constitution?.payToLabel ?? null}
+
         open={contribOpen}
         onClose={() => {
           setContribOpen(false);
