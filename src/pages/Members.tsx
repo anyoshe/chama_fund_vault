@@ -58,7 +58,9 @@ export default function Members() {
 
   const myMembership = user?.memberships.find((m) => m.chama_id === activeChamaId);
   const canManage =
-    myMembership?.role === "Chairperson" || myMembership?.role === "Secretary";
+    myMembership?.role === "Chairperson" ||
+    myMembership?.role === "Secretary" ||
+    myMembership?.role === "Treasurer";
 
 
   const createInvite = async () => {
@@ -325,7 +327,7 @@ export default function Members() {
       <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-8 text-center">
         <p className="text-sm font-semibold text-slate-200">Members directory restricted</p>
         <p className="mt-2 text-sm text-slate-500">
-          Only the Chairperson or Secretary can view member profiles.
+          Only Chairperson, Secretary or Treasurer can manage members.
         </p>
       </div>
     );

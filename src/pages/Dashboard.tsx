@@ -1335,7 +1335,9 @@ export default function Dashboard() {
   const canChamaFinance =
     role === "Chairperson" || role === "Treasurer" || role === "Secretary";
   const canManageMembers =
-    role === "Chairperson" || role === "Secretary";
+    role === "Chairperson" ||
+    role === "Secretary" ||
+    role === "Treasurer";
 
   // Only show tabs this role can use; bounce off restricted ones
   useEffect(() => {
