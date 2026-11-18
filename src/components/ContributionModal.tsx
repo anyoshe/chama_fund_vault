@@ -18,13 +18,14 @@ import {
   type Member,
 } from "../types/chama";
 import { fmtKsh } from "../data/mockChamaData";
+import { pollContributionStatus } from "@/lib/paymentStatus";
 
 interface ContributionModalProps {
   open: boolean;
   onClose: () => void;
   chama: Chama;
   currentMember: Member;
-  onSubmit: (contribution: Contribution) => Promise<void>;
+  onSubmit: (contribution: Contribution) => Promise<{ id?: string; channel?: string; stkConfigured?: boolean } | void>;
   lockedDestination?: string | null;
   paymentMode?: string | null;
   payToLabel?: string | null;
@@ -33,7 +34,7 @@ interface ContributionModalProps {
   prefillNote?: string | null;
 }
 
-type Step = "channel" | "details" | "confirm" | "processing" | "receipt";
+type Step = "channel" | "details" | "confirm" | "processing" | "stk-wait" | "success" | "failed" | "receipt";
 type Channel = "manual" | "mpesa";
 
 const MANUAL_METHODS: { value: ContributionMethod; label: string; hint: string }[] = [
@@ -159,12 +160,29 @@ export default function ContributionModal({
       date: `${paymentDate}T12:00:00.000Z`,
     };
     void onSubmit(payload)
-      .then(() => setStep("receipt"))
+      .then(async (result) => {
+        if (channel === "mpesa" && result?.id) {
+          setStep("stk-wait");
+          const status = await pollContributionStatus(result.id, {
+            intervalMs: 2500,
+            timeoutMs: 100_000,
+          });
+          if (status === "completed") {
+            setStep("success");
+            toast.success("Payment received — pots updated");
+          } else {
+            setStep("failed");
+          }
+          return;
+        }
+        // Manual → waiting treasurer
+        setStep("receipt");
+      })
       .catch((error: unknown) => {
         toast.error(
           error instanceof Error ? error.message : "Payment could not be submitted",
         );
-        setStep("confirm");
+        setStep("failed");
       });
   };
 
@@ -490,6 +508,85 @@ export default function ContributionModal({
                 </div>
               )}
 
+              {step === "stk-wait" && (
+                <div className="space-y-4 py-8 text-center">
+                  <div className="mx-auto h-12 w-12 animate-spin rounded-full border-2 border-sky-400 border-t-transparent" />
+                  <p className="text-lg font-bold text-white">Waiting for M-Pesa</p>
+                  <p className="text-sm text-slate-400">
+                    Enter your PIN on the phone prompt. We will update the pot as soon as
+                    Safaricom confirms.
+                  </p>
+                  <p className="font-mono text-xs text-slate-500">Ref {savedRef}</p>
+                </div>
+              )}
+
+              {step === "success" && (
+                <div className="space-y-4 py-4 text-center">
+                  <CheckCircle
+                    size={52}
+                    className="mx-auto text-emerald-400"
+                    weight="fill"
+                  />
+                  <p className="text-lg font-bold text-white">Payment successful</p>
+                  <p className="text-sm text-slate-400">
+                    {fmtKsh(amount)} has been received. Your pot and the group pool are
+                    updated. No treasurer approval needed for M-Pesa.
+                  </p>
+                  <p className="font-mono text-xs text-slate-500">Ref {savedRef}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      window.location.reload();
+                    }}
+                    className="w-full rounded-xl bg-emerald-500 py-3 text-sm font-bold text-white"
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
+
+              {step === "failed" && (
+                <div className="space-y-4 py-4 text-center">
+                  <p className="text-4xl">!</p>
+                  <p className="text-lg font-bold text-rose-300">Payment failed</p>
+                  <p className="text-sm text-slate-400">
+                    M-Pesa did not complete (cancelled, timeout, or error). Nothing was
+                    added to the pots. Try again or use manual payment.
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setChannel("mpesa");
+                        setStep("details");
+                      }}
+                      className="w-full rounded-xl bg-sky-500 py-3 text-sm font-bold text-white"
+                    >
+                      Try M-Pesa again
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setChannel("manual");
+                        setMethod("Cash");
+                        setStep("details");
+                      }}
+                      className="w-full rounded-xl border border-emerald-500/40 bg-emerald-500/10 py-3 text-sm font-bold text-emerald-200"
+                    >
+                      Use manual payment
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="w-full rounded-xl border border-slate-600 py-3 text-sm font-semibold text-slate-300"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {step === "receipt" && (
                 <div className="space-y-4 py-4 text-center">
                   <CheckCircle
@@ -497,15 +594,10 @@ export default function ContributionModal({
                     className="mx-auto text-emerald-400"
                     weight="fill"
                   />
-                  <p className="text-lg font-bold text-white">
-                    {channel === "mpesa"
-                      ? "Check your phone"
-                      : "Waiting for treasurer"}
-                  </p>
+                  <p className="text-lg font-bold text-white">Waiting for treasurer</p>
                   <p className="text-sm text-slate-400">
-                    {channel === "mpesa"
-                      ? "Enter your M-Pesa PIN. The pot updates when payment is confirmed."
-                      : "Your payment is registered. The treasurer will approve when money is received."}
+                    Your payment is registered. The treasurer will approve when money is
+                    received — then pots update.
                   </p>
                   <p className="font-mono text-xs text-slate-500">Ref {savedRef}</p>
                   <button

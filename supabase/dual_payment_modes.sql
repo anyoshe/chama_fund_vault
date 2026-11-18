@@ -475,3 +475,37 @@ begin
   return jsonb_build_object('ok', true, 'status', 'rejected');
 end;
 $$;
+
+
+-- Pending approval list: manual payments only (STK completes via callback)
+create or replace function public.list_pending_contributions(p_chama_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_chama_official(p_chama_id) then
+    raise exception 'Only officials can list pending payments';
+  end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', c.id,
+      'memberId', c.member_id,
+      'amount', c.amount,
+      'destination', c.destination,
+      'method', c.method,
+      'reference', c.reference,
+      'paymentDate', c.payment_date,
+      'paymentDetails', c.payment_details,
+      'phone', c.phone,
+      'createdAt', c.created_at
+    ) order by c.created_at)
+    from public.contributions c
+    where c.chama_id = p_chama_id
+      and c.status = 'pending'
+      and coalesce(c.method, '') not in ('M-Pesa STK Push', 'Airtel Money')
+  ), '[]'::jsonb);
+end;
+$$;

@@ -510,27 +510,29 @@ export default function Dashboard() {
         toast.message(
           "STK pending — add Safaricom credentials to Edge Functions to prompt the phone",
         );
+        const cid = (data as { id?: string })?.id || contribution.id;
         setContributions((prev) => [
           {
             ...contribution,
-            id: (data as { id?: string })?.id || contribution.id,
+            id: cid,
             reference: (data as { reference?: string })?.reference || contribution.reference,
             status: "pending",
           },
           ...prev,
         ]);
-        return;
+        return { id: cid, channel: "mpesa" as const, stkConfigured: false };
       }
-      toast.success(stk.customerMessage || "Enter M-Pesa PIN on your phone");
+      toast.message(stk.customerMessage || "Enter M-Pesa PIN on your phone");
+      const cid = stk.contributionId || contribution.id;
       setContributions((prev) => [
         {
           ...contribution,
-          id: stk.contributionId || contribution.id,
+          id: cid,
           status: "pending",
         },
         ...prev,
       ]);
-      return;
+      return { id: cid, channel: "mpesa" as const };
     }
 
     // manual_confirm or both without STK → pending until treasurer approves
@@ -546,14 +548,16 @@ export default function Dashboard() {
     });
     if (error) throw error;
     toast.success("Submitted — treasurer must confirm before pots update");
+    const cid = (data as { id?: string })?.id || contribution.id;
     setContributions((prev) => [
       {
         ...contribution,
-        id: (data as { id?: string })?.id || contribution.id,
+        id: cid,
         status: "pending",
       },
       ...prev,
     ]);
+    return { id: cid, channel: "manual" as const };
   };
 
   // Server proposals + audit (source of truth when SQL applied)
