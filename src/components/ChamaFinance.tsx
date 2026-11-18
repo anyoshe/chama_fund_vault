@@ -692,7 +692,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
   >(null);
   const [rejectPayId, setRejectPayId] = useState<string | null>(null);
   const [treasuryCard, setTreasuryCard] = useState<
-    null | "kits" | "plans" | "obligations" | "welfare" | "penalties"
+    null | "pots" | "contributions" | "welfare" | "mgr" | "shares"
   >(null);
   const [openOut, setOpenOut] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
@@ -1101,7 +1101,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
       </div>
 
       
-      <div className={`rounded-2xl border border-emerald-500/30 bg-slate-900/80 p-4 ${deskPanel === "report" || deskPanel === "settings" ? "" : "hidden"}`}>
+      <div className={`rounded-2xl border border-emerald-500/30 bg-slate-900/80 p-4 ${deskPanel === "report" ? "" : "hidden"}`}>
         <p className="text-sm font-bold text-white">Monthly pot report (Excel)</p>
         <p className="mt-1 text-xs text-slate-400">
           Download a spreadsheet of who paid into each pot by month. Share with members to see months paid and not paid.
@@ -1308,119 +1308,119 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
         )}
       </div>
 
-{(deskPanel === "command" || deskPanel === "operations") && section === "command" ? (
+{(deskPanel === "command") ? (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           className="space-y-5"
         >
+          {/* Snapshot — 4 numbers only */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Kpi
               label="Group pool"
               value={fmtKsh(groupPool)}
-              sub="All kits combined"
+              sub="All pots combined"
               icon={<Wallet size={14} />}
               accent="emerald"
             />
             <Kpi
-              label="Loaning pool"
+              label="Available to lend"
               value={fmtKsh(loaningPool)}
-              sub="4 liquidity kits"
+              sub="Loaning pool"
               icon={<Bank size={14} />}
               accent="sky"
             />
             <Kpi
-              label="Outstanding loans"
+              label="Loans out"
               value={fmtKsh(outstandingPrincipal)}
-              sub={`${fmtKsh(outstandingInterest)} interest still due`}
+              sub={
+                outstandingPrincipal > 0
+                  ? `${fmtKsh(outstandingInterest)} interest due`
+                  : "No open facilities"
+              }
               icon={<HandCoins size={14} />}
               accent="rose"
             />
             <Kpi
-              label="Interest accrued"
-              value={fmtKsh(interestAccrued)}
-              sub={`Collected ~ ${fmtKsh(interestCollected)} · reserve ${fmtKsh(Number(reserveKit?.balance) || 0)}`}
-              icon={<TrendUp size={14} />}
-              accent="amber"
-            />
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Kpi
               label="Member deposits"
               value={fmtKsh(totalContributions)}
-              sub={`${completedContributions.length} contribution records`}
+              sub={`${completedContributions.length} records · ${awaitingDisburse.length} to disburse`}
               icon={<Coins size={14} />}
-              accent="emerald"
-            />
-            <Kpi
-              label="Awaiting disbursement"
-              value={String(awaitingDisburse.length)}
-              sub={isTreasurer ? "Treasurer action required" : "Treasurer disburses"}
-              icon={<Receipt size={14} />}
               accent="violet"
             />
-            <Kpi
-              label="Open votes"
-              value={String(activeVotes.length)}
-              sub="Quorum-governed proposals"
-              icon={<UsersThree size={14} />}
-              accent="sky"
-            />
-            <Kpi
-              label="Settled loans"
-              value={String(paidLoans.length)}
-              sub="Fully repaid facilities"
-              icon={<ChartLineUp size={14} />}
-              accent="emerald"
-            />
           </div>
 
-          {/* Status strip */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-            <p className="text-sm font-bold text-white">Chama status</p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {kits.map((k) => (
-                <div
-                  key={k.kit_code}
-                  className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2"
-                >
-                  <span className="text-xs font-semibold text-slate-300">{k.label}</span>
-                  <span className="font-mono text-xs font-bold text-emerald-300">
-                    {fmtKsh(Number(k.balance) || 0)}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <p className="mt-3 text-[11px] text-slate-500">
-              Quorum {chama.constitution?.quorumPercent ?? 60}% · max loan{" "}
-              {chama.constitution?.maxLoanMultiple ?? 3}× shares · default interest{" "}
-              {chama.constitution?.loanInterestMonthlyPercent ?? 10}% / month flat · reserve{" "}
-              {chama.constitution?.interestReservePercent ?? 20}% · split basis{" "}
-              {chama.constitution?.interestSplitBasis ?? "share-capital"}
-            </p>
-          </div>
-
-          {/* Treasury section cards */}
           {treasuryCard === null ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {[
-                { id: "kits" as const, title: "Kit balances", sub: "Each pot balance" },
-                { id: "plans" as const, title: "Contribution plans", sub: "Monthly / registration rules" },
-                { id: "obligations" as const, title: "Obligations dashboard", sub: "Expected vs collected" },
-                { id: "welfare" as const, title: "Welfare events", sub: "Collect · expense · payout" },
-                { id: "penalties" as const, title: "Penalties", sub: "Assess · waive" },
-              ].map((c) => (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Open a group — related tools stay together
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
                 <button
-                  key={c.id}
                   type="button"
-                  onClick={() => setTreasuryCard(c.id)}
-                  className="rounded-2xl border border-slate-700 bg-slate-900/80 p-4 text-left hover:border-violet-500/40"
+                  onClick={() => setTreasuryCard("pots")}
+                  className="rounded-2xl border border-emerald-500/25 bg-slate-900/80 p-4 text-left hover:border-emerald-400/40"
                 >
-                  <p className="text-sm font-bold text-white">{c.title}</p>
-                  <p className="mt-1 text-xs text-slate-400">{c.sub}</p>
+                  <p className="text-sm font-bold text-white">Pots & balances</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {kits.length} kits · pool {fmtKsh(groupPool)}
+                  </p>
                 </button>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => setTreasuryCard("contributions")}
+                  className="rounded-2xl border border-sky-500/25 bg-slate-900/80 p-4 text-left hover:border-sky-400/40"
+                >
+                  <p className="text-sm font-bold text-white">Contributions & dues</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Plans, obligations, treasurer record pay, penalties
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTreasuryCard("welfare")}
+                  className="rounded-2xl border border-teal-500/25 bg-slate-900/80 p-4 text-left hover:border-teal-400/40"
+                >
+                  <p className="text-sm font-bold text-white">Welfare & contingency</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Events, campaigns, welfare expenses
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTreasuryCard("mgr")}
+                  className="rounded-2xl border border-amber-500/25 bg-slate-900/80 p-4 text-left hover:border-amber-400/40"
+                >
+                  <p className="text-sm font-bold text-white">Merry-go-round & expenses</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Rotate turns, pay beneficiary, kit expenses
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTreasuryCard("shares")}
+                  className="rounded-2xl border border-violet-500/25 bg-slate-900/80 p-4 text-left hover:border-violet-400/40 sm:col-span-2"
+                >
+                  <p className="text-sm font-bold text-white">Shares & withdrawals</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Lock rules and pending share withdrawal requests
+                  </p>
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Loans (disburse, rates, facilities) live under{" "}
+                <button
+                  type="button"
+                  className="font-semibold text-violet-300 hover:underline"
+                  onClick={() => {
+                    setSection("operations");
+                    setDeskPanel("operations");
+                  }}
+                >
+                  Loans & ledger
+                </button>
+                . Rates under Settings.
+              </p>
             </div>
           ) : (
             <button
@@ -1428,12 +1428,33 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
               onClick={() => setTreasuryCard(null)}
               className="text-sm font-semibold text-slate-400 hover:text-white"
             >
-              ← Back to treasury sections
+              ← Back to treasury groups
             </button>
           )}
 
+          {/* kits list when pots */}
+          {treasuryCard === "pots" && (
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+              <p className="text-sm font-bold text-white">Kit balances</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {kits.map((k) => (
+                  <div
+                    key={k.kit_code}
+                    className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2"
+                  >
+                    <span className="text-xs font-semibold text-slate-300">{k.label}</span>
+                    <span className="font-mono text-xs font-bold text-emerald-300">
+                      {fmtKsh(Number(k.balance) || 0)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Phase 1 — Contribution plans */}
-          <div className={`rounded-2xl border border-emerald-500/25 bg-slate-900/70 p-4 ${treasuryCard === "plans" ? "" : "hidden"}`}>
+
+          <div className={`rounded-2xl border border-emerald-500/25 bg-slate-900/70 p-4 ${treasuryCard === "contributions" ? "" : "hidden"}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-bold text-white">Contribution plans</p>
@@ -1570,7 +1591,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
               <div>
                 <p className="text-sm font-bold text-white">
           {/* Obligation-based dashboard + arrears */}
-          {oblDash && treasuryCard === "obligations" && (
+          {oblDash && treasuryCard === "contributions" && (
             <div className="rounded-2xl border border-emerald-500/20 bg-slate-900/70 p-4">
               <p className="text-sm font-bold text-white">Contributions dashboard (from obligations)</p>
               <div className="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
@@ -1924,7 +1945,6 @@ Welfare / emergency kitty</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <button
               type="button"
-              className="rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-left text-xs font-bold text-sky-200 hover:bg-sky-500/15"
               onClick={async () => {
                 try {
                   const { data, error } = await supabase.rpc("list_chama_obligations", {
@@ -1969,6 +1989,7 @@ Welfare / emergency kitty</p>
                   );
                 }
               }}
+              className={`rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-left text-xs font-bold text-sky-200 hover:bg-sky-500/15 ${treasuryCard === "contributions" ? "" : "hidden"}`}
             >
               Record member payment (treasurer)
               <span className="mt-1 block text-[10px] font-normal text-slate-400">
@@ -1977,7 +1998,7 @@ Welfare / emergency kitty</p>
             </button>
             <button
               type="button"
-              className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-left text-xs font-bold text-rose-200 hover:bg-rose-500/15"
+              className={`rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-left text-xs font-bold text-rose-200 hover:bg-rose-500/15 ${treasuryCard === "contributions" ? "" : "hidden"}`}
               onClick={async () => {
                 try {
                   const { data, error } = await supabase.rpc("assess_overdue_penalties", {
@@ -2127,7 +2148,7 @@ Welfare / emergency kitty</p>
             </div>
           )}
 
-          {penaltyList.filter((p) => p.status === "assessed").length > 0 && treasuryCard === "penalties" && (
+          {penaltyList.filter((p) => p.status === "assessed").length > 0 && treasuryCard === "contributions" && (
             <div className="rounded-2xl border border-rose-500/20 bg-slate-900/70 p-4">
               <p className="text-sm font-bold text-white">Open penalties</p>
               <div className="mt-2 space-y-1.5">
@@ -2200,7 +2221,7 @@ Welfare / emergency kitty</p>
                   toast.error(e instanceof Error ? e.message : "Could not close cycle");
                 }
               }}
-              className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-left text-xs font-bold text-amber-200 hover:bg-amber-500/15"
+              className={`rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-left text-xs font-bold text-amber-200 hover:bg-amber-500/15 ${treasuryCard === "contributions" ? "" : "hidden"}`}
             >
               Close contribution cycle & post fines
               <span className="mt-1 block text-[10px] font-normal text-slate-400">
@@ -2221,7 +2242,7 @@ Welfare / emergency kitty</p>
                   toast.error(e instanceof Error ? e.message : "Could not advance rotation");
                 }
               }}
-              className="rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-left text-xs font-bold text-sky-200 hover:bg-sky-500/15"
+              className={`rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-left text-xs font-bold text-sky-200 hover:bg-sky-500/15 ${treasuryCard === "mgr" ? "" : "hidden"}`}
             >
               Advance merry-go-round turn
               <span className="mt-1 block text-[10px] font-normal text-slate-400">
@@ -2250,7 +2271,7 @@ Welfare / emergency kitty</p>
                   toast.error(e instanceof Error ? e.message : "MGR payout failed");
                 }
               }}
-              className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-left text-xs font-bold text-emerald-200 hover:bg-emerald-500/15"
+              className={`rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-left text-xs font-bold text-emerald-200 hover:bg-emerald-500/15 ${treasuryCard === "mgr" ? "" : "hidden"}`}
             >
               Pay merry-go-round beneficiary
               <span className="mt-1 block text-[10px] font-normal text-slate-400">
@@ -2260,7 +2281,7 @@ Welfare / emergency kitty</p>
             <button
               type="button"
               onClick={() => setExpenseOpen(true)}
-              className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-left text-xs font-bold text-rose-200 hover:bg-rose-500/15"
+              className={`rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-left text-xs font-bold text-rose-200 hover:bg-rose-500/15 ${treasuryCard === "mgr" ? "" : "hidden"}`}
             >
               Record expense from a kit
               <span className="mt-1 block text-[10px] font-normal text-slate-400">
@@ -2270,7 +2291,7 @@ Welfare / emergency kitty</p>
             <button
               type="button"
               onClick={() => setCampaignOpen(true)}
-              className="rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-left text-xs font-bold text-violet-200 hover:bg-violet-500/15"
+              className={`rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-left text-xs font-bold text-violet-200 hover:bg-violet-500/15 ${treasuryCard === "welfare" ? "" : "hidden"}`}
             >
               Open contingency campaign
               <span className="mt-1 block text-[10px] font-normal text-slate-400">
@@ -2358,7 +2379,7 @@ Welfare / emergency kitty</p>
                   );
                 }
               }}
-              className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-left text-xs font-bold text-amber-200 hover:bg-amber-500/15"
+              className={`rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-left text-xs font-bold text-amber-200 hover:bg-amber-500/15 ${treasuryCard === "shares" ? "" : "hidden"}`}
             >
               Review share withdrawal requests
               <span className="mt-1 block text-[10px] font-normal text-slate-400">
@@ -2368,7 +2389,7 @@ Welfare / emergency kitty</p>
             <button
               type="button"
               onClick={() => setLockOpen(true)}
-              className="rounded-2xl border border-slate-600 bg-slate-800/80 px-4 py-3 text-left text-xs font-bold text-slate-200 hover:bg-slate-800"
+              className={`rounded-2xl border border-slate-600 bg-slate-800/80 px-4 py-3 text-left text-xs font-bold text-slate-200 hover:bg-slate-800 ${treasuryCard === "shares" ? "" : "hidden"}`}
             >
               Set share lock rules (chair)
               <span className="mt-1 block text-[10px] font-normal text-slate-400">
@@ -2377,6 +2398,7 @@ Welfare / emergency kitty</p>
             </button>
           </div>
 
+          <div className="hidden">
           <CollapseSection
             title="Outstanding facilities"
             subtitle="Principal still out · expand to view"
@@ -2516,38 +2538,9 @@ Welfare / emergency kitty</p>
               No external facilities yet
             </div>
           </CollapseSection>
-
-{/* Leader actions hint */}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-              <p className="flex items-center gap-2 text-sm font-bold text-white">
-                <HandCoins size={18} className="text-violet-400" /> Treasurer
-              </p>
-              <p className="mt-2 text-xs text-slate-400">
-                {awaitingDisburse.length} loan
-                {awaitingDisburse.length === 1 ? "" : "s"} awaiting disbursement. Open{" "}
-                <button
-                  type="button"
-                  className="font-semibold text-violet-300 underline-offset-2 hover:underline"
-                  onClick={() => setSection("operations")}
-                >
-                  Loans & ledger ops
-                </button>{" "}
-                to confirm applicant and disburse from the loaning pool.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-              <p className="flex items-center gap-2 text-sm font-bold text-white">
-                <GearSix size={18} className="text-amber-400" /> Chairperson
-              </p>
-              <p className="mt-2 text-xs text-slate-400">
-                {isChair
-                  ? "Set monthly interest rates, reserve %, and interest split basis under Loans & ledger ops."
-                  : "Only the Chairperson can change rates and interest distribution rules."}
-              </p>
-            </div>
           </div>
-        </motion.div>
+
+</motion.div>
       ) : deskPanel === "operations" ? (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
           <OpsReportCards
