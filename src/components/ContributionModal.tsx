@@ -133,7 +133,7 @@ export default function ContributionModal({
                   <Receipt size={19} />
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-white">Cashless Contribution</h2>
+                  <h2 className="text-sm font-bold text-white">Pay into chama</h2>
                   <p className="text-[11px] text-slate-400">{chama.name}</p>
                 </div>
               </div>
@@ -154,7 +154,7 @@ export default function ContributionModal({
                     <span className="font-semibold text-emerald-300">
                       no member or treasurer ever touches cash
                     </span>
-                    . Choose the account to credit and your payment rail:
+                    . Choose where the money goes (table banking, shares…), then how you pay:
                   </p>
                   <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
                     Contributing to

@@ -45,7 +45,7 @@ export default function Login() {
               <ChamaVaultLogo size={56} showWordmark />
             </div>
             <p className="mt-1 text-sm text-slate-400">
-              Sign in to your chama treasury
+              Enter your phone or email and password
             </p>
           </div>
 

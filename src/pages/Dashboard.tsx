@@ -1446,8 +1446,13 @@ export default function Dashboard() {
                   (c) => c.chamaId === activeChamaId,
                 )}
                 proposals={proposals}
+                memberBalances={memberBalances}
                 onOpenContribute={() => {
                   setContribKitLock(null);
+                  setContribOpen(true);
+                }}
+                onOpenContributeToKit={(kit) => {
+                  setContribKitLock(kit);
                   setContribOpen(true);
                 }}
                 onProposeLoan={handleProposeLoan}
