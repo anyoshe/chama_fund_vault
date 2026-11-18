@@ -1149,6 +1149,47 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                   type="button"
                   className="rounded-lg border border-slate-600 px-2.5 py-1 text-[10px] font-bold text-slate-300"
                   onClick={async () => {
+                    const cur =
+                      chama.constitution?.memberFinanceVisibility === "all_members"
+                        ? "all_members"
+                        : "private";
+                    const next = window.prompt(
+                      "Member balances visibility:\n  private = only self + officials (recommended)\n  all_members = everyone sees everyone\n\nType private or all_members",
+                      cur,
+                    );
+                    if (!next) return;
+                    const v = next.trim().toLowerCase();
+                    if (v !== "private" && v !== "all_members") {
+                      toast.error("Use private or all_members");
+                      return;
+                    }
+                    try {
+                      const constitution = {
+                        ...chama.constitution,
+                        memberFinanceVisibility: v,
+                      };
+                      const { error } = await supabase
+                        .from("chamas")
+                        .update({ constitution })
+                        .eq("id", chamaId);
+                      if (error) throw error;
+                      toast.success(
+                        v === "all_members"
+                          ? "All members can see individual balances (document this in your rules)"
+                          : "Individual balances private — only self + officials",
+                      );
+                      onRefresh?.();
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Failed");
+                    }
+                  }}
+                >
+                  Member privacy
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-600 px-2.5 py-1 text-[10px] font-bold text-slate-300"
+                  onClick={async () => {
                     const raw = window.prompt(
                       "Allowed methods (comma-separated)",
                       "Cash,M-Pesa,Bank,Other",

@@ -39,6 +39,8 @@ interface ChamaOverviewProps {
   /** Personal kit balances (deposits + interest credits) */
   memberBalances?: { user_id: string; kit_code: string; balance: number }[];
   currentMemberId: string;
+  /** Chair/Treasurer/Secretary — can always see individual standings */
+  isOfficial?: boolean;
   onContribute: () => void;
   onProposeLoan: () => void;
   canRequestLoan?: boolean;
@@ -92,6 +94,7 @@ export default function ChamaOverview({
   kits = [],
   memberBalances = [],
   currentMemberId,
+  isOfficial = false,
   onContribute,
   onProposeLoan,
   canRequestLoan = true,
@@ -495,6 +498,12 @@ export default function ChamaOverview({
           Account pool: <span className="font-mono font-semibold text-emerald-300">{fmtKsh(accountPool)}</span>
         </p>
         <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+          {!isOfficial &&
+            chama.constitution.memberFinanceVisibility !== "all_members" && (
+            <p className="mb-2 text-[11px] text-slate-500 sm:col-span-2">
+              Individual amounts are private. You only see your own unless the chama votes for full transparency.
+            </p>
+          )}
           {members.map((m) => {
             const fromBalance = memberBalances.find(
               (b) => b.user_id === m.id && b.kit_code === selectedAccount,
@@ -502,12 +511,15 @@ export default function ChamaOverview({
             const fromContributions = accountContributions
               .filter((contribution) => contribution.memberId === m.id)
               .reduce((sum, contribution) => sum + contribution.amount, 0);
-            // Prefer ledger balance (includes interest); fall back to contributions only
             const memberPaid =
               fromBalance != null ? Number(fromBalance.balance) || 0 : fromContributions;
             const target = m.monthlyContribution || chama.constitution.minMonthlyContribution;
             const pct = target > 0 ? Math.min(100, Math.round((memberPaid / target) * 100)) : 0;
             const isCurrent = m.id === currentMemberId;
+            const showAll =
+              isOfficial ||
+              chama.constitution.memberFinanceVisibility === "all_members";
+            const canSeeAmount = showAll || isCurrent;
             return (
               <div
                 key={m.id}
@@ -530,17 +542,25 @@ export default function ChamaOverview({
                       {isCurrent && <span className="ml-1 text-[10px] font-medium text-emerald-400">(you)</span>}
                     </p>
                     <span className="font-mono text-[11px] font-bold tabular-nums text-slate-300">
-                      {fmtKsh(memberPaid)}
+                      {canSeeAmount ? fmtKsh(memberPaid) : "••••"}
                     </span>
                   </div>
                   <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
                     <div
-                      className={`h-full rounded-full ${pct >= 80 ? "bg-emerald-500" : pct >= 50 ? "bg-teal-400" : "bg-amber-400"}`}
-                      style={{ width: `${pct}%` }}
+                      className={`h-full rounded-full ${
+                        !canSeeAmount
+                          ? "bg-slate-600"
+                          : pct >= 80
+                            ? "bg-emerald-500"
+                            : pct >= 50
+                              ? "bg-teal-400"
+                              : "bg-amber-400"
+                      }`}
+                      style={{ width: canSeeAmount ? `${pct}%` : "0%" }}
                     />
                   </div>
                 </div>
-                {m.activeLoans > 0 && (
+                {canSeeAmount && m.activeLoans > 0 && (
                   <span className="flex items-center gap-1 rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-bold text-violet-300">
                     {m.activeLoans} loan
                   </span>

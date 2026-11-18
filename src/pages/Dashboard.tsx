@@ -1487,6 +1487,7 @@ export default function Dashboard() {
                 kits={kits}
                 memberBalances={memberBalances}
                 currentMemberId={currentMemberId}
+                isOfficial={isOfficial}
                 onContribute={() => {
                   setContribKitLock(null);
                   setContribOpen(true);

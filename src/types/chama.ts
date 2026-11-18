@@ -220,7 +220,12 @@ export interface Chama {
     channelContributionsToWelfare?: boolean;
     /** officials = leaders only; member_quorum = vote then execute */
     welfareExpenseApproval?: "officials" | "member_quorum";
-
+    /**
+     * Who can see individual member balances/contributions on overview & lists.
+     * private = only self + officials (default)
+     * all_members = chama agreed full transparency
+     */
+    memberFinanceVisibility?: "private" | "all_members";
   };
   nextPayout: {
     recipientName: string;
