@@ -863,6 +863,76 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
         </div>
       </div>
 
+      <div className="rounded-2xl border border-sky-500/30 bg-slate-900/80 p-4">
+        <p className="text-sm font-bold text-white">Member privacy (who sees balances)</p>
+        <p className="mt-1 text-xs text-slate-400">
+          Default is private: each member sees only their own amounts; officials see all.
+          Switch to open books only if the group agreed.
+        </p>
+        <p className="mt-2 text-xs text-slate-300">
+          Current:{" "}
+          <span className="font-bold text-sky-300">
+            {chama.constitution?.memberFinanceVisibility === "all_members"
+              ? "all_members — everyone sees everyone"
+              : "private — self + officials only"}
+          </span>
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded-xl border border-slate-600 bg-slate-950 px-3 py-2 text-xs font-bold text-slate-200 hover:border-sky-500/50"
+            onClick={async () => {
+              try {
+                const constitution = {
+                  ...chama.constitution,
+                  memberFinanceVisibility: "private" as const,
+                };
+                const { error } = await supabase
+                  .from("chamas")
+                  .update({ constitution })
+                  .eq("id", chamaId);
+                if (error) throw error;
+                toast.success("Privacy: private (self + officials only)");
+                window.location.reload();
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Could not save");
+              }
+            }}
+          >
+            Set private
+          </button>
+          <button
+            type="button"
+            className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-200 hover:bg-amber-500/20"
+            onClick={async () => {
+              if (
+                !window.confirm(
+                  "Make individual balances visible to ALL members? Only do this if the chama agreed in writing.",
+                )
+              )
+                return;
+              try {
+                const constitution = {
+                  ...chama.constitution,
+                  memberFinanceVisibility: "all_members" as const,
+                };
+                const { error } = await supabase
+                  .from("chamas")
+                  .update({ constitution })
+                  .eq("id", chamaId);
+                if (error) throw error;
+                toast.success("Open books: all members can see individual balances");
+                window.location.reload();
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Could not save");
+              }
+            }}
+          >
+            Set open books (all members)
+          </button>
+        </div>
+      </div>
+
       {section === "command" ? (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
