@@ -25,6 +25,7 @@ import type {
 import { fmtKsh } from "../data/mockChamaData";
 import { LoanRatesChairPanel } from "./LoansAndLedger";
 import { SimpleFieldsModal, ChoiceModal } from "./FlowModals";
+import AppModal from "./AppModal";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import {
@@ -686,6 +687,10 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
   const [deskPanel, setDeskPanel] = useState<
     null | "settings" | "pending" | "report" | "command" | "operations"
   >(null);
+  const [settingsModal, setSettingsModal] = useState<
+    null | "privacy" | "payment" | "mpesa"
+  >(null);
+  const [rejectPayId, setRejectPayId] = useState<string | null>(null);
   const [openOut, setOpenOut] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [campaignOpen, setCampaignOpen] = useState(false);
@@ -964,18 +969,54 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
 
       {/* Settings panel */}
       {deskPanel === "settings" && (
-        <div className="space-y-4 rounded-2xl border border-amber-500/20 bg-slate-900/50 p-4">
+        <div className="space-y-3">
           <h3 className="text-lg font-bold text-white">Settings</h3>
           <p className="text-xs text-slate-400">
-            Configure privacy, how members pay, and see M-Pesa setup notes. Scroll the blocks below on this page for the same controls, or use the cards.
+            Tap a card to change settings in a form — no browser prompts.
           </p>
-          <p className="text-xs text-slate-500">
-            Tip: Privacy, payment mode, and Excel report stay available in the sections under this hub when you open Approvals / Reports from the cards.
-          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setSettingsModal("privacy")}
+              className="rounded-2xl border border-sky-500/30 bg-slate-900/80 p-4 text-left hover:border-sky-400/50"
+            >
+              <p className="text-sm font-bold text-white">Member privacy</p>
+              <p className="mt-1 text-xs text-slate-400">
+                Now:{" "}
+                {chama.constitution?.memberFinanceVisibility === "all_members"
+                  ? "Open books"
+                  : "Private (self + officials)"}
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSettingsModal("payment")}
+              className="rounded-2xl border border-amber-500/30 bg-slate-900/80 p-4 text-left hover:border-amber-400/50"
+            >
+              <p className="text-sm font-bold text-white">Payment mode</p>
+              <p className="mt-1 text-xs text-slate-400">
+                {chama.constitution?.paymentMode || "Not set"}
+                {chama.constitution?.payToLabel
+                  ? ` · ${chama.constitution.payToLabel}`
+                  : ""}
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSettingsModal("mpesa")}
+              className="rounded-2xl border border-emerald-500/30 bg-slate-900/80 p-4 text-left hover:border-emerald-400/50 sm:col-span-2"
+            >
+              <p className="text-sm font-bold text-white">M-Pesa / Daraja</p>
+              <p className="mt-1 text-xs text-slate-400">
+                STK uses server secrets — never enter Consumer Key/Secret in the app.
+                View setup checklist here.
+              </p>
+            </button>
+          </div>
         </div>
       )}
 
-<div className={`rounded-2xl border border-sky-500/30 bg-slate-900/80 p-4 ${deskPanel === null || deskPanel === "command" || deskPanel === "operations" ? "hidden" : ""}`}>
+<div className={`rounded-2xl border border-sky-500/30 bg-slate-900/80 p-4 "hidden"`}>
         <p className="text-sm font-bold text-white">Member privacy (who sees balances)</p>
         <p className="mt-1 text-xs text-slate-400">
           Default is private: each member sees only their own amounts; officials see all.
@@ -1134,7 +1175,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
       </div>
 
 
-      <div className={`rounded-2xl border border-amber-500/30 bg-slate-900/80 p-4 ${deskPanel === "settings" || deskPanel === "pending" ? "" : "hidden"}`}>
+      <div className={`rounded-2xl border border-amber-500/30 bg-slate-900/80 p-4 "hidden"`}>
         <p className="text-sm font-bold text-white">How members pay</p>
         <p className="mt-1 text-xs text-slate-400">
           <strong className="text-slate-300">Manual:</strong> member pays till/cash, records in app, you approve.
@@ -1236,20 +1277,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                       <button
                         type="button"
                         className="rounded-lg border border-rose-500/40 px-3 py-1.5 text-[11px] font-bold text-rose-300"
-                        onClick={async () => {
-                          const reason = window.prompt("Reason for reject (optional)") || "";
-                          try {
-                            const { error } = await supabase.rpc(
-                              "reject_pending_contribution",
-                              { p_contribution_id: p.id, p_reason: reason || null },
-                            );
-                            if (error) throw error;
-                            toast.message("Payment rejected");
-                            setPendingPays((prev) => prev.filter((x) => x.id !== p.id));
-                          } catch (e) {
-                            toast.error(e instanceof Error ? e.message : "Reject failed");
-                          }
-                        }}
+                        onClick={() => setRejectPayId(p.id)}
                       >
                         Reject
                       </button>
@@ -2626,6 +2654,131 @@ Welfare / emergency kitty</p>
         </motion.div>
       ) : null}
     </div>
+
+
+      <SimpleFieldsModal
+        open={!!rejectPayId}
+        onClose={() => setRejectPayId(null)}
+        title="Reject payment"
+        subtitle="Optional reason — member is not credited"
+        submitLabel="Reject"
+        fields={[
+          { key: "reason", label: "Reason (optional)", defaultValue: "", placeholder: "e.g. Amount not received" },
+        ]}
+        onSubmit={async (v) => {
+          if (!rejectPayId) return;
+          const { error } = await supabase.rpc("reject_pending_contribution", {
+            p_contribution_id: rejectPayId,
+            p_reason: v.reason || null,
+          });
+          if (error) throw error;
+          toast.message("Payment rejected");
+          setPendingPays((prev) => prev.filter((x) => x.id !== rejectPayId));
+          setRejectPayId(null);
+        }}
+      />
+
+      <ChoiceModal
+        open={settingsModal === "privacy"}
+        onClose={() => setSettingsModal(null)}
+        title="Member privacy"
+        subtitle="Who can see individual balances on Overview"
+        options={[
+          {
+            id: "private",
+            label: "Private (recommended)",
+            description: "Each member sees only their own amounts; officials see all",
+          },
+          {
+            id: "all_members",
+            label: "Open books",
+            description: "All members can see each other's balances (only if AGM agreed)",
+          },
+        ]}
+        confirmLabel="Save privacy"
+        onConfirm={async (id) => {
+          const constitution = {
+            ...chama.constitution,
+            memberFinanceVisibility: id as "private" | "all_members",
+          };
+          const { error } = await supabase
+            .from("chamas")
+            .update({ constitution })
+            .eq("id", chamaId);
+          if (error) throw error;
+          toast.success(id === "private" ? "Privacy: private" : "Open books enabled");
+          setSettingsModal(null);
+          window.location.reload();
+        }}
+      />
+
+      <SimpleFieldsModal
+        open={settingsModal === "payment"}
+        onClose={() => setSettingsModal(null)}
+        title="Payment mode"
+        subtitle="How members pay into the chama"
+        submitLabel="Save"
+        fields={[
+          {
+            key: "mode",
+            label: "Mode (manual_confirm | mpesa_stk | both)",
+            defaultValue: chama.constitution?.paymentMode || "manual_confirm",
+            required: true,
+          },
+          {
+            key: "payTo",
+            label: "Pay to (till / paybill / phone for manual)",
+            defaultValue: chama.constitution?.payToLabel || "",
+            placeholder: "e.g. Till 123456 or 07xx…",
+          },
+        ]}
+        onSubmit={async (v) => {
+          const mode = String(v.mode || "").trim();
+          if (!["manual_confirm", "mpesa_stk", "both"].includes(mode)) {
+            throw new Error("Mode must be manual_confirm, mpesa_stk, or both");
+          }
+          const { error } = await supabase.rpc("set_chama_payment_mode", {
+            p_chama_id: chamaId,
+            p_mode: mode,
+            p_pay_to_label: v.payTo || null,
+            p_pay_to_phone: null,
+          });
+          if (error) throw error;
+          toast.success("Payment mode saved");
+          setSettingsModal(null);
+          window.location.reload();
+        }}
+      />
+
+      <AppModal
+        open={settingsModal === "mpesa"}
+        onClose={() => setSettingsModal(null)}
+        title="M-Pesa / Daraja"
+        subtitle="Credentials stay on the server — not in this app"
+        footer={
+          <button
+            type="button"
+            className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-white"
+            onClick={() => setSettingsModal(null)}
+          >
+            Close
+          </button>
+        }
+      >
+        <div className="space-y-2 text-sm text-slate-300">
+          <p>
+            STK Push uses Supabase Edge secrets (Consumer Key, Secret, Passkey, Shortcode).
+            Officials never type those into the browser.
+          </p>
+          <ol className="list-decimal space-y-1 pl-4 text-xs text-slate-400">
+            <li>Deploy functions mpesa-stk-push and mpesa-callback</li>
+            <li>Set MPESA_* secrets in Supabase</li>
+            <li>Set payment mode to mpesa_stk or both</li>
+            <li>Members pay via STK; pots update on callback</li>
+          </ol>
+          <p className="text-xs text-slate-500">Full steps: docs/MPESA_SETUP.md in the repo</p>
+        </div>
+      </AppModal>
 
       <SimpleFieldsModal
         open={expenseOpen}
