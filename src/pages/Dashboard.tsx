@@ -157,7 +157,17 @@ export default function Dashboard() {
           poolBalance: Number(c.pool_balance) || 0,
           monthlyTarget: Number(c.monthly_target) || 0,
           monthCollected: Number(c.month_collected) || 0,
-          constitution: c.constitution,
+          constitution: (() => {
+            const raw = c.constitution as unknown;
+            if (typeof raw === "string") {
+              try {
+                return JSON.parse(raw) as Chama["constitution"];
+              } catch {
+                return {} as Chama["constitution"];
+              }
+            }
+            return (raw || {}) as Chama["constitution"];
+          })(),
           nextPayout: { recipientName: "—", amount: 0, dueDate: "" },
           currency: c.currency || "KES",
         } satisfies Chama;

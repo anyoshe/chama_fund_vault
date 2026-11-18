@@ -498,13 +498,48 @@ export default function ChamaOverview({
           Account pool: <span className="font-mono font-semibold text-emerald-300">{fmtKsh(accountPool)}</span>
         </p>
         <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
-          {!isOfficial &&
-            chama.constitution.memberFinanceVisibility !== "all_members" && (
-            <p className="mb-2 text-[11px] text-slate-500 sm:col-span-2">
-              Individual amounts are private. You only see your own unless the chama votes for full transparency.
-            </p>
-          )}
-          {members.map((m) => {
+          {(() => {
+            const visibility =
+              chama.constitution?.memberFinanceVisibility === "all_members"
+                ? "all_members"
+                : "private";
+            return (
+              <p className="mb-2 text-[11px] text-slate-500 sm:col-span-2">
+                {visibility === "private" ? (
+                  isOfficial ? (
+                    <>
+                      <span className="font-semibold text-sky-300">Privacy: private.</span>{" "}
+                      You see all amounts because you are an official (chair / treasurer / secretary).
+                      Ordinary members only see their own.
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-semibold text-sky-300">Privacy: private.</span>{" "}
+                      You only see your own balance. Other members are hidden.
+                    </>
+                  )
+                ) : (
+                  <>
+                    <span className="font-semibold text-amber-300">Privacy: open books.</span>{" "}
+                    All members can see each other&apos;s standings.
+                  </>
+                )}
+              </p>
+            );
+          })()}
+          {members
+            .filter((m) => {
+              const visibility =
+                chama.constitution?.memberFinanceVisibility === "all_members"
+                  ? "all_members"
+                  : "private";
+              // Non-officials in private mode: only their own row
+              if (!isOfficial && visibility === "private") {
+                return m.id === currentMemberId;
+              }
+              return true;
+            })
+            .map((m) => {
             const fromBalance = memberBalances.find(
               (b) => b.user_id === m.id && b.kit_code === selectedAccount,
             );
@@ -518,7 +553,7 @@ export default function ChamaOverview({
             const isCurrent = m.id === currentMemberId;
             const showAll =
               isOfficial ||
-              chama.constitution.memberFinanceVisibility === "all_members";
+              chama.constitution?.memberFinanceVisibility === "all_members";
             const canSeeAmount = showAll || isCurrent;
             return (
               <div
