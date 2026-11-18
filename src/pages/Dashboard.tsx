@@ -1322,39 +1322,40 @@ export default function Dashboard() {
     return Math.max(0, loanLimitInfo.maxLoan - committed);
   }, [user?.id, activeChamaId, proposals, loanLimitInfo.maxLoan]);
 
+  const role = currentMember?.role;
   const isOfficial = useMemo(() => {
-    const role = currentMember?.role;
     return (
       role === "Chairperson" ||
       role === "Treasurer" ||
       role === "Secretary"
     );
-  }, [currentMember?.role]);
+  }, [role]);
 
-  // Members: Home + Overview + Vote only. Officials get full nav.
-  // Redirect away from restricted tabs if a member somehow lands there.
+  /** Who may open each restricted area */
+  const canChamaFinance =
+    role === "Chairperson" || role === "Treasurer" || role === "Secretary";
+  const canManageMembers =
+    role === "Chairperson" || role === "Secretary";
+
+  // Only show tabs this role can use; bounce off restricted ones
   useEffect(() => {
-    if (!currentMember || isOfficial) return;
-    if (tab === "loans" || tab === "members") {
-      setTab("home");
-    }
-  }, [currentMember?.id, isOfficial, tab]);
+    if (!currentMember) return;
+    if (tab === "loans" && !canChamaFinance) setTab("home");
+    if (tab === "members" && !canManageMembers) setTab("home");
+  }, [currentMember?.id, role, tab, canChamaFinance, canManageMembers]);
 
-  const TABS: { id: Tab; label: string }[] = isOfficial
-    ? [
-        { id: "home", label: "Home" },
-        { id: "overview", label: "Overview" },
-        { id: "voting", label: "Voting Board" },
-        { id: "loans", label: "Chama Finance" },
-        { id: "my-finance", label: "My Finance" },
-        { id: "members", label: "Members" },
-      ]
-    : [
-        { id: "home", label: "Home" },
-        { id: "overview", label: "Overview" },
-        { id: "voting", label: "Vote" },
-        { id: "my-finance", label: "My Finance" },
-      ];
+  const TABS: { id: Tab; label: string }[] = [
+    { id: "home", label: "Home" },
+    { id: "overview", label: "Overview" },
+    { id: "voting", label: isOfficial ? "Voting Board" : "Vote" },
+    { id: "my-finance", label: "My Finance" },
+    ...(canChamaFinance
+      ? [{ id: "loans" as Tab, label: "Chama Finance" }]
+      : []),
+    ...(canManageMembers
+      ? [{ id: "members" as Tab, label: "Members" }]
+      : []),
+  ];
 
   if (!chama) {
     return (
@@ -1502,7 +1503,7 @@ export default function Dashboard() {
                 onCastVote={handleCastVote}
               />
             )}
-            {tab === "loans" && isOfficial && (
+            {tab === "loans" && canChamaFinance && (
               <ChamaFinance
                 chama={chama}
                 chamaId={activeChamaId}
@@ -1577,7 +1578,7 @@ export default function Dashboard() {
                 onReallocateContribution={handleReallocateContribution}
               />
             )}
-            {tab === "members" && isOfficial && <Members />}
+            {tab === "members" && canManageMembers && <Members />}
           </motion.div>
         </AnimatePresence>
       </main>
