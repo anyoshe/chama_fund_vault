@@ -688,9 +688,12 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
     null | "settings" | "pending" | "report" | "command" | "operations"
   >(null);
   const [settingsModal, setSettingsModal] = useState<
-    null | "privacy" | "payment" | "mpesa"
+    null | "privacy" | "payment" | "mpesa" | "rates"
   >(null);
   const [rejectPayId, setRejectPayId] = useState<string | null>(null);
+  const [treasuryCard, setTreasuryCard] = useState<
+    null | "kits" | "plans" | "obligations" | "welfare" | "penalties"
+  >(null);
   const [openOut, setOpenOut] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [campaignOpen, setCampaignOpen] = useState(false);
@@ -1003,8 +1006,19 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             </button>
             <button
               type="button"
+              onClick={() => setSettingsModal("rates")}
+              className="rounded-2xl border border-violet-500/30 bg-slate-900/80 p-4 text-left hover:border-violet-400/50"
+            >
+              <p className="text-sm font-bold text-white">Loan rates & interest</p>
+              <p className="mt-1 text-xs text-slate-400">
+                Default {chama.constitution?.loanInterestMonthlyPercent ?? 10}% / mo · reserve{" "}
+                {chama.constitution?.interestReservePercent ?? 20}%
+              </p>
+            </button>
+            <button
+              type="button"
               onClick={() => setSettingsModal("mpesa")}
-              className="rounded-2xl border border-emerald-500/30 bg-slate-900/80 p-4 text-left hover:border-emerald-400/50 sm:col-span-2"
+              className="rounded-2xl border border-emerald-500/30 bg-slate-900/80 p-4 text-left hover:border-emerald-400/50"
             >
               <p className="text-sm font-bold text-white">M-Pesa / Daraja</p>
               <p className="mt-1 text-xs text-slate-400">
@@ -1016,7 +1030,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
         </div>
       )}
 
-<div className={`rounded-2xl border border-sky-500/30 bg-slate-900/80 p-4 "hidden"`}>
+<div className="hidden">
         <p className="text-sm font-bold text-white">Member privacy (who sees balances)</p>
         <p className="mt-1 text-xs text-slate-400">
           Default is private: each member sees only their own amounts; officials see all.
@@ -1175,7 +1189,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
       </div>
 
 
-      <div className={`rounded-2xl border border-amber-500/30 bg-slate-900/80 p-4 "hidden"`}>
+      <div className="hidden">
         <p className="text-sm font-bold text-white">How members pay</p>
         <p className="mt-1 text-xs text-slate-400">
           <strong className="text-slate-300">Manual:</strong> member pays till/cash, records in app, you approve.
@@ -1387,9 +1401,39 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             </p>
           </div>
 
-          
+          {/* Treasury section cards */}
+          {treasuryCard === null ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {[
+                { id: "kits" as const, title: "Kit balances", sub: "Each pot balance" },
+                { id: "plans" as const, title: "Contribution plans", sub: "Monthly / registration rules" },
+                { id: "obligations" as const, title: "Obligations dashboard", sub: "Expected vs collected" },
+                { id: "welfare" as const, title: "Welfare events", sub: "Collect · expense · payout" },
+                { id: "penalties" as const, title: "Penalties", sub: "Assess · waive" },
+              ].map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setTreasuryCard(c.id)}
+                  className="rounded-2xl border border-slate-700 bg-slate-900/80 p-4 text-left hover:border-violet-500/40"
+                >
+                  <p className="text-sm font-bold text-white">{c.title}</p>
+                  <p className="mt-1 text-xs text-slate-400">{c.sub}</p>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setTreasuryCard(null)}
+              className="text-sm font-semibold text-slate-400 hover:text-white"
+            >
+              ← Back to treasury sections
+            </button>
+          )}
+
           {/* Phase 1 — Contribution plans */}
-          <div className="rounded-2xl border border-emerald-500/25 bg-slate-900/70 p-4">
+          <div className={`rounded-2xl border border-emerald-500/25 bg-slate-900/70 p-4 ${treasuryCard === "plans" ? "" : "hidden"}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-bold text-white">Contribution plans</p>
@@ -1521,12 +1565,12 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
 
           
           {/* Welfare kitty sub-funds + expense approval */}
-          <div className="rounded-2xl border border-teal-500/25 bg-slate-900/70 p-4">
+          <div className={`rounded-2xl border border-teal-500/25 bg-slate-900/70 p-4 ${treasuryCard === "welfare" ? "" : "hidden"}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-bold text-white">
           {/* Obligation-based dashboard + arrears */}
-          {oblDash && (
+          {oblDash && treasuryCard === "obligations" && (
             <div className="rounded-2xl border border-emerald-500/20 bg-slate-900/70 p-4">
               <p className="text-sm font-bold text-white">Contributions dashboard (from obligations)</p>
               <div className="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
@@ -1576,47 +1620,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                 >
                   Set spending policy
                 </button>
-                <button
-                  type="button"
-                  className="rounded-lg border border-slate-600 px-2.5 py-1 text-[10px] font-bold text-slate-300"
-                  onClick={async () => {
-                    const cur =
-                      chama.constitution?.memberFinanceVisibility === "all_members"
-                        ? "all_members"
-                        : "private";
-                    const next = window.prompt(
-                      "Member balances visibility:\n  private = only self + officials (recommended)\n  all_members = everyone sees everyone\n\nType private or all_members",
-                      cur,
-                    );
-                    if (!next) return;
-                    const v = next.trim().toLowerCase();
-                    if (v !== "private" && v !== "all_members") {
-                      toast.error("Use private or all_members");
-                      return;
-                    }
-                    try {
-                      const constitution = {
-                        ...chama.constitution,
-                        memberFinanceVisibility: v,
-                      };
-                      const { error } = await supabase
-                        .from("chamas")
-                        .update({ constitution })
-                        .eq("id", chamaId);
-                      if (error) throw error;
-                      toast.success(
-                        v === "all_members"
-                          ? "All members can see individual balances (document this in your rules)"
-                          : "Individual balances private — only self + officials",
-                      );
-                      onRefresh?.();
-                    } catch (e) {
-                      toast.error(e instanceof Error ? e.message : "Failed");
-                    }
-                  }}
-                >
-                  Member privacy
-                </button>
+                
                 <button
                   type="button"
                   className="rounded-lg border border-slate-600 px-2.5 py-1 text-[10px] font-bold text-slate-300"
@@ -2000,7 +2004,7 @@ Welfare / emergency kitty</p>
             </button>
             <button
               type="button"
-              className="rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-left text-xs font-bold text-violet-200 hover:bg-violet-500/15"
+              className={`rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-left text-xs font-bold text-violet-200 hover:bg-violet-500/15 ${treasuryCard === "welfare" ? "" : "hidden"}`}
               onClick={() => setWelfareFormOpen(true)}
             >
               Create welfare event
@@ -2010,7 +2014,7 @@ Welfare / emergency kitty</p>
             </button>
           </div>
 
-          {welfareEvents.length > 0 && (
+          {welfareEvents.length > 0 && treasuryCard === "welfare" && (
             <div className="rounded-2xl border border-violet-500/20 bg-slate-900/70 p-4">
               <p className="text-sm font-bold text-white">Welfare events</p>
               <div className="mt-3 space-y-2">
@@ -2123,7 +2127,7 @@ Welfare / emergency kitty</p>
             </div>
           )}
 
-          {penaltyList.filter((p) => p.status === "assessed").length > 0 && (
+          {penaltyList.filter((p) => p.status === "assessed").length > 0 && treasuryCard === "penalties" && (
             <div className="rounded-2xl border border-rose-500/20 bg-slate-900/70 p-4">
               <p className="text-sm font-bold text-white">Open penalties</p>
               <div className="mt-2 space-y-1.5">
@@ -2575,11 +2579,6 @@ Welfare / emergency kitty</p>
             setOpsCard={setOpsCard}
             monthLabel={monthLabel}
           />
-          <LoanRatesChairPanel
-            chama={props.chama}
-            members={props.members}
-            onSaveLoanRates={props.onSaveLoanRates}
-          />
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
             <p className="text-sm font-bold text-white">Disbursement queue</p>
@@ -2749,6 +2748,32 @@ Welfare / emergency kitty</p>
           window.location.reload();
         }}
       />
+
+      {settingsModal === "rates" && isChair && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/70 p-4 sm:items-center">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-4 shadow-xl">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm font-bold text-white">Loan rates & interest rules</p>
+              <button type="button" className="text-xs font-bold text-slate-400" onClick={() => setSettingsModal(null)}>
+                Close
+              </button>
+            </div>
+            <LoanRatesChairPanel
+              chama={chama}
+              members={members}
+              onSaveLoanRates={async (next) => {
+                await props.onSaveLoanRates?.(next);
+                setSettingsModal(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
+      {settingsModal === "rates" && !isChair && (
+        <AppModal open onClose={() => setSettingsModal(null)} title="Loan rates" subtitle="Only the Chairperson can change rates">
+          <p className="text-sm text-slate-400">Ask the chairperson to update interest rules.</p>
+        </AppModal>
+      )}
 
       <AppModal
         open={settingsModal === "mpesa"}
