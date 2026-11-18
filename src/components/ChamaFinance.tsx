@@ -683,7 +683,6 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
     }[]
   >([]);
   const [section, setSection] = useState<"command" | "operations">("command");
-  /** Card hub: null = overview grid; string = detail panel */
   const [deskPanel, setDeskPanel] = useState<
     null | "settings" | "pending" | "report" | "command" | "operations"
   >(null);
@@ -867,12 +866,6 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
     );
   }
 
-  const privacyLabel =
-    chama.constitution?.memberFinanceVisibility === "all_members"
-      ? "Open books"
-      : "Private";
-  const payModeLabel = chama.constitution?.paymentMode || "Not set";
-
   return (
     <>
     <div className="space-y-5">
@@ -890,10 +883,10 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
               {isChair && " · you can set rates & interest rules"}
             </p>
           </div>
-          <div className={`flex gap-1.5 rounded-xl border border-slate-700 bg-slate-950/60 p-1 ${deskPanel === null ? "hidden" : ""}`}>
+          <div className="flex gap-1.5 rounded-xl border border-slate-700 bg-slate-950/60 p-1">
             <button
               type="button"
-              onClick={() => { setSection("command"); setDeskPanel("command"); }}
+              onClick={() => setSection("command")}
               className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
                 section === "command"
                   ? "bg-violet-500/20 text-violet-200"
@@ -904,7 +897,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             </button>
             <button
               type="button"
-              onClick={() => { setSection("operations"); setDeskPanel("operations"); }}
+              onClick={() => setSection("operations")}
               className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${
                 section === "operations"
                   ? "bg-violet-500/20 text-violet-200"
@@ -917,90 +910,45 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
         </div>
       </div>
 
-      {/* —— Card hub —— */}
+      
       {deskPanel === null && (
         <div className="space-y-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             Open a card for details
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <button
-              type="button"
-              onClick={() => setDeskPanel("pending")}
-              className="rounded-2xl border border-rose-500/25 bg-slate-900/80 p-4 text-left hover:border-rose-400/50"
-            >
-              <p className="text-[10px] font-bold uppercase tracking-wide text-rose-300/80">
-                Approvals
-              </p>
+            <button type="button" onClick={() => setDeskPanel("pending")}
+              className="rounded-2xl border border-rose-500/25 bg-slate-900/80 p-4 text-left hover:border-rose-400/50">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-rose-300/80">Approvals</p>
               <p className="mt-1 text-2xl font-bold text-white">{pendingPays.length}</p>
-              <p className="mt-1 text-xs text-slate-400">
-                Manual payments waiting for treasurer
-              </p>
+              <p className="mt-1 text-xs text-slate-400">Manual payments waiting for treasurer</p>
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setSection("command");
-                setDeskPanel("command");
-              }}
-              className="rounded-2xl border border-violet-500/25 bg-slate-900/80 p-4 text-left hover:border-violet-400/50"
-            >
-              <p className="text-[10px] font-bold uppercase tracking-wide text-violet-300/80">
-                Treasury
-              </p>
+            <button type="button" onClick={() => { setSection("command"); setDeskPanel("command"); }}
+              className="rounded-2xl border border-violet-500/25 bg-slate-900/80 p-4 text-left hover:border-violet-400/50">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-violet-300/80">Treasury</p>
               <p className="mt-1 text-2xl font-bold text-white">{fmtKsh(groupPool)}</p>
-              <p className="mt-1 text-xs text-slate-400">
-                Group pool · kits · loans overview
-              </p>
+              <p className="mt-1 text-xs text-slate-400">Group pool · kits · overview</p>
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setSection("operations");
-                setDeskPanel("operations");
-              }}
-              className="rounded-2xl border border-emerald-500/25 bg-slate-900/80 p-4 text-left hover:border-emerald-400/50"
-            >
-              <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-300/80">
-                Loans & ledger
-              </p>
+            <button type="button" onClick={() => { setSection("operations"); setDeskPanel("operations"); }}
+              className="rounded-2xl border border-emerald-500/25 bg-slate-900/80 p-4 text-left hover:border-emerald-400/50">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-300/80">Loans & ledger</p>
               <p className="mt-1 text-sm font-bold text-white">Disburse · rates · ops</p>
-              <p className="mt-1 text-xs text-slate-400">
-                Day-to-day loan operations
-              </p>
+              <p className="mt-1 text-xs text-slate-400">Day-to-day loan operations</p>
             </button>
-            <button
-              type="button"
-              onClick={() => setDeskPanel("report")}
-              className="rounded-2xl border border-sky-500/25 bg-slate-900/80 p-4 text-left hover:border-sky-400/50"
-            >
-              <p className="text-[10px] font-bold uppercase tracking-wide text-sky-300/80">
-                Reports
-              </p>
+            <button type="button" onClick={() => setDeskPanel("report")}
+              className="rounded-2xl border border-sky-500/25 bg-slate-900/80 p-4 text-left hover:border-sky-400/50">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-sky-300/80">Reports</p>
               <p className="mt-1 text-sm font-bold text-white">Monthly pot Excel</p>
-              <p className="mt-1 text-xs text-slate-400">
-                Paid / not paid by member
-              </p>
+              <p className="mt-1 text-xs text-slate-400">Paid / not paid by member</p>
             </button>
-            <button
-              type="button"
-              onClick={() => setDeskPanel("settings")}
-              className="rounded-2xl border border-amber-500/30 bg-slate-900/80 p-4 text-left hover:border-amber-400/50 sm:col-span-2 lg:col-span-1"
-            >
-              <p className="text-[10px] font-bold uppercase tracking-wide text-amber-300/80">
-                Settings
-              </p>
-              <p className="mt-1 text-sm font-bold text-white">
-                Privacy · {privacyLabel}
-              </p>
+            <button type="button" onClick={() => setDeskPanel("settings")}
+              className="rounded-2xl border border-amber-500/30 bg-slate-900/80 p-4 text-left hover:border-amber-400/50 sm:col-span-2 lg:col-span-1">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-amber-300/80">Settings</p>
+              <p className="mt-1 text-sm font-bold text-white">Privacy · payments · M-Pesa</p>
               <p className="mt-1 text-xs text-slate-400">
-                Pay mode: {payModeLabel}
-                {chama.constitution?.payToLabel
-                  ? ` · ${chama.constitution.payToLabel}`
-                  : ""}
-              </p>
-              <p className="mt-2 text-[10px] text-slate-500">
-                Privacy, payment rails, Daraja / M-Pesa notes
+                {chama.constitution?.paymentMode || "Pay mode not set"}
+                {" · "}
+                {chama.constitution?.memberFinanceVisibility === "all_members" ? "Open books" : "Private"}
               </p>
             </button>
           </div>
@@ -1008,147 +956,26 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
       )}
 
       {deskPanel !== null && (
-        <button
-          type="button"
-          onClick={() => setDeskPanel(null)}
-          className="text-sm font-semibold text-slate-400 hover:text-white"
-        >
+        <button type="button" onClick={() => setDeskPanel(null)}
+          className="text-sm font-semibold text-slate-400 hover:text-white">
           ← Back to overview cards
         </button>
       )}
 
-      {/* Settings detail */}
+      {/* Settings panel */}
       {deskPanel === "settings" && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-bold text-white">Chama settings</h3>
-
-          <div className="rounded-2xl border border-sky-500/30 bg-slate-900/80 p-4">
-            <p className="text-sm font-bold text-white">Member privacy</p>
-            <p className="mt-1 text-xs text-slate-400">
-              Who can see individual balances on Overview.
-            </p>
-            <p className="mt-2 text-xs text-slate-300">
-              Current:{" "}
-              <span className="font-bold text-sky-300">{privacyLabel}</span>
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="rounded-xl border border-slate-600 bg-slate-950 px-3 py-2 text-xs font-bold text-slate-200"
-                onClick={async () => {
-                  try {
-                    const constitution = {
-                      ...chama.constitution,
-                      memberFinanceVisibility: "private" as const,
-                    };
-                    const { error } = await supabase
-                      .from("chamas")
-                      .update({ constitution })
-                      .eq("id", chamaId);
-                    if (error) throw error;
-                    toast.success("Privacy: private");
-                    window.location.reload();
-                  } catch (e) {
-                    toast.error(e instanceof Error ? e.message : "Failed");
-                  }
-                }}
-              >
-                Set private
-              </button>
-              <button
-                type="button"
-                className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-200"
-                onClick={async () => {
-                  if (
-                    !window.confirm(
-                      "Make balances visible to ALL members? Only if the group agreed.",
-                    )
-                  )
-                    return;
-                  try {
-                    const constitution = {
-                      ...chama.constitution,
-                      memberFinanceVisibility: "all_members" as const,
-                    };
-                    const { error } = await supabase
-                      .from("chamas")
-                      .update({ constitution })
-                      .eq("id", chamaId);
-                    if (error) throw error;
-                    toast.success("Open books enabled");
-                    window.location.reload();
-                  } catch (e) {
-                    toast.error(e instanceof Error ? e.message : "Failed");
-                  }
-                }}
-              >
-                Set open books
-              </button>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-amber-500/30 bg-slate-900/80 p-4">
-            <p className="text-sm font-bold text-white">How members pay</p>
-            <p className="mt-1 text-xs text-slate-400">
-              Manual (treasurer confirms) and/or M-Pesa STK (auto credit).
-            </p>
-            <p className="mt-2 text-xs text-slate-300">
-              Mode: <span className="font-bold text-amber-200">{payModeLabel}</span>
-              {chama.constitution?.payToLabel
-                ? ` · Pay to: ${chama.constitution.payToLabel}`
-                : ""}
-            </p>
-            <button
-              type="button"
-              className="mt-3 rounded-xl border border-slate-600 px-3 py-2 text-xs font-bold text-slate-200"
-              onClick={async () => {
-                const mode = window.prompt(
-                  "Payment mode: manual_confirm | mpesa_stk | both",
-                  chama.constitution?.paymentMode || "manual_confirm",
-                );
-                if (!mode) return;
-                const payTo = window.prompt(
-                  "Where should members pay? (Till / Paybill / phone)",
-                  chama.constitution?.payToLabel || "",
-                );
-                try {
-                  const { error } = await supabase.rpc("set_chama_payment_mode", {
-                    p_chama_id: chamaId,
-                    p_mode: mode.trim(),
-                    p_pay_to_label: payTo,
-                    p_pay_to_phone: null,
-                  });
-                  if (error) throw error;
-                  toast.success("Payment mode saved");
-                  window.location.reload();
-                } catch (e) {
-                  toast.error(e instanceof Error ? e.message : "Failed");
-                }
-              }}
-            >
-              Set payment mode & pay-to
-            </button>
-          </div>
-
-          <div className="rounded-2xl border border-sky-500/25 bg-slate-900/80 p-4">
-            <p className="text-sm font-bold text-white">M-Pesa / Daraja (STK)</p>
-            <p className="mt-1 text-xs leading-relaxed text-slate-400">
-              Credentials are stored as Supabase Edge secrets (not in the browser): Consumer Key,
-              Secret, Passkey, Shortcode. See docs/MPESA_SETUP.md. Callback credits pots
-              automatically — no treasurer approve for STK.
-            </p>
-            <ul className="mt-2 list-inside list-disc text-[11px] text-slate-500">
-              <li>Deploy functions: mpesa-stk-push, mpesa-callback</li>
-              <li>Set MPESA_* secrets on the project</li>
-              <li>Use mode mpesa_stk or both above</li>
-            </ul>
-          </div>
+        <div className="space-y-4 rounded-2xl border border-amber-500/20 bg-slate-900/50 p-4">
+          <h3 className="text-lg font-bold text-white">Settings</h3>
+          <p className="text-xs text-slate-400">
+            Configure privacy, how members pay, and see M-Pesa setup notes. Scroll the blocks below on this page for the same controls, or use the cards.
+          </p>
+          <p className="text-xs text-slate-500">
+            Tip: Privacy, payment mode, and Excel report stay available in the sections under this hub when you open Approvals / Reports from the cards.
+          </p>
         </div>
       )}
 
-      {/* Detail panels: pending + report + full treasury (legacy body) */}
-      <div className={deskPanel === "pending" || deskPanel === "report" || deskPanel === "command" || deskPanel === "operations" ? "space-y-4" : "hidden"}>
-      <div className="hidden">
+<div className={`rounded-2xl border border-sky-500/30 bg-slate-900/80 p-4 ${deskPanel === null || deskPanel === "command" || deskPanel === "operations" ? "hidden" : ""}`}>
         <p className="text-sm font-bold text-white">Member privacy (who sees balances)</p>
         <p className="mt-1 text-xs text-slate-400">
           Default is private: each member sees only their own amounts; officials see all.
@@ -1219,7 +1046,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
       </div>
 
       
-      <div className={`rounded-2xl border border-emerald-500/30 bg-slate-900/80 p-4 ${deskPanel === "report" ? "" : "hidden"}`}>
+      <div className={`rounded-2xl border border-emerald-500/30 bg-slate-900/80 p-4 ${deskPanel === "report" || deskPanel === "settings" ? "" : "hidden"}`}>
         <p className="text-sm font-bold text-white">Monthly pot report (Excel)</p>
         <p className="mt-1 text-xs text-slate-400">
           Download a spreadsheet of who paid into each pot by month. Share with members to see months paid and not paid.
@@ -1307,7 +1134,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
       </div>
 
 
-      <div className="hidden rounded-2xl border border-amber-500/30 bg-slate-900/80 p-4">
+      <div className={`rounded-2xl border border-amber-500/30 bg-slate-900/80 p-4 ${deskPanel === "settings" || deskPanel === "pending" ? "" : "hidden"}`}>
         <p className="text-sm font-bold text-white">How members pay</p>
         <p className="mt-1 text-xs text-slate-400">
           <strong className="text-slate-300">Manual:</strong> member pays till/cash, records in app, you approve.
@@ -1439,7 +1266,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
         )}
       </div>
 
-{deskPanel === "command" && section === "command" ? (
+{(deskPanel === "command" || deskPanel === "operations") && section === "command" ? (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -2798,7 +2625,7 @@ Welfare / emergency kitty</p>
           </div>
         </motion.div>
       ) : null}
-      </div>
+    </div>
 
       <SimpleFieldsModal
         open={expenseOpen}
