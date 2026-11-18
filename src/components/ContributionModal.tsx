@@ -133,7 +133,7 @@ export default function ContributionModal({
                   <Receipt size={19} />
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-white">Pay into chama</h2>
+                  <h2 className="text-sm font-bold text-white">Record payment</h2>
                   <p className="text-[11px] text-slate-400">{chama.name}</p>
                 </div>
               </div>
@@ -154,7 +154,7 @@ export default function ContributionModal({
                     <span className="font-semibold text-emerald-300">
                       no member or treasurer ever touches cash
                     </span>
-                    . Choose where the money goes (table banking, shares…), then how you pay:
+                    . 1) Pay the chama till/phone if required  2) Choose pot  3) Enter amount, method, reference & date  4) Submit — treasurer confirms before pots update (manual mode).
                   </p>
                   <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
                     Contributing to

@@ -593,8 +593,18 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
     let cancelled = false;
     (async () => {
       try {
-        const [plansRes, welfareRes, penRes, buckRes, expRes, dashRes, arrRes] = await Promise.all([
+        const [
+          plansRes,
+          pendingRes,
+          welfareRes,
+          penRes,
+          buckRes,
+          expRes,
+          dashRes,
+          arrRes,
+        ] = await Promise.all([
           supabase.rpc("list_contribution_plans", { p_chama_id: chamaId }),
+          supabase.rpc("list_pending_contributions", { p_chama_id: chamaId }),
           supabase.rpc("list_welfare_events", { p_chama_id: chamaId }),
           supabase.rpc("list_chama_penalties", { p_chama_id: chamaId }),
           supabase.rpc("list_welfare_buckets", { p_chama_id: chamaId }),
@@ -605,6 +615,11 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
         if (!cancelled) {
           if (!plansRes.error) {
             setPlans((Array.isArray(plansRes.data) ? plansRes.data : []) as ContributionPlan[]);
+          }
+          if (!pendingRes.error) {
+            setPendingPays(
+              (Array.isArray(pendingRes.data) ? pendingRes.data : []) as typeof pendingPays,
+            );
           }
           if (!welfareRes.error) {
             setWelfareEvents(
@@ -655,6 +670,18 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   });
   const [reportPot, setReportPot] = useState<string>("all");
+  const [pendingPays, setPendingPays] = useState<
+    {
+      id: string;
+      memberId: string;
+      amount: number;
+      destination: string;
+      method: string;
+      reference: string;
+      paymentDate?: string;
+      paymentDetails?: string;
+    }[]
+  >([]);
   const [section, setSection] = useState<"command" | "operations">("command");
   const [openOut, setOpenOut] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
@@ -1036,6 +1063,133 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             Download Excel report
           </button>
         </div>
+      </div>
+
+
+      <div className="rounded-2xl border border-amber-500/30 bg-slate-900/80 p-4">
+        <p className="text-sm font-bold text-white">How members pay</p>
+        <p className="mt-1 text-xs text-slate-400">
+          <strong className="text-slate-300">Manual:</strong> member pays till/cash, records in app, you approve.
+          {" "}
+          <strong className="text-slate-300">M-Pesa STK:</strong> phone prompt; ledger updates when payment confirms (Daraja later).
+        </p>
+        <p className="mt-2 text-xs text-slate-300">
+          Mode:{" "}
+          <span className="font-bold text-amber-200">
+            {chama.constitution?.paymentMode || "manual_confirm"}
+          </span>
+          {chama.constitution?.payToLabel
+            ? ` · Pay to: ${chama.constitution.payToLabel}`
+            : ""}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded-xl border border-slate-600 px-3 py-2 text-xs font-bold text-slate-200"
+            onClick={async () => {
+              const mode = window.prompt(
+                "Payment mode: manual_confirm | mpesa_stk | both",
+                chama.constitution?.paymentMode || "manual_confirm",
+              );
+              if (!mode) return;
+              const payTo = window.prompt(
+                "Where should members pay? (Till / Paybill / phone / bank)",
+                chama.constitution?.payToLabel || "",
+              );
+              try {
+                const { error } = await supabase.rpc("set_chama_payment_mode", {
+                  p_chama_id: chamaId,
+                  p_mode: mode.trim(),
+                  p_pay_to_label: payTo,
+                  p_pay_to_phone: null,
+                });
+                if (error) throw error;
+                toast.success("Payment mode saved");
+                window.location.reload();
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Failed");
+              }
+            }}
+          >
+            Set payment mode
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-rose-500/25 bg-slate-900/80 p-4">
+        <p className="text-sm font-bold text-white">
+          Payments waiting for approval ({pendingPays.length})
+        </p>
+        <p className="mt-1 text-xs text-slate-400">
+          Confirm you received the money (cash, till, or bank), then approve to update pots.
+        </p>
+        {pendingPays.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-500">No pending payments</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {pendingPays.map((p) => {
+              const who = members.find((m) => m.id === p.memberId)?.name || "Member";
+              return (
+                <li
+                  key={p.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2.5"
+                >
+                  <div className="min-w-0 text-xs">
+                    <p className="font-bold text-white">
+                      {who} · {fmtKsh(Number(p.amount))}
+                    </p>
+                    <p className="text-slate-500">
+                      {p.destination} · {p.method} · Ref {p.reference}
+                      {p.paymentDate ? ` · ${String(p.paymentDate).slice(0, 10)}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="rounded-lg bg-emerald-500 px-3 py-1.5 text-[11px] font-bold text-white"
+                      onClick={async () => {
+                        try {
+                          const { error } = await supabase.rpc(
+                            "approve_pending_contribution",
+                            { p_contribution_id: p.id },
+                          );
+                          if (error) throw error;
+                          toast.success("Approved — pot updated");
+                          setPendingPays((prev) => prev.filter((x) => x.id !== p.id));
+                          window.location.reload();
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : "Approve failed");
+                        }
+                      }}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-rose-500/40 px-3 py-1.5 text-[11px] font-bold text-rose-300"
+                      onClick={async () => {
+                        const reason = window.prompt("Reason (optional)") || null;
+                        try {
+                          const { error } = await supabase.rpc(
+                            "reject_pending_contribution",
+                            { p_contribution_id: p.id, p_reason: reason },
+                          );
+                          if (error) throw error;
+                          toast.message("Rejected");
+                          setPendingPays((prev) => prev.filter((x) => x.id !== p.id));
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : "Reject failed");
+                        }
+                      }}
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
 
 {section === "command" ? (

@@ -453,6 +453,58 @@ export default function Dashboard() {
   };
 
   const handleContribute = async (contribution: Contribution) => {
+    const mode = chama?.constitution?.paymentMode || "manual_confirm";
+    const useStk =
+      (mode === "mpesa_stk" || mode === "both") &&
+      (contribution.method === "M-Pesa STK Push" || contribution.method === "Airtel Money");
+    const usePending =
+      mode === "manual_confirm" ||
+      (mode === "both" && !useStk) ||
+      mode === "mpesa_stk"; // STK also starts pending until callback
+
+    if (usePending && !useStk) {
+      const { data, error } = await supabase.rpc("submit_pending_contribution", {
+        p_chama_id: contribution.chamaId,
+        p_amount: contribution.amount,
+        p_destination: contribution.destination ?? "general-savings",
+        p_method: contribution.method,
+        p_reference: contribution.reference,
+        p_payment_date: (contribution.date || new Date().toISOString()).slice(0, 10),
+        p_payment_details: contribution.paymentDetails || null,
+        p_phone: null,
+      });
+      if (error) throw error;
+      toast.success("Submitted for treasurer approval — pots update after confirm");
+      const saved: Contribution = {
+        ...contribution,
+        id: (data as { id?: string })?.id || contribution.id,
+        status: "pending",
+      };
+      setContributions((prev) => [saved, ...prev]);
+      return;
+    }
+
+    if (useStk) {
+      const { data, error } = await supabase.rpc("request_mpesa_stk_contribution", {
+        p_chama_id: contribution.chamaId,
+        p_amount: contribution.amount,
+        p_destination: contribution.destination ?? "general-savings",
+        p_phone: contribution.paymentDetails || "",
+      });
+      if (error) throw error;
+      toast.message(
+        (data as { message?: string })?.message ||
+          "STK pending — complete M-Pesa prompt when connected",
+      );
+      const saved: Contribution = {
+        ...contribution,
+        id: (data as { id?: string })?.id || contribution.id,
+        reference: (data as { reference?: string })?.reference || contribution.reference,
+        status: "pending",
+      };
+      setContributions((prev) => [saved, ...prev]);
+      return;
+    }
 
     const { data, error } = await supabase.rpc("record_contribution", {
       p_chama_id: contribution.chamaId,

@@ -104,7 +104,7 @@ export type ContributionMethod =
   | "PesaLink"
   | "Other";
 
-export type ContributionStatus = "completed" | "pending" | "failed";
+export type ContributionStatus = "completed" | "pending" | "failed" | "rejected" | "confirmed";
 
 export interface Contribution {
   id: string;
@@ -226,6 +226,11 @@ export interface Chama {
      * all_members = chama agreed full transparency
      */
     memberFinanceVisibility?: "private" | "all_members";
+    /** How members pay: offline then approve, or M-Pesa STK auto */
+    paymentMode?: "manual_confirm" | "mpesa_stk" | "both";
+    /** Where to send money e.g. Till 123456 or Treasurer phone */
+    payToLabel?: string;
+    payToPhone?: string;
   };
   nextPayout: {
     recipientName: string;
