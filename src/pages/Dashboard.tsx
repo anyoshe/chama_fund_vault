@@ -1331,13 +1331,14 @@ export default function Dashboard() {
     );
   }, [currentMember?.role]);
 
-  // Members land on simple home; officials keep full controls but can open Home too
+  // Members: Home + Overview + Vote only. Officials get full nav.
+  // Redirect away from restricted tabs if a member somehow lands there.
   useEffect(() => {
-    if (!currentMember) return;
-    if (!isOfficial) {
-      setTab((t) => (t === "overview" || t === "loans" || t === "my-finance" ? "home" : t));
+    if (!currentMember || isOfficial) return;
+    if (tab === "loans" || tab === "my-finance" || tab === "members") {
+      setTab("home");
     }
-  }, [currentMember?.id, isOfficial]);
+  }, [currentMember?.id, isOfficial, tab]);
 
   const TABS: { id: Tab; label: string }[] = isOfficial
     ? [
@@ -1350,8 +1351,8 @@ export default function Dashboard() {
       ]
     : [
         { id: "home", label: "Home" },
+        { id: "overview", label: "Overview" },
         { id: "voting", label: "Vote" },
-        { id: "members", label: "Members" },
       ];
 
   if (!chama) {
@@ -1473,7 +1474,7 @@ export default function Dashboard() {
                 onOpenFullApp={() => switchTab("overview")}
               />
             )}
-            {tab === "overview" && isOfficial && (
+            {tab === "overview" && (
               <ChamaOverview
                 chama={chama}
                 members={displayMembers}
@@ -1575,7 +1576,7 @@ export default function Dashboard() {
                 onReallocateContribution={handleReallocateContribution}
               />
             )}
-            {tab === "members" && <Members />}
+            {tab === "members" && isOfficial && <Members />}
           </motion.div>
         </AnimatePresence>
       </main>
