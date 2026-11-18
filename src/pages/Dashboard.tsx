@@ -1335,7 +1335,7 @@ export default function Dashboard() {
   // Redirect away from restricted tabs if a member somehow lands there.
   useEffect(() => {
     if (!currentMember || isOfficial) return;
-    if (tab === "loans" || tab === "my-finance" || tab === "members") {
+    if (tab === "loans" || tab === "members") {
       setTab("home");
     }
   }, [currentMember?.id, isOfficial, tab]);
@@ -1353,6 +1353,7 @@ export default function Dashboard() {
         { id: "home", label: "Home" },
         { id: "overview", label: "Overview" },
         { id: "voting", label: "Vote" },
+        { id: "my-finance", label: "My Finance" },
       ];
 
   if (!chama) {
@@ -1551,7 +1552,7 @@ export default function Dashboard() {
                 }}
               />
             )}
-            {tab === "my-finance" && isOfficial && (
+            {tab === "my-finance" && (
               <MyFinance
                 chama={chama}
                 me={currentMember}
