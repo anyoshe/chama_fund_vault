@@ -363,3 +363,115 @@ end;
 $$;
 
 grant execute on function public.complete_mpesa_contribution(uuid, text) to authenticated;
+
+-- Restrict approve/reject to Treasurer (or Chairperson as backup)
+create or replace function public.approve_pending_contribution(p_contribution_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_c public.contributions%rowtype;
+  v_role text;
+  v_dest text;
+begin
+  select * into v_c from public.contributions where id = p_contribution_id for update;
+  if not found then raise exception 'Payment not found'; end if;
+
+  select role into v_role from public.chama_members
+  where chama_id = v_c.chama_id and user_id = auth.uid() and status = 'active';
+  if v_role is distinct from 'Treasurer' and v_role is distinct from 'Chairperson' then
+    raise exception 'Only the treasurer (or chairperson) can approve payments';
+  end if;
+  if v_c.status <> 'pending' then
+    raise exception 'Payment is not pending (status=%)', v_c.status;
+  end if;
+
+  v_dest := v_c.destination;
+  perform public.ensure_chama_kits(v_c.chama_id);
+
+  insert into public.chama_kits (chama_id, kit_code, label, balance, is_loan_fund, counts_toward_loan_limit)
+  values (
+    v_c.chama_id, v_dest, public.kit_label(v_dest),
+    v_c.amount, false, public.kit_counts_toward_loan(v_dest)
+  )
+  on conflict (chama_id, kit_code) do update set
+    balance = public.chama_kits.balance + excluded.balance;
+
+  insert into public.member_kit_balances (chama_id, user_id, kit_code, balance, updated_at)
+  values (v_c.chama_id, v_c.member_id, v_dest, v_c.amount, now())
+  on conflict (chama_id, user_id, kit_code) do update set
+    balance = public.member_kit_balances.balance + excluded.balance,
+    updated_at = now();
+
+  update public.chama_members
+  set total_paid = total_paid + v_c.amount
+  where chama_id = v_c.chama_id and user_id = v_c.member_id and status = 'active';
+
+  update public.chamas
+  set pool_balance = coalesce((
+    select sum(k.balance) from public.chama_kits k where k.chama_id = public.chamas.id
+  ), 0),
+  month_collected = month_collected + v_c.amount
+  where id = v_c.chama_id;
+
+  update public.contributions set
+    status = 'completed',
+    confirmed_at = now(),
+    approved_by = auth.uid(),
+    approved_at = now()
+  where id = p_contribution_id;
+
+  insert into public.audit_events (chama_id, member_id, type, description, amount, reference)
+  values (
+    v_c.chama_id, auth.uid(), 'contribution',
+    format('Payment approved · %s · member credited', v_dest),
+    v_c.amount, v_c.reference
+  );
+
+  return jsonb_build_object('ok', true, 'status', 'completed', 'amount', v_c.amount);
+end;
+$$;
+
+create or replace function public.reject_pending_contribution(
+  p_contribution_id uuid,
+  p_reason text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_c public.contributions%rowtype;
+  v_role text;
+begin
+  select * into v_c from public.contributions where id = p_contribution_id for update;
+  if not found then raise exception 'Payment not found'; end if;
+  select role into v_role from public.chama_members
+  where chama_id = v_c.chama_id and user_id = auth.uid() and status = 'active';
+  if v_role is distinct from 'Treasurer' and v_role is distinct from 'Chairperson' then
+    raise exception 'Only the treasurer (or chairperson) can reject payments';
+  end if;
+  if v_c.status <> 'pending' then
+    raise exception 'Not pending';
+  end if;
+
+  update public.contributions set
+    status = 'rejected',
+    payment_details = coalesce(payment_details || ' | ', '') || coalesce(p_reason, 'Rejected by official'),
+    approved_by = auth.uid(),
+    approved_at = now()
+  where id = p_contribution_id;
+
+  insert into public.audit_events (chama_id, member_id, type, description, amount, reference)
+  values (
+    v_c.chama_id, auth.uid(), 'contribution',
+    format('Payment rejected · %s', coalesce(p_reason, 'no reason')),
+    v_c.amount, v_c.reference
+  );
+
+  return jsonb_build_object('ok', true, 'status', 'rejected');
+end;
+$$;

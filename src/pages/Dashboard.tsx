@@ -350,6 +350,10 @@ export default function Dashboard() {
   }, [user?.id]);
   const [tab, setTab] = useState<Tab>("home");
   const [contribOpen, setContribOpen] = useState(false);
+  const [contribPrefill, setContribPrefill] = useState<{
+    amount?: number;
+    note?: string;
+  } | null>(null);
   const [contribKitLock, setContribKitLock] = useState<string | null>(null);
   const [loanRequestOpen, setLoanRequestOpen] = useState(false);
   const [disburseProposalId, setDisburseProposalId] = useState<string | null>(null);
@@ -1513,6 +1517,12 @@ export default function Dashboard() {
                 }}
                 onOpenContributeToKit={(kit) => {
                   setContribKitLock(kit);
+                  setContribPrefill(null);
+                  setContribOpen(true);
+                }}
+                onPayOwe={(amount, note, destination) => {
+                  setContribKitLock(destination || null);
+                  setContribPrefill({ amount, note });
                   setContribOpen(true);
                 }}
                 onProposeLoan={handleProposeLoan}
@@ -1791,8 +1801,11 @@ export default function Dashboard() {
         onClose={() => {
           setContribOpen(false);
           setContribKitLock(null);
+          setContribPrefill(null);
         }}
         lockedDestination={contribKitLock}
+        prefillAmount={contribPrefill?.amount}
+        prefillNote={contribPrefill?.note}
         chama={chama}
         currentMember={currentMember}
         onSubmit={handleContribute}

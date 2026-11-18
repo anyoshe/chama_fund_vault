@@ -1121,7 +1121,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
           Payments waiting for approval ({pendingPays.length})
         </p>
         <p className="mt-1 text-xs text-slate-400">
-          Confirm you received the money (cash, till, or bank), then approve to update pots.
+          Officials can view. Only the treasurer can Approve (credits pot) or Reject.
         </p>
         {pendingPays.length === 0 ? (
           <p className="mt-3 text-sm text-slate-500">No pending payments</p>
@@ -1143,48 +1143,54 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                       {p.paymentDate ? ` · ${String(p.paymentDate).slice(0, 10)}` : ""}
                     </p>
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      className="rounded-lg bg-emerald-500 px-3 py-1.5 text-[11px] font-bold text-white"
-                      onClick={async () => {
-                        try {
-                          const { error } = await supabase.rpc(
-                            "approve_pending_contribution",
-                            { p_contribution_id: p.id },
-                          );
-                          if (error) throw error;
-                          toast.success("Approved — pot updated");
-                          setPendingPays((prev) => prev.filter((x) => x.id !== p.id));
-                          window.location.reload();
-                        } catch (e) {
-                          toast.error(e instanceof Error ? e.message : "Approve failed");
-                        }
-                      }}
-                    >
-                      Approve
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-lg border border-rose-500/40 px-3 py-1.5 text-[11px] font-bold text-rose-300"
-                      onClick={async () => {
-                        const reason = window.prompt("Reason (optional)") || null;
-                        try {
-                          const { error } = await supabase.rpc(
-                            "reject_pending_contribution",
-                            { p_contribution_id: p.id, p_reason: reason },
-                          );
-                          if (error) throw error;
-                          toast.message("Rejected");
-                          setPendingPays((prev) => prev.filter((x) => x.id !== p.id));
-                        } catch (e) {
-                          toast.error(e instanceof Error ? e.message : "Reject failed");
-                        }
-                      }}
-                    >
-                      Reject
-                    </button>
-                  </div>
+                  {isTreasurer ? (
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className="rounded-lg bg-emerald-500 px-3 py-1.5 text-[11px] font-bold text-white"
+                        onClick={async () => {
+                          try {
+                            const { error } = await supabase.rpc(
+                              "approve_pending_contribution",
+                              { p_contribution_id: p.id },
+                            );
+                            if (error) throw error;
+                            toast.success("Approved — pot updated");
+                            setPendingPays((prev) => prev.filter((x) => x.id !== p.id));
+                            window.location.reload();
+                          } catch (e) {
+                            toast.error(e instanceof Error ? e.message : "Approve failed");
+                          }
+                        }}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-rose-500/40 px-3 py-1.5 text-[11px] font-bold text-rose-300"
+                        onClick={async () => {
+                          const reason = window.prompt("Reason for reject (optional)") || "";
+                          try {
+                            const { error } = await supabase.rpc(
+                              "reject_pending_contribution",
+                              { p_contribution_id: p.id, p_reason: reason || null },
+                            );
+                            if (error) throw error;
+                            toast.message("Payment rejected");
+                            setPendingPays((prev) => prev.filter((x) => x.id !== p.id));
+                          } catch (e) {
+                            toast.error(e instanceof Error ? e.message : "Reject failed");
+                          }
+                        }}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] font-semibold text-slate-500">
+                      Only treasurer can approve / reject
+                    </span>
+                  )}
                 </li>
               );
             })}

@@ -57,6 +57,8 @@ interface SimpleMemberHomeProps {
   memberBalances: { user_id: string; kit_code: string; balance: number }[];
   onOpenContribute: () => void;
   onOpenContributeToKit: (kit: string) => void;
+  /** Open payment modal for an obligation (amount + note) */
+  onPayOwe?: (amount: number, note: string, destination?: string) => void;
   onProposeLoan: () => void;
   onPartialRepay: (
     proposalId: string,
@@ -112,6 +114,7 @@ export default function SimpleMemberHome({
   memberBalances,
   onOpenContribute,
   onOpenContributeToKit,
+  onPayOwe,
   onProposeLoan,
   onPartialRepay,
   canRequestLoan,
@@ -309,11 +312,20 @@ export default function SimpleMemberHome({
                 </p>
                 <button
                   type="button"
-                  disabled={payingId === o.id}
-                  onClick={() => void payObligation(o)}
-                  className="mt-4 w-full rounded-xl bg-emerald-500 py-4 text-base font-bold text-white hover:bg-emerald-400 disabled:opacity-50"
+                  onClick={() => {
+                    if (onPayOwe) {
+                      onPayOwe(
+                        Number(o.outstanding) || 0,
+                        `Due: ${o.planName}`,
+                        o.destinationKit,
+                      );
+                    } else {
+                      onOpenContribute();
+                    }
+                  }}
+                  className="mt-4 w-full rounded-xl bg-emerald-500 py-4 text-base font-bold text-white hover:bg-emerald-400"
                 >
-                  {payingId === o.id ? "Paying…" : "Pay now"}
+                  Pay now
                 </button>
               </div>
             ))}
