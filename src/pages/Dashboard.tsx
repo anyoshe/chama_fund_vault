@@ -11,6 +11,7 @@ import LoansAndLedger from "@/components/LoansAndLedger";
 import ChamaFinance from "@/components/ChamaFinance";
 import Members from "@/pages/Members";
 import MyFinance from "@/components/MyFinance";
+import SimpleMemberHome from "@/components/SimpleMemberHome";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import {
@@ -131,7 +132,7 @@ function loadPersisted(): PersistedState | null {
   }
 }
 
-type Tab = "overview" | "voting" | "loans" | "my-finance" | "members";
+type Tab = "home" | "overview" | "voting" | "loans" | "my-finance" | "members";
 
 export default function Dashboard() {
   const {
@@ -336,7 +337,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (user?.id) setCurrentMemberId(user.id);
   }, [user?.id]);
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>("home");
   const [contribOpen, setContribOpen] = useState(false);
   const [contribKitLock, setContribKitLock] = useState<string | null>(null);
   const [loanRequestOpen, setLoanRequestOpen] = useState(false);
@@ -1321,13 +1322,37 @@ export default function Dashboard() {
     return Math.max(0, loanLimitInfo.maxLoan - committed);
   }, [user?.id, activeChamaId, proposals, loanLimitInfo.maxLoan]);
 
-  const TABS: { id: Tab; label: string }[] = [
-    { id: "overview", label: "Overview" },
-    { id: "voting", label: "Voting Board" },
-    { id: "loans", label: "Chama Finance" },
-    { id: "my-finance", label: "My Finance" },
-    { id: "members", label: "Members" },
-  ];
+  const isOfficial = useMemo(() => {
+    const role = currentMember?.role;
+    return (
+      role === "Chairperson" ||
+      role === "Treasurer" ||
+      role === "Secretary"
+    );
+  }, [currentMember?.role]);
+
+  // Members land on simple home; officials keep full controls but can open Home too
+  useEffect(() => {
+    if (!currentMember) return;
+    if (!isOfficial) {
+      setTab((t) => (t === "overview" || t === "loans" || t === "my-finance" ? "home" : t));
+    }
+  }, [currentMember?.id, isOfficial]);
+
+  const TABS: { id: Tab; label: string }[] = isOfficial
+    ? [
+        { id: "home", label: "Home" },
+        { id: "overview", label: "Overview" },
+        { id: "voting", label: "Voting Board" },
+        { id: "loans", label: "Chama Finance" },
+        { id: "my-finance", label: "My Finance" },
+        { id: "members", label: "Members" },
+      ]
+    : [
+        { id: "home", label: "Home" },
+        { id: "voting", label: "Vote" },
+        { id: "members", label: "Members" },
+      ];
 
   if (!chama) {
     return (
@@ -1363,7 +1388,7 @@ export default function Dashboard() {
         unreadNotifications={unreadNotifications}
         onSwitchChama={(id) => {
           setActiveChamaId(id);
-          setTab("overview");
+          setTab(isOfficial ? "overview" : "home");
         }}
         onOpenNotifications={() => setNotifOpen((v) => !v)}
         onResetPassword={resetPassword}
@@ -1412,7 +1437,38 @@ export default function Dashboard() {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.22, ease: "easeOut" }}
           >
-            {tab === "overview" && (
+            {tab === "home" && (
+              <SimpleMemberHome
+                chamaId={activeChamaId}
+                chamaName={chama.name}
+                me={currentMember}
+                contributions={contributions.filter(
+                  (c) => c.chamaId === activeChamaId,
+                )}
+                proposals={proposals}
+                onOpenContribute={() => {
+                  setContribKitLock(null);
+                  setContribOpen(true);
+                }}
+                onProposeLoan={handleProposeLoan}
+                onPartialRepay={handlePartialRepay}
+                canRequestLoan={canRequestLoan}
+                availableLoanLimit={availableLoanLimit}
+                pendingVotes={
+                  proposals.filter(
+                    (p) =>
+                      p.chamaId === activeChamaId &&
+                      p.status === "active" &&
+                      p.requesterId !== currentMemberId &&
+                      !p.votes?.[currentMemberId],
+                  ).length
+                }
+                onGoVote={() => switchTab("voting")}
+                isOfficial={isOfficial}
+                onOpenFullApp={() => switchTab("overview")}
+              />
+            )}
+            {tab === "overview" && isOfficial && (
               <ChamaOverview
                 chama={chama}
                 members={displayMembers}
@@ -1439,7 +1495,7 @@ export default function Dashboard() {
                 onCastVote={handleCastVote}
               />
             )}
-            {tab === "loans" && (
+            {tab === "loans" && isOfficial && (
               <ChamaFinance
                 chama={chama}
                 chamaId={activeChamaId}
@@ -1489,7 +1545,7 @@ export default function Dashboard() {
                 }}
               />
             )}
-            {tab === "my-finance" && (
+            {tab === "my-finance" && isOfficial && (
               <MyFinance
                 chama={chama}
                 me={currentMember}
