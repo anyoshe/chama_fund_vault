@@ -193,7 +193,7 @@ export default function ContributionModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/70 backdrop-blur-sm sm:items-center sm:p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-3 sm:p-6"
           onClick={onClose}
         >
           <motion.div
@@ -201,7 +201,7 @@ export default function ContributionModal({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 40, opacity: 0 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md overflow-hidden rounded-t-3xl border border-slate-700 bg-slate-900 shadow-2xl sm:rounded-3xl"
+            className="w-auto min-w-[min(92vw,18rem)] max-w-[min(92vw,28rem)] max-h-[min(90vh,40rem)] overflow-hidden rounded-3xl border border-slate-700 bg-slate-900 shadow-2xl"
           >
             <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
               <div className="flex items-center gap-2.5">
