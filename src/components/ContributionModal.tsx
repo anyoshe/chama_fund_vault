@@ -17,6 +17,7 @@ import {
   type ContributionMethod,
   type Member,
 } from "../types/chama";
+import { potOptionsForChama } from "@/lib/kitVisibility";
 import { fmtKsh } from "../data/mockChamaData";
 import { pollContributionStatus } from "@/lib/paymentStatus";
 
@@ -71,7 +72,7 @@ export default function ContributionModal({
   const [method, setMethod] = useState<ContributionMethod>("Cash");
   const [destination, setDestination] = useState<ChamaActivity>(
     (lockedDestination as ChamaActivity) ||
-      chama.constitution.activities?.[0] ||
+      potOptionsForChama(chama).map(a => a.value)?.[0] ||
       "general-savings",
   );
   const [phone, setPhone] = useState(currentMember.phone || "");
@@ -91,7 +92,7 @@ export default function ContributionModal({
     setChannel(null);
     setDestination(
       (lockedDestination as ChamaActivity) ||
-        chama.constitution.activities?.[0] ||
+        potOptionsForChama(chama).map(a => a.value)?.[0] ||
         "general-savings",
     );
     setPhone(currentMember.phone || "");
@@ -121,18 +122,14 @@ export default function ContributionModal({
     effectiveMode,
     currentMember.phone,
     chama.constitution.minMonthlyContribution,
-    chama.constitution.activities,
+    chama.constitution?.enabledKitCodes,
+    chama.constitution?.activities,
   ]);
 
   const genReference = () =>
     `CV${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 90 + 10)}`;
 
-  const potOptions = CHAMA_ACTIVITIES.filter((a) =>
-    (chama.constitution.activities?.length
-      ? chama.constitution.activities
-      : CHAMA_ACTIVITIES.map((x) => x.value)
-    ).includes(a.value),
-  );
+  const potOptions = potOptionsForChama(chama);
 
   const canSubmit = () => {
     if (amount < 100) return false;

@@ -200,6 +200,8 @@ export interface Chama {
     maxLoanMultiple: number; // e.g. 3x own savings
     payoutCycle: string; // e.g. "1st Monday"
     activities?: ChamaActivity[];
+    /** Kits shown in UI; hide unused pots when set */
+    enabledKitCodes?: string[];
     /** Flat % of principal charged each month while loan is outstanding */
     loanInterestMonthlyPercent?: number;
     /** Optional named rates chair can offer (e.g. welfare 5, standard 10) */

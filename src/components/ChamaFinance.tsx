@@ -27,6 +27,7 @@ import { LoanRatesChairPanel } from "./LoansAndLedger";
 import { SimpleFieldsModal, ChoiceModal } from "./FlowModals";
 import AppModal from "./AppModal";
 import { supabase } from "@/lib/supabase";
+import { filterVisibleKits, potOptionsForChama } from "@/lib/kitVisibility";
 import { toast } from "sonner";
 import {
   buildMonthlyPotMatrix,
@@ -1072,6 +1073,11 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
 
   const [opsCard, setOpsCard] = useState<string | null>(null);
 
+  const visibleKits = useMemo(
+    () => filterVisibleKits(kits, chama),
+    [kits, chama],
+  );
+
   const chamaProposals = useMemo(
     () => proposals.filter((p) => String(p.chamaId).toLowerCase() === String(chamaId).toLowerCase() && p.type === "loan"),
     [proposals, chamaId],
@@ -1329,6 +1335,85 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
               </p>
             </button>
           </div>
+
+          <div className="rounded-2xl border border-orange-500/25 bg-slate-900/80 p-4">
+            <p className="text-sm font-bold text-white">Active pots</p>
+            <p className="mt-1 text-[11px] text-slate-500">
+              Tick only the pots this chama uses. Unticked pots stay hidden for members and group screens.
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {(
+                kits.length
+                  ? Array.from(
+                      new Map(
+                        [
+                          ...kits.map(
+                            (k) =>
+                              [k.kit_code, k.label || k.kit_code] as [
+                                string,
+                                string,
+                              ],
+                          ),
+                          ...potOptionsForChama(chama).map(
+                            (a) => [a.value, a.label] as [string, string],
+                          ),
+                        ],
+                      ).entries(),
+                    )
+                  : potOptionsForChama(chama).map(
+                      (a) => [a.value, a.label] as [string, string],
+                    )
+              ).map(([code, label]) => {
+                const enabledList =
+                  chama.constitution?.enabledKitCodes ??
+                  kits.map((k) => k.kit_code);
+                const checked =
+                  !chama.constitution?.enabledKitCodes?.length ||
+                  enabledList.includes(code);
+                return (
+                  <label
+                    key={code}
+                    className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-2.5 py-2 text-xs text-slate-200"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={async (e) => {
+                        const on = e.target.checked;
+                        const current =
+                          chama.constitution?.enabledKitCodes ??
+                          kits.map((k) => k.kit_code);
+                        const next = on
+                          ? Array.from(new Set([...current, code]))
+                          : current.filter((x) => x !== code);
+                        if (next.length === 0) {
+                          toast.error("Keep at least one pot enabled");
+                          return;
+                        }
+                        const constitution = {
+                          ...chama.constitution,
+                          enabledKitCodes: next,
+                        };
+                        const { error } = await supabase
+                          .from("chamas")
+                          .update({ constitution })
+                          .eq("id", chamaId);
+                        if (error) {
+                          toast.error(error.message);
+                          return;
+                        }
+                        toast.success(
+                          on ? `${label} shown in app` : `${label} hidden`,
+                        );
+                        window.setTimeout(() => window.location.reload(), 400);
+                      }}
+                    />
+                    <span className="truncate">{label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
 
@@ -1416,7 +1501,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             </div>
           </div>
           <div className="mt-2 flex max-h-[4.75rem] flex-wrap gap-1.5 overflow-y-auto">
-            {kits
+            {visibleKits
               .slice()
               .sort((a, b) => a.kit_code.localeCompare(b.kit_code))
               .map((k) => (
@@ -1507,12 +1592,12 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                   setExpenseForm((f) => ({ ...f, kitCode: e.target.value }))
                 }
               >
-                {kits.map((k) => (
+                {visibleKits.map((k) => (
                   <option key={k.kit_code} value={k.kit_code}>
                     {k.label || k.kit_code} ({fmtKsh(Number(k.balance) || 0)})
                   </option>
                 ))}
-                {!kits.find((k) => k.kit_code === "group-reserve") && (
+                {!visibleKits.find((k) => k.kit_code === "group-reserve") && (
                   <option value="group-reserve">Group reserve</option>
                 )}
               </select>

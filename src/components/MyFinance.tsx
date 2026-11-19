@@ -20,6 +20,7 @@ import type {
   Member,
   Proposal,
 } from "../types/chama";
+import { potOptionsForChama } from "@/lib/kitVisibility";
 import { fmtKsh } from "../data/mockChamaData";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -767,21 +768,9 @@ export default function MyFinance({
           history below if you already paid into the wrong pot.
         </p>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from(
-            new Set([
-              ...(chama.constitution.activities ?? []),
-              "table-banking",
-              "share-capital",
-              "general-savings",
-              "member-loans",
-              "merry-go-round",
-              "registration-fees",
-              "contingency",
-              "welfare",
-            ]),
-          ).map((code) => {
-            const label =
-              CHAMA_ACTIVITIES.find((a) => a.value === code)?.label ?? code;
+          {potOptionsForChama(chama).map((act) => {
+            const code = act.value;
+            const label = act.label;
             const bal =
               memberBalances.find(
                 (b) => b.user_id === myId && b.kit_code === code,

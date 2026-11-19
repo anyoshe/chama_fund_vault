@@ -10,6 +10,7 @@ import {
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { potOptionsForChama } from "@/lib/kitVisibility";
 import { fmtKsh } from "@/data/mockChamaData";
 import type {
   Contribution,
@@ -261,7 +262,7 @@ export default function SimpleMemberHome({
 
   const firstName = (me?.name || "Member").split(" ")[0];
 
-  const PAY_POTS = [
+  const PAY_POTS_ALL = [
     { code: "table-banking", label: "Table banking", hint: "Monthly table money" },
     { code: "share-capital", label: "Shares", hint: "Share capital" },
     { code: "merry-go-round", label: "Merry-go-round", hint: "ROSCA turn money" },
@@ -270,6 +271,10 @@ export default function SimpleMemberHome({
     { code: "registration-fees", label: "Registration", hint: "Joining fee" },
     { code: "member-loans", label: "Loan fund", hint: "Money for lending" },
   ];
+  const PAY_POTS =
+    enabledKitCodes && enabledKitCodes.length > 0
+      ? PAY_POTS_ALL.filter((p) => enabledKitCodes.includes(p.code))
+      : PAY_POTS_ALL;
 
   if (panel === "owe") {
     return (

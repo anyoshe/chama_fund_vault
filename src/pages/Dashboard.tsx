@@ -1754,6 +1754,7 @@ A local copy was kept on this device only.`,
               <SimpleMemberHome
                 chamaId={activeChamaId}
                 chamaName={chama.name}
+                enabledKitCodes={chama.constitution?.enabledKitCodes ?? null}
                 me={currentMember}
                 contributions={contributions.filter(
                   (c) => c.chamaId === activeChamaId,
