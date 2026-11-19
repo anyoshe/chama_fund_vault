@@ -608,6 +608,36 @@ export default function Dashboard() {
     };
   }, [activeChamaId]);
 
+  // Keep votes / applied loans in sync across members (poll)
+  useEffect(() => {
+    if (!activeChamaId) return;
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const plist = await fetchChamaProposals(activeChamaId);
+        if (cancelled) return;
+        setProposals((prev) => {
+          const others = prev.filter((p) => p.chamaId !== activeChamaId);
+          // Prefer server list for this chama (multi-device truth)
+          return [...plist, ...others];
+        });
+      } catch {
+        /* offline / SQL not applied */
+      }
+    };
+    const id = window.setInterval(() => void refresh(), 12000);
+    // Also refresh when tab becomes visible
+    const onVis = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [activeChamaId]);
+
   const handleCastVote = async (proposalId: string, vote: VoteValue) => {
     const target = proposals.find((p) => p.id === proposalId);
     if (!target) return;
@@ -1256,13 +1286,31 @@ export default function Dashboard() {
             }
           : undefined,
       });
+      // Re-fetch so every client shape matches server (ids, votes)
+      let fresh = list;
+      try {
+        fresh = await fetchChamaProposals(activeChamaId);
+      } catch {
+        /* use list from create */
+      }
       setProposals((prev) => {
         const others = prev.filter((p) => p.chamaId !== activeChamaId);
-        return [...list, ...others];
+        const hasActive = fresh.some(
+          (p) =>
+            p.requesterId === user.id &&
+            p.status === "active" &&
+            Math.abs(p.amount - amount) < 0.5,
+        );
+        if (!hasActive) {
+          return [newProposal, ...fresh, ...others];
+        }
+        return [...fresh, ...others];
       });
       toast.success("Loan request submitted for quorum vote");
       try {
-        const created = list.find((p) => p.requesterId === user.id && p.status === "active");
+        const created = fresh.find(
+          (p) => p.requesterId === user.id && p.status === "active",
+        );
         if (created?.id) {
           await supabase.rpc("notify_loan_proposed", { p_proposal_id: created.id });
         }
@@ -1273,10 +1321,11 @@ export default function Dashboard() {
       return;
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not save proposal on server";
-      console.warn(msg, e);
-      toast.message("Saved locally — run proposals SQL for multi-device sync", {
-        description: String(msg),
+      console.error("create_loan_proposal failed", e);
+      toast.error("Loan was not saved for other members", {
+        description: `${msg}. Apply supabase/proposals_ledger_persistence.sql if needed.`,
       });
+      // Still show locally so the requester can see it while fixing server
     }
     setProposals((prev) => [newProposal, ...prev]);
  setLedger((prev) =>
@@ -1295,6 +1344,16 @@ export default function Dashboard() {
 
   const switchTab = (t: Tab) => {
     setTab(t);
+    if (t === "voting" && activeChamaId) {
+      void fetchChamaProposals(activeChamaId)
+        .then((plist) => {
+          setProposals((prev) => {
+            const others = prev.filter((p) => p.chamaId !== activeChamaId);
+            return [...plist, ...others];
+          });
+        })
+        .catch(() => {});
+    }
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }

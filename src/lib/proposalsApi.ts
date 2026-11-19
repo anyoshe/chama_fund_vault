@@ -1,6 +1,16 @@
 import { supabase } from "@/lib/supabase";
 import type { AuditEvent, Proposal, VoteValue } from "@/types/chama";
 
+function asProposalRows(data: unknown): Record<string, unknown>[] {
+  if (Array.isArray(data)) return data as Record<string, unknown>[];
+  if (data && typeof data === "object") {
+    const o = data as Record<string, unknown>;
+    // PostgREST sometimes wraps
+    if (Array.isArray(o.data)) return o.data as Record<string, unknown>[];
+  }
+  return [];
+}
+
 function mapProposal(row: Record<string, unknown>): Proposal {
   return {
     id: String(row.id),
@@ -36,8 +46,7 @@ export async function fetchChamaProposals(chamaId: string): Promise<Proposal[]> 
     p_chama_id: chamaId,
   });
   if (error) throw error;
-  const rows = Array.isArray(data) ? data : [];
-  return rows.map((r) => mapProposal(r as Record<string, unknown>));
+  return asProposalRows(data).map((r) => mapProposal(r));
 }
 
 export async function createLoanProposalOnServer(params: {
@@ -57,8 +66,7 @@ export async function createLoanProposalOnServer(params: {
     p_repayment: params.repayment ?? null,
   });
   if (error) throw error;
-  const rows = Array.isArray(data) ? data : [];
-  return rows.map((r) => mapProposal(r as Record<string, unknown>));
+  return asProposalRows(data).map((r) => mapProposal(r));
 }
 
 export async function castVoteOnServer(
@@ -70,8 +78,7 @@ export async function castVoteOnServer(
     p_vote: vote,
   });
   if (error) throw error;
-  const rows = Array.isArray(data) ? data : [];
-  return rows.map((r) => mapProposal(r as Record<string, unknown>));
+  return asProposalRows(data).map((r) => mapProposal(r));
 }
 
 export async function updateProposalOnServer(params: {
@@ -87,8 +94,7 @@ export async function updateProposalOnServer(params: {
     p_repayment: params.repayment ?? null,
   });
   if (error) throw error;
-  const rows = Array.isArray(data) ? data : [];
-  return rows.map((r) => mapProposal(r as Record<string, unknown>));
+  return asProposalRows(data).map((r) => mapProposal(r));
 }
 
 export async function fetchChamaAudit(chamaId: string): Promise<AuditEvent[]> {
