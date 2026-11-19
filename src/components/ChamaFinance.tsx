@@ -524,13 +524,50 @@ function OpsReportCards({
         Four areas · open Loan book for metrics · details open in a modal
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
-        {/* 1. Loan book */}
-        <div className="rounded-2xl border border-violet-500/25 bg-slate-900/80 p-4 sm:col-span-2">
+        {/* 1. Loan book — summary until opened */}
+        <button
+          type="button"
+          onClick={() =>
+            setOpsCard(
+              opsCard === "loan-book" ||
+                (opsCard != null &&
+                  !["external", "disburse-queue", "audit"].includes(opsCard))
+                ? null
+                : "loan-book",
+            )
+          }
+          className={`rounded-2xl border p-4 text-left transition sm:col-span-2 ${
+            opsCard === "loan-book" ||
+            (opsCard != null &&
+              !["external", "disburse-queue", "audit"].includes(opsCard))
+              ? "border-violet-500/40 bg-violet-500/10"
+              : "border-slate-800 bg-slate-900/80 hover:border-violet-500/30"
+          }`}
+        >
           <p className="text-sm font-bold text-white">Loan book</p>
-          <p className="mt-1 text-xs text-slate-400">
-            Balances, pipeline, liquidity and collections — tap a tile for the full list
+          <p className="mt-1 font-mono text-lg font-bold text-white">
+            {fmtKsh(outstandingPrincipal)}
+            <span className="ml-2 text-sm font-semibold text-slate-400">
+              out · lend {fmtKsh(loaningPool)}
+            </span>
           </p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <p className="mt-1 text-xs text-slate-400">
+            {awaitingDisburse.length} to disburse · {duesList.length} due ·{" "}
+            {activeVotes.length} in vote
+          </p>
+          <p className="mt-2 text-[10px] font-semibold text-violet-300/90">
+            {opsCard === "loan-book" ||
+            (opsCard != null &&
+              !["external", "disburse-queue", "audit"].includes(opsCard))
+              ? "Metrics open below · tap header to close"
+              : "Tap to open metrics"}
+          </p>
+        </button>
+
+        {(opsCard === "loan-book" ||
+          (opsCard != null &&
+            !["external", "disburse-queue", "audit"].includes(opsCard))) && (
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 sm:col-span-2">
             <BookMini
               id="balances"
               label="Loan balances outstanding"
@@ -594,36 +631,26 @@ function OpsReportCards({
               sub={`${completedContributions.length} records`}
             />
           </div>
-        </div>
+        )}
 
         {/* 2. External */}
         <button
           type="button"
-          onClick={() => setOpsCard(opsCard === "external" ? null : "external")}
-          className={`rounded-2xl border p-4 text-left transition ${
-            opsCard === "external"
-              ? "border-sky-500/40 bg-sky-500/10"
-              : "border-slate-800 bg-slate-900/80 hover:border-slate-600"
-          }`}
+          onClick={() => setOpsCard("external")}
+          className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 text-left hover:border-sky-500/40"
         >
           <p className="text-sm font-bold text-white">External borrowing</p>
           <p className="mt-1 text-xs text-slate-400">
             Bank or inter-chama debt when this chama borrows
           </p>
-          <p className="mt-2 text-[10px] font-semibold text-slate-500">
-            {opsCard === "external" ? "Hide" : "Tap to open"}
-          </p>
+          <p className="mt-2 text-[10px] font-semibold text-slate-500">Tap to open</p>
         </button>
 
         {/* 3. Disbursement queue */}
         <button
           type="button"
-          onClick={() => setOpsCard(opsCard === "disburse-queue" ? null : "disburse-queue")}
-          className={`rounded-2xl border p-4 text-left transition ${
-            opsCard === "disburse-queue"
-              ? "border-emerald-500/40 bg-emerald-500/10"
-              : "border-slate-800 bg-slate-900/80 hover:border-slate-600"
-          }`}
+          onClick={() => setOpsCard("disburse-queue")}
+          className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 text-left hover:border-emerald-500/40"
         >
           <p className="text-sm font-bold text-white">Disbursement queue</p>
           <p className="mt-1 font-mono text-lg font-bold text-white">
@@ -632,125 +659,130 @@ function OpsReportCards({
           <p className="mt-1 text-xs text-slate-400">
             Treasurer releases funds from the loaning pool
           </p>
+          <p className="mt-2 text-[10px] font-semibold text-slate-500">Tap to open</p>
         </button>
 
         {/* 4. Group audit */}
         <button
           type="button"
-          onClick={() => setOpsCard(opsCard === "audit" ? null : "audit")}
-          className={`rounded-2xl border p-4 text-left transition sm:col-span-2 ${
-            opsCard === "audit"
-              ? "border-amber-500/40 bg-amber-500/10"
-              : "border-slate-800 bg-slate-900/80 hover:border-slate-600"
-          }`}
+          onClick={() => setOpsCard("audit")}
+          className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 text-left hover:border-amber-500/40 sm:col-span-2"
         >
           <p className="text-sm font-bold text-white">Group audit</p>
           <p className="mt-1 text-xs text-slate-400">
             Recent high-level trail (not personal loan management)
           </p>
-          <p className="mt-2 text-[10px] font-semibold text-slate-500">
-            {opsCard === "audit" ? "Hide" : "Tap to open"}
-          </p>
+          <p className="mt-2 text-[10px] font-semibold text-slate-500">Tap to open</p>
         </button>
       </div>
 
-      {/* Expanded panels for external / queue / audit (not loan-book metrics) */}
-      {opsCard === "external" && (
-        <div className="rounded-2xl border border-sky-500/25 bg-slate-900/80 p-4">
-          <p className="text-sm font-bold text-white">External borrowing</p>
-          <p className="mt-1 text-xs text-slate-400">
-            Loans this chama takes from a bank or another chama. Member facilities stay in the Loan book.
-          </p>
-          <div className="mt-3 rounded-xl border border-dashed border-slate-700 bg-slate-950/40 px-3 py-6 text-center text-[11px] text-slate-500">
-            No external facilities yet
-          </div>
+      <AppModal
+        open={opsCard === "external"}
+        onClose={() => setOpsCard(null)}
+        title="External borrowing"
+        subtitle="Bank or inter-chama debt when this chama borrows"
+        size="lg"
+        footer={
+          <button type="button" className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white" onClick={() => setOpsCard(null)}>
+            Close
+          </button>
+        }
+      >
+        <p className="text-xs text-slate-400">
+          Member facilities stay in the Loan book. This tracks loans the chama itself takes.
+        </p>
+        <div className="mt-4 rounded-xl border border-dashed border-slate-700 bg-slate-950/40 px-3 py-8 text-center text-[11px] text-slate-500">
+          No external facilities yet
         </div>
-      )}
-      {opsCard === "disburse-queue" && (
-        <div className="rounded-2xl border border-emerald-500/25 bg-slate-900/80 p-4">
-          <p className="text-sm font-bold text-white">Disbursement queue</p>
-          <p className="mt-1 text-[11px] text-slate-500">
-            Confirm the applicant and release funds. Personal repayments stay on My Finance.
-          </p>
-          <div className="mt-3 space-y-2">
-            {awaitingDisburse.length === 0 ? (
-              <p className="text-xs text-slate-500">No loans waiting for disbursement.</p>
-            ) : (
-              awaitingDisburse.map((p) => {
-                const who = members.find((m) => m.id === p.requesterId)?.name ?? "Member";
-                return (
-                  <div
-                    key={p.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5"
-                  >
-                    <div>
-                      <p className="text-xs font-semibold text-slate-200">
-                        {who} · {p.title}
-                      </p>
-                      <p className="text-[10px] text-slate-500">
-                        {fmtKsh(p.amount)} · {p.status}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={!canDisburse}
-                      onClick={() => void onDisburse?.(p.id)}
-                      className={`rounded-xl px-3 py-1.5 text-[11px] font-bold ${
-                        canDisburse
-                          ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
-                          : "cursor-not-allowed bg-slate-800 text-slate-500"
-                      }`}
-                    >
-                      {canDisburse ? "Disburse" : "Treasurer only"}
-                    </button>
+      </AppModal>
+
+      <AppModal
+        open={opsCard === "disburse-queue"}
+        onClose={() => setOpsCard(null)}
+        title="Disbursement queue"
+        subtitle="Treasurer releases funds from the loaning pool"
+        size="lg"
+        footer={
+          <button type="button" className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white" onClick={() => setOpsCard(null)}>
+            Close
+          </button>
+        }
+      >
+        <div className="max-h-[60vh] space-y-2 overflow-y-auto">
+          {awaitingDisburse.length === 0 ? (
+            <p className="text-xs text-slate-500">No loans waiting for disbursement.</p>
+          ) : (
+            awaitingDisburse.map((p) => {
+              const who = members.find((m) => m.id === p.requesterId)?.name ?? "Member";
+              return (
+                <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-200">{who} · {p.title}</p>
+                    <p className="text-[10px] text-slate-500">{fmtKsh(p.amount)} · {p.status}</p>
                   </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      )}
-      {opsCard === "audit" && (
-        <div className="rounded-2xl border border-amber-500/25 bg-slate-900/80 p-4">
-          <p className="text-sm font-bold text-white">Group audit (recent)</p>
-          <div className="mt-3 max-h-64 space-y-1.5 overflow-y-auto">
-            {ledger
-              .filter((e) => e.chamaId === chamaId)
-              .slice(0, 20)
-              .map((e) => (
-                <div
-                  key={e.id}
-                  className="flex justify-between gap-2 rounded-lg border border-slate-800/80 px-2.5 py-1.5 text-[11px]"
-                >
-                  <span className="truncate text-slate-400">{e.description}</span>
-                  <span className="shrink-0 font-mono text-slate-300">
-                    {fmtKsh(e.amount)}
-                  </span>
+                  <button
+                    type="button"
+                    disabled={!canDisburse}
+                    onClick={() => void onDisburse?.(p.id)}
+                    className={`rounded-xl px-3 py-1.5 text-[11px] font-bold ${
+                      canDisburse
+                        ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
+                        : "cursor-not-allowed bg-slate-800 text-slate-500"
+                    }`}
+                  >
+                    {canDisburse ? "Disburse" : "Treasurer only"}
+                  </button>
                 </div>
-              ))}
-            {ledger.filter((e) => e.chamaId === chamaId).length === 0 && (
-              <p className="text-xs text-slate-500">No audit events yet.</p>
-            )}
-          </div>
+              );
+            })
+          )}
         </div>
-      )}
+      </AppModal>
+
+      <AppModal
+        open={opsCard === "audit"}
+        onClose={() => setOpsCard(null)}
+        title="Group audit"
+        subtitle="Recent high-level trail"
+        size="lg"
+        footer={
+          <button type="button" className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white" onClick={() => setOpsCard(null)}>
+            Close
+          </button>
+        }
+      >
+        <div className="max-h-[60vh] space-y-1.5 overflow-y-auto">
+          {ledger
+            .filter((e) => e.chamaId === chamaId)
+            .slice(0, 30)
+            .map((e) => (
+              <div key={e.id} className="flex justify-between gap-2 rounded-lg border border-slate-800/80 px-2.5 py-1.5 text-[11px]">
+                <span className="truncate text-slate-400">{e.description}</span>
+                <span className="shrink-0 font-mono text-slate-300">{fmtKsh(e.amount)}</span>
+              </div>
+            ))}
+          {ledger.filter((e) => e.chamaId === chamaId).length === 0 && (
+            <p className="text-xs text-slate-500">No audit events yet.</p>
+          )}
+        </div>
+      </AppModal>
 
       {/* Loan book metric details → modal */}
       <AppModal
         open={Boolean(
           opsCard &&
-            !["external", "disburse-queue", "audit"].includes(opsCard),
+            !["external", "disburse-queue", "audit", "loan-book"].includes(opsCard),
         )}
-        onClose={() => setOpsCard(null)}
+        onClose={() => setOpsCard("loan-book")}
         title={opsCard ? detailTitle[opsCard] || "Details" : "Details"}
         size="lg"
         footer={
           <button
             type="button"
             className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white"
-            onClick={() => setOpsCard(null)}
+            onClick={() => setOpsCard("loan-book")}
           >
-            Close
+            Back to loan book
           </button>
         }
       >
