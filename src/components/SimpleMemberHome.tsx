@@ -52,6 +52,7 @@ type Panel =
 interface SimpleMemberHomeProps {
   chamaId: string;
   chamaName: string;
+  enabledKitCodes?: string[] | null;
   me?: Member;
   contributions: Contribution[];
   proposals: Proposal[];
@@ -110,6 +111,7 @@ function Back({ onClick }: { onClick: () => void }) {
 export default function SimpleMemberHome({
   chamaId,
   chamaName,
+  enabledKitCodes,
   me,
   contributions,
   proposals,
