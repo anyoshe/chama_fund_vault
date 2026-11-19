@@ -27,7 +27,7 @@ import { LoanRatesChairPanel } from "./LoansAndLedger";
 import { SimpleFieldsModal, ChoiceModal } from "./FlowModals";
 import AppModal from "./AppModal";
 import { supabase } from "@/lib/supabase";
-import { filterVisibleKits, potOptionsForChama } from "@/lib/kitVisibility";
+import { filterVisibleKits, potOptionsForChama, isRetiredWelfareExpenseKit } from "@/lib/kitVisibility";
 import { toast } from "sonner";
 import {
   buildMonthlyPotMatrix,
@@ -1371,6 +1371,9 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                       }),
                     ],
                   ).entries(),
+                ).filter(
+                  ([code, label]) =>
+                    !isRetiredWelfareExpenseKit(code, label),
                 );
                 const saved =
                   chama.constitution?.enabledKitCodes &&

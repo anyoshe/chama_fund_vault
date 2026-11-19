@@ -504,7 +504,7 @@ export default function Dashboard() {
       throw new Error("Payment mode not configured");
     }
 
-    let dest = contribution.destination ?? "general-savings";
+    let dest = normalizeKitDestination(contribution.destination ?? "general-savings");
     let paymentDetails = contribution.paymentDetails || "";
     if (paymentIntent?.kind === "loan_repay" && paymentIntent.proposalId) {
       dest = "loan-repay";
