@@ -906,8 +906,44 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
   >([]);
   const [section, setSection] = useState<"command" | "operations">("command");
   const [deskPanel, setDeskPanel] = useState<
-    null | "settings" | "pending" | "report" | "command" | "operations"
+    null | "settings" | "pending" | "report" | "command" | "operations" | "expenses"
   >(null);
+  const [groupExpenses, setGroupExpenses] = useState<
+    {
+      id: string;
+      category: string;
+      expenseType?: string;
+      description: string;
+      amount: number;
+      expenseDate: string;
+      paymentMethod?: string;
+      kitCode?: string;
+      paidTo?: string;
+      reference?: string;
+      status?: string;
+      spentBy?: string;
+    }[]
+  >([]);
+  const [expenseForm, setExpenseForm] = useState({
+    expenseType: "Stationary",
+    category: "Administration",
+    kitCode: "group-reserve",
+    amount: "",
+    paidBy: "",
+    paidTo: "",
+    reference: "",
+    description: "",
+    expenseDate: new Date().toISOString().slice(0, 10),
+  });
+  const [expenseBusy, setExpenseBusy] = useState(false);
+  const [expenseReportFrom, setExpenseReportFrom] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 2);
+    return d.toISOString().slice(0, 10);
+  });
+  const [expenseReportTo, setExpenseReportTo] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
   const [settingsModal, setSettingsModal] = useState<
     null | "privacy" | "payment" | "mpesa" | "rates"
   >(null);
@@ -995,6 +1031,45 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
   const [openSettled, setOpenSettled] = useState(false);
   const [openMembers, setOpenMembers] = useState(false);
   const [openExternal, setOpenExternal] = useState(false);
+
+  useEffect(() => {
+    if (!chamaId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data, error } = await supabase.rpc("list_group_expenses", {
+          p_chama_id: chamaId,
+          p_from: null,
+          p_to: null,
+        });
+        if (error) throw error;
+        if (cancelled) return;
+        const rows = Array.isArray(data) ? data : [];
+        setGroupExpenses(
+          rows.map((r: Record<string, unknown>) => ({
+            id: String(r.id),
+            category: String(r.category ?? ""),
+            expenseType: String(r.expenseType ?? r.category ?? ""),
+            description: String(r.description ?? ""),
+            amount: Number(r.amount) || 0,
+            expenseDate: String(r.expenseDate ?? r.expense_date ?? "").slice(0, 10),
+            paymentMethod: r.paymentMethod ? String(r.paymentMethod) : undefined,
+            kitCode: r.kitCode ? String(r.kitCode) : r.kit_code ? String(r.kit_code) : undefined,
+            paidTo: r.paidTo ? String(r.paidTo) : r.paid_to ? String(r.paid_to) : undefined,
+            reference: r.reference ? String(r.reference) : undefined,
+            status: r.status ? String(r.status) : undefined,
+            spentBy: r.spentBy ? String(r.spentBy) : r.spent_by ? String(r.spent_by) : undefined,
+          })),
+        );
+      } catch (e) {
+        console.warn("list_group_expenses", e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [chamaId, deskPanel]);
+
   const [opsCard, setOpsCard] = useState<string | null>(null);
 
   const chamaProposals = useMemo(
@@ -1164,11 +1239,17 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
               <p className="mt-1 text-sm font-bold text-white">Disburse · rates · ops</p>
               <p className="mt-1 text-xs text-slate-400">Day-to-day loan operations</p>
             </button>
+            <button type="button" onClick={() => setDeskPanel("expenses")}
+              className="rounded-2xl border border-orange-500/25 bg-slate-900/80 p-4 text-left hover:border-orange-400/50">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-orange-300/80">Expenses</p>
+              <p className="mt-1 text-2xl font-bold text-white">{groupExpenses.length}</p>
+              <p className="mt-1 text-xs text-slate-400">Record spend from pots · full trail</p>
+            </button>
             <button type="button" onClick={() => setDeskPanel("report")}
               className="rounded-2xl border border-sky-500/25 bg-slate-900/80 p-4 text-left hover:border-sky-400/50">
               <p className="text-[10px] font-bold uppercase tracking-wide text-sky-300/80">Reports</p>
-              <p className="mt-1 text-sm font-bold text-white">Monthly pot Excel</p>
-              <p className="mt-1 text-xs text-slate-400">Paid / not paid by member</p>
+              <p className="mt-1 text-sm font-bold text-white">Pot + expense Excel</p>
+              <p className="mt-1 text-xs text-slate-400">Share with members</p>
             </button>
             <button type="button" onClick={() => setDeskPanel("settings")}
               className="rounded-2xl border border-amber-500/30 bg-slate-900/80 p-4 text-left hover:border-amber-400/50 sm:col-span-2 lg:col-span-1">
@@ -1322,6 +1403,331 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
       </div>
 
       
+
+      {/* Expenses desk */}
+      <div className={`space-y-4 ${deskPanel === "expenses" ? "" : "hidden"}`}>
+        <div className="rounded-2xl border border-orange-500/30 bg-slate-900/80 p-4">
+          <p className="text-sm font-bold text-white">Pots (live balances)</p>
+          <p className="mt-1 text-xs text-slate-400">
+            Recording an expense debits the selected pot immediately.
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {kits
+              .slice()
+              .sort((a, b) => a.kit_code.localeCompare(b.kit_code))
+              .map((k) => (
+                <button
+                  key={k.kit_code}
+                  type="button"
+                  onClick={() =>
+                    setExpenseForm((f) => ({ ...f, kitCode: k.kit_code }))
+                  }
+                  className={`rounded-xl border px-3 py-2.5 text-left ${
+                    expenseForm.kitCode === k.kit_code
+                      ? "border-orange-500/50 bg-orange-500/10"
+                      : "border-slate-800 bg-slate-950/50 hover:border-slate-600"
+                  }`}
+                >
+                  <p className="text-[11px] font-semibold text-slate-300">
+                    {k.label || k.kit_code}
+                  </p>
+                  <p className="mt-0.5 font-mono text-sm font-bold text-white">
+                    {fmtKsh(Number(k.balance) || 0)}
+                  </p>
+                </button>
+              ))}
+            {kits.length === 0 && (
+              <p className="text-xs text-slate-500">No kits loaded yet.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
+          <p className="text-sm font-bold text-white">Record expense</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label className="text-xs text-slate-400">
+              Type of expense
+              <select
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-white"
+                value={expenseForm.expenseType}
+                onChange={(e) =>
+                  setExpenseForm((f) => ({ ...f, expenseType: e.target.value }))
+                }
+              >
+                {[
+                  "Stationary",
+                  "Transport",
+                  "Venue / hall",
+                  "Refreshments",
+                  "Communication",
+                  "Legal / registration",
+                  "Welfare support",
+                  "Bank charges",
+                  "Other",
+                ].map((x) => (
+                  <option key={x} value={x}>
+                    {x}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs text-slate-400">
+              Category
+              <select
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-white"
+                value={expenseForm.category}
+                onChange={(e) =>
+                  setExpenseForm((f) => ({ ...f, category: e.target.value }))
+                }
+              >
+                {[
+                  "Administration",
+                  "Operations",
+                  "Welfare",
+                  "Meetings",
+                  "Compliance",
+                  "Other",
+                ].map((x) => (
+                  <option key={x} value={x}>
+                    {x}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs text-slate-400">
+              Pay from pot
+              <select
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-white"
+                value={expenseForm.kitCode}
+                onChange={(e) =>
+                  setExpenseForm((f) => ({ ...f, kitCode: e.target.value }))
+                }
+              >
+                {kits.map((k) => (
+                  <option key={k.kit_code} value={k.kit_code}>
+                    {k.label || k.kit_code} ({fmtKsh(Number(k.balance) || 0)})
+                  </option>
+                ))}
+                {!kits.find((k) => k.kit_code === "group-reserve") && (
+                  <option value="group-reserve">Group reserve</option>
+                )}
+              </select>
+            </label>
+            <label className="text-xs text-slate-400">
+              Amount (KES)
+              <input
+                type="number"
+                min={1}
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-white"
+                value={expenseForm.amount}
+                onChange={(e) =>
+                  setExpenseForm((f) => ({ ...f, amount: e.target.value }))
+                }
+              />
+            </label>
+            <label className="text-xs text-slate-400">
+              Who paid (from chama)
+              <select
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-white"
+                value={expenseForm.paidBy}
+                onChange={(e) =>
+                  setExpenseForm((f) => ({ ...f, paidBy: e.target.value }))
+                }
+              >
+                <option value="">— Select member —</option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} ({m.role})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs text-slate-400">
+              Paid to (supplier / person)
+              <input
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-white"
+                value={expenseForm.paidTo}
+                onChange={(e) =>
+                  setExpenseForm((f) => ({ ...f, paidTo: e.target.value }))
+                }
+                placeholder="e.g. Office Mart, John"
+              />
+            </label>
+            <label className="text-xs text-slate-400">
+              Reference
+              <input
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-white"
+                value={expenseForm.reference}
+                onChange={(e) =>
+                  setExpenseForm((f) => ({ ...f, reference: e.target.value }))
+                }
+                placeholder="Receipt no. / M-Pesa code"
+              />
+            </label>
+            <label className="text-xs text-slate-400">
+              Date
+              <input
+                type="date"
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-white"
+                value={expenseForm.expenseDate}
+                onChange={(e) =>
+                  setExpenseForm((f) => ({ ...f, expenseDate: e.target.value }))
+                }
+              />
+            </label>
+            <label className="text-xs text-slate-400 sm:col-span-2">
+              Description
+              <input
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-white"
+                value={expenseForm.description}
+                onChange={(e) =>
+                  setExpenseForm((f) => ({ ...f, description: e.target.value }))
+                }
+                placeholder="What was this for?"
+              />
+            </label>
+          </div>
+          <button
+            type="button"
+            disabled={expenseBusy}
+            className="mt-4 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-orange-400 disabled:opacity-50"
+            onClick={async () => {
+              const amount = Number(expenseForm.amount);
+              if (!amount || amount <= 0) {
+                toast.error("Enter a valid amount");
+                return;
+              }
+              if (!expenseForm.kitCode) {
+                toast.error("Select a pot");
+                return;
+              }
+              setExpenseBusy(true);
+              try {
+                const paidByName =
+                  members.find((m) => m.id === expenseForm.paidBy)?.name || "";
+                const { error } = await supabase.rpc("record_group_expense", {
+                  p_chama_id: chamaId,
+                  p_category: expenseForm.category,
+                  p_description:
+                    expenseForm.description ||
+                    `${expenseForm.expenseType} · ${expenseForm.category}`,
+                  p_amount: amount,
+                  p_kit_code: expenseForm.kitCode,
+                  p_payment_method: "Expense",
+                  p_notes: paidByName
+                    ? `Paid by: ${paidByName}`
+                    : null,
+                  p_paid_to: expenseForm.paidTo || null,
+                  p_reference: expenseForm.reference || null,
+                  p_expense_type: expenseForm.expenseType,
+                  p_expense_date: expenseForm.expenseDate || null,
+                });
+                if (error) throw error;
+                toast.success(
+                  `Expense ${fmtKsh(amount)} recorded from ${expenseForm.kitCode}`,
+                );
+                setExpenseForm((f) => ({
+                  ...f,
+                  amount: "",
+                  description: "",
+                  reference: "",
+                  paidTo: "",
+                }));
+                // refresh list
+                const { data } = await supabase.rpc("list_group_expenses", {
+                  p_chama_id: chamaId,
+                  p_from: null,
+                  p_to: null,
+                });
+                const rows = Array.isArray(data) ? data : [];
+                setGroupExpenses(
+                  rows.map((r: Record<string, unknown>) => ({
+                    id: String(r.id),
+                    category: String(r.category ?? ""),
+                    expenseType: String(r.expenseType ?? r.category ?? ""),
+                    description: String(r.description ?? ""),
+                    amount: Number(r.amount) || 0,
+                    expenseDate: String(
+                      r.expenseDate ?? r.expense_date ?? "",
+                    ).slice(0, 10),
+                    kitCode: r.kitCode
+                      ? String(r.kitCode)
+                      : r.kit_code
+                        ? String(r.kit_code)
+                        : undefined,
+                    paidTo: r.paidTo
+                      ? String(r.paidTo)
+                      : r.paid_to
+                        ? String(r.paid_to)
+                        : undefined,
+                    reference: r.reference ? String(r.reference) : undefined,
+                    spentBy: r.spentBy
+                      ? String(r.spentBy)
+                      : r.spent_by
+                        ? String(r.spent_by)
+                        : undefined,
+                  })),
+                );
+                // soft reload kits via parent refresh if available
+                window.setTimeout(() => window.location.reload(), 800);
+              } catch (e) {
+                toast.error(
+                  e instanceof Error ? e.message : "Could not record expense",
+                );
+              } finally {
+                setExpenseBusy(false);
+              }
+            }}
+          >
+            {expenseBusy ? "Saving…" : "Post expense"}
+          </button>
+        </div>
+
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
+          <p className="text-sm font-bold text-white">Expense register</p>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[40rem] text-left text-[11px]">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-500">
+                  <th className="py-1.5 pr-2">Date</th>
+                  <th className="py-1.5 pr-2">Type</th>
+                  <th className="py-1.5 pr-2">Category</th>
+                  <th className="py-1.5 pr-2">Pot</th>
+                  <th className="py-1.5 pr-2">Paid to</th>
+                  <th className="py-1.5 pr-2">Ref</th>
+                  <th className="py-1.5 text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {groupExpenses.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-4 text-slate-500">
+                      No expenses yet. Record one above.
+                    </td>
+                  </tr>
+                ) : (
+                  groupExpenses.map((e) => (
+                    <tr key={e.id} className="border-b border-slate-800/80">
+                      <td className="py-1.5 text-slate-400">{e.expenseDate}</td>
+                      <td className="py-1.5 text-slate-200">
+                        {e.expenseType || e.category}
+                      </td>
+                      <td className="py-1.5 text-slate-400">{e.category}</td>
+                      <td className="py-1.5 text-slate-400">{e.kitCode || "—"}</td>
+                      <td className="py-1.5 text-slate-400">{e.paidTo || "—"}</td>
+                      <td className="py-1.5 text-slate-500">{e.reference || "—"}</td>
+                      <td className="py-1.5 text-right font-mono font-semibold text-orange-200">
+                        {fmtKsh(e.amount)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <div className={`rounded-2xl border border-emerald-500/30 bg-slate-900/80 p-4 ${deskPanel === "report" ? "" : "hidden"}`}>
         <p className="text-sm font-bold text-white">Monthly pot report (Excel)</p>
         <p className="mt-1 text-xs text-slate-400">
@@ -1404,8 +1810,81 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
               }
             }}
           >
-            Download Excel report
+            Download pot Excel
           </button>
+        </div>
+
+        <div className="mt-8 border-t border-slate-800 pt-5">
+          <p className="text-sm font-bold text-white">Expense report (Excel)</p>
+          <p className="mt-1 text-xs text-slate-400">
+            Download expenses for a date range to share with members for accountability.
+          </p>
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <label className="text-xs text-slate-400">
+              From
+              <input
+                type="date"
+                value={expenseReportFrom}
+                onChange={(e) => setExpenseReportFrom(e.target.value)}
+                className="mt-1 block rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-white"
+              />
+            </label>
+            <label className="text-xs text-slate-400">
+              To
+              <input
+                type="date"
+                value={expenseReportTo}
+                onChange={(e) => setExpenseReportTo(e.target.value)}
+                className="mt-1 block rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-white"
+              />
+            </label>
+            <button
+              type="button"
+              className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white hover:bg-orange-400"
+              onClick={() => {
+                const from = expenseReportFrom;
+                const to = expenseReportTo;
+                if (!from || !to || from > to) {
+                  toast.error("Choose a valid from / to date range");
+                  return;
+                }
+                const rows = groupExpenses.filter(
+                  (e) => e.expenseDate >= from && e.expenseDate <= to,
+                );
+                const lines = [
+                  "ChamaVault expense report",
+                  `Chama,${chama.name}`,
+                  `From,${from}`,
+                  `To,${to}`,
+                  "",
+                  "Date,Type,Category,Pot,Description,Paid to,Reference,Amount",
+                  ...rows.map(
+                    (e) =>
+                      `${e.expenseDate},${JSON.stringify(e.expenseType || "")},${JSON.stringify(e.category)},${e.kitCode || ""},${JSON.stringify(e.description)},${JSON.stringify(e.paidTo || "")},${JSON.stringify(e.reference || "")},${e.amount}`,
+                  ),
+                  "",
+                  `Total,, , , , , ,${rows.reduce((s, e) => s + e.amount, 0)}`,
+                ];
+                const csv = lines.join("\n");
+                const blob = new Blob([csv], {
+                  type: "text/csv;charset=utf-8",
+                });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `chamavault-expenses-${chama.name.replace(/[^a-zA-Z0-9]+/g, "-").slice(0, 20)}-${from}_${to}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+                toast.success(
+                  rows.length
+                    ? `Downloaded ${rows.length} expense row(s)`
+                    : "Downloaded empty report (no expenses in range)",
+                );
+              }}
+            >
+              Download expense Excel
+            </button>
+          </div>
         </div>
       </div>
 
