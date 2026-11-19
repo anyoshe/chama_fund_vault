@@ -190,6 +190,16 @@ export default function Dashboard() {
   const [loanLimitInfo, setLoanLimitInfo] = useState({ maxLoan: 0, shares: 0 });
 
   useEffect(() => {
+    if (authChamaId && authChamaId !== activeChamaId) {
+      setActiveChamaIdLocal(authChamaId);
+      return;
+    }
+    if (!activeChamaId && displayChamas[0]?.id) {
+      setActiveChamaIdLocal(displayChamas[0].id);
+    }
+  }, [authChamaId, activeChamaId, displayChamas]);
+
+  useEffect(() => {
     if (!activeChamaId) {
       setDisplayMembers([]);
       setKits([]);
@@ -1585,28 +1595,11 @@ A local copy was kept on this device only.`,
       : []),
   ];
 
-  if (!chama) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-4 text-center text-slate-100">
-        <h1 className="text-xl font-bold text-white">No chama linked to this account yet</h1>
-        <p className="mt-2 max-w-md text-sm text-slate-400">
-          If you just confirmed your email, sign out and sign in again once. Your chama is created on first login after confirmation.
-          Otherwise create a chama from the registration page.
-        </p>
-        <button
-          type="button"
-          onClick={() => logout()}
-          className="mt-6 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-bold text-white"
-        >
-          Sign out
-        </button>
-      </div>
-    );
-  }
-  if (displayMembers.length === 0) {
+  // Wait quietly for membership / members — do not block sign-in with a "not linked" screen
+  if (!chama || displayMembers.length === 0) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 text-sm text-slate-400">
-        Loading members…
+        Opening your chama…
       </div>
     );
   }
