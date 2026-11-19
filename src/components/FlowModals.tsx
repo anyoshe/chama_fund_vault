@@ -34,6 +34,16 @@ export function LoanRequestModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+
+  const principal = Number(amount) || 0;
+  const months = Math.max(0, Math.floor(Number(termMonths) || 0));
+  const ratePct = Number(rate) || 0;
+  // Flat rate on principal per month (chama rule): e.g. 10% of 20k = 2k/month
+  const interestPerMonth = principal > 0 && ratePct > 0 ? (principal * ratePct) / 100 : 0;
+  const totalInterest = interestPerMonth * months;
+  const totalToPay = principal + totalInterest;
+  const installment = months > 0 ? totalToPay / months : 0;
+
   useEffect(() => {
     if (open) {
       setAmount("");
@@ -153,7 +163,31 @@ export function LoanRequestModal({
           onChange={(e) => setRate(e.target.value)}
         />
       </ModalField>
+
+      {principal > 0 && months > 0 && ratePct >= 0 ? (
+        <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-3 text-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-300/90">
+            What you will repay
+          </p>
+          <p className="mt-2 font-mono text-lg font-bold text-white">
+            {fmtKsh(totalToPay)}
+          </p>
+          <p className="mt-1 text-xs text-slate-400">
+            Principal {fmtKsh(principal)} + interest {fmtKsh(totalInterest)} (
+            {ratePct}% flat × {months} month{months === 1 ? "" : "s"})
+          </p>
+          <p className="mt-1 text-xs text-slate-400">
+            About {fmtKsh(installment)} per month if paid evenly over {months} month
+            {months === 1 ? "" : "s"}
+          </p>
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-slate-500">
+          Enter amount and term to see total expected repayment.
+        </p>
+      )}
       {error ? <p className="text-xs text-rose-400">{error}</p> : null}
+
     </AppModal>
   );
 }
