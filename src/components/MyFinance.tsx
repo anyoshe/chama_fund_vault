@@ -160,6 +160,9 @@ export default function MyFinance({
   onReallocateContribution,
 }: MyFinanceProps) {
   const [repayOpen, setRepayOpen] = useState(false);
+  const [financePanel, setFinancePanel] = useState<
+    null | "kits" | "dues" | "loans" | "statement" | "history"
+  >(null);
   const [repayAmount, setRepayAmount] = useState("");
   const [repayMethod, setRepayMethod] = useState("M-Pesa STK Push");
   const [repayBusy, setRepayBusy] = useState(false);
@@ -514,59 +517,105 @@ export default function MyFinance({
         )}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Card
-          title="My kit balances"
-          value={fmtKsh(myBalancesTotal || totalContributed)}
-          sub="All pots · deposits + interest"
-          icon={<Wallet size={14} />}
-          accent="emerald"
-        />
-        <Card
-          title={`Paid · ${cycle.monthLabel}`}
-          value={fmtKsh(paidThisCycle)}
-          sub={
-            monthlyTarget
-              ? `Due ${cycle.dueLabel} · target ${fmtKsh(monthlyTarget)}${
-                  shortfall > 0
-                    ? cycle.isOverdue
-                      ? ` · overdue by ${Math.abs(cycle.daysUntilDue)}d`
-                      : ` · short ${fmtKsh(shortfall)} · ${cycle.daysUntilDue}d left`
-                    : " · on track"
-                }`
-              : `Due ${cycle.dueLabel}`
-          }
-          icon={<Coins size={14} />}
-          accent={shortfall > 0 ? "amber" : "sky"}
-        />
-        <Card
-          title="Loan limit"
-          value={fmtKsh(loanLimit)}
-          sub={
-            canRequestLoan
-              ? `${maxMultiple}× shares ${fmtKsh(myShares)} · pool ${fmtKsh(loaningPool)}`
-              : "Locked until current loan is fully repaid"
-          }
-          icon={<Calculator size={14} />}
-          accent="violet"
-        />
-        <Card
-          title="Outstanding loans"
-          value={fmtKsh(outstandingLoan)}
-          sub={
-            myLoans.length
-              ? `${myLoans.filter((p) => p.status === "disbursed").length} active facility`
-              : "No open facilities"
-          }
-          icon={<HandCoins size={14} />}
-          accent="rose"
-        />
-      </div>
-
-      
+      {financePanel === null ? (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Open a card for details
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setFinancePanel("kits")}
+              className="rounded-2xl border border-emerald-500/25 bg-slate-900/80 p-4 text-left hover:border-emerald-400/40"
+            >
+              <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-300/80">
+                Kits & contributions
+              </p>
+              <p className="mt-1 font-mono text-xl font-bold text-white">
+                {fmtKsh(myBalancesTotal || totalContributed)}
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                Balances per pot · pay into a kit
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFinancePanel("dues")}
+              className="rounded-2xl border border-amber-500/25 bg-slate-900/80 p-4 text-left hover:border-amber-400/40"
+            >
+              <p className="text-[10px] font-bold uppercase tracking-wide text-amber-300/80">
+                What I owe
+              </p>
+              <p className="mt-1 font-mono text-xl font-bold text-white">
+                {fmtKsh(paidThisCycle)}
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                {cycle.monthLabel} · due {cycle.dueLabel}
+                {shortfall > 0 ? ` · short ${fmtKsh(shortfall)}` : " · on track"}
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFinancePanel("loans")}
+              className="rounded-2xl border border-violet-500/25 bg-slate-900/80 p-4 text-left hover:border-violet-400/40"
+            >
+              <p className="text-[10px] font-bold uppercase tracking-wide text-violet-300/80">
+                My loans
+              </p>
+              <p className="mt-1 font-mono text-xl font-bold text-white">
+                {fmtKsh(outstandingLoan)}
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                Limit {fmtKsh(loanLimit)}
+                {canRequestLoan ? " · can borrow" : " · settle first"}
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFinancePanel("statement")}
+              className="rounded-2xl border border-sky-500/25 bg-slate-900/80 p-4 text-left hover:border-sky-400/40"
+            >
+              <p className="text-[10px] font-bold uppercase tracking-wide text-sky-300/80">
+                My statement
+              </p>
+              <p className="mt-1 text-sm font-bold text-white">Expected vs paid</p>
+              <p className="mt-1 text-xs text-slate-400">
+                Full obligation & penalty table · download CSV above
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFinancePanel("history")}
+              className="rounded-2xl border border-slate-600 bg-slate-900/80 p-4 text-left hover:border-slate-400 sm:col-span-2"
+            >
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                History & moves
+              </p>
+              <p className="mt-1 text-sm font-bold text-white">
+                {myContributions.length} contribution records
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                Past payments · move a contribution to another kit
+              </p>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setFinancePanel(null)}
+          className="text-sm font-semibold text-slate-400 hover:text-white"
+        >
+          ← Back to My Finance cards
+        </button>
+      )}
 
       {/* Full member statement */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+      <div
+        className={`rounded-2xl border border-slate-800 bg-slate-900/70 p-4 ${
+          financePanel === "statement" ? "" : "hidden"
+        }`}
+      >
         <p className="text-sm font-bold text-white">My statement</p>
         <p className="mt-1 text-[11px] text-slate-500">
           Expected vs paid vs balance (obligations and penalties)
@@ -619,7 +668,7 @@ export default function MyFinance({
       </div>
 
       {/* Phase 1 — What I owe (from contribution plans) */}
-      <div className="rounded-2xl border border-amber-500/25 bg-gradient-to-br from-slate-900 to-amber-950/30 p-4 sm:p-5">
+      <div className={`rounded-2xl border border-amber-500/25 bg-gradient-to-br from-slate-900 to-amber-950/30 p-4 sm:p-5 ${financePanel === "dues" ? "" : "hidden"}`}>
         <div className="flex items-center justify-between gap-2">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-amber-300/90">
@@ -723,7 +772,7 @@ export default function MyFinance({
       </div>
 
 {/* Kit cards — click to contribute to the right pot */}
-      <div>
+      <div className={financePanel === "kits" ? "space-y-3" : "hidden"}>
         <p className="mb-1 text-sm font-bold text-white">
           Contribute to a kit — pick the pot first
         </p>
@@ -793,12 +842,12 @@ export default function MyFinance({
       </div>
 
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className={`grid gap-4 lg:grid-cols-2 ${financePanel === "kits" ? "" : "hidden"}`}>
         {/* Balances by kit */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"
+          className={`rounded-2xl border border-slate-800 bg-slate-900/70 p-4 ${financePanel === "kits" ? "" : "hidden"}`}
         >
           <p className="flex items-center gap-2 text-sm font-bold text-white">
             <ChartLineUp size={18} className="text-emerald-400" /> Holdings by kit
@@ -917,7 +966,7 @@ export default function MyFinance({
       </div>
 
       {/* Contribution history */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+      <div className={`rounded-2xl border border-slate-800 bg-slate-900/70 p-4 ${financePanel === "history" ? "" : "hidden"}`}>
         <p className="flex items-center gap-2 text-sm font-bold text-white">
           <Receipt size={18} className="text-sky-400" /> My contribution history
         </p>
@@ -975,7 +1024,7 @@ export default function MyFinance({
       </div>
 
       {/* Loans + repayments snapshot */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className={`grid gap-4 lg:grid-cols-2 ${financePanel === "loans" ? "" : "hidden"}`}>
         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
           <p className="flex items-center gap-2 text-sm font-bold text-white">
             <HandCoins size={18} className="text-violet-400" /> My loans
