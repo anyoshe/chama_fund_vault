@@ -7,6 +7,7 @@ import ChamaOverview from "@/components/ChamaOverview";
 import GovernanceVoting from "@/components/GovernanceVoting";
 import ContributionModal from "@/components/ContributionModal";
 import { LoanRequestModal, DisburseModal } from "@/components/FlowModals";
+import AppModal from "@/components/AppModal";
 import LoansAndLedger from "@/components/LoansAndLedger";
 import ChamaFinance from "@/components/ChamaFinance";
 import Members from "@/pages/Members";
@@ -358,6 +359,11 @@ export default function Dashboard() {
   } | null>(null);
   const [contribKitLock, setContribKitLock] = useState<string | null>(null);
   const [loanRequestOpen, setLoanRequestOpen] = useState(false);
+  const [loanOutcome, setLoanOutcome] = useState<{
+    kind: "success" | "error";
+    title: string;
+    message: string;
+  } | null>(null);
   const [disburseProposalId, setDisburseProposalId] = useState<string | null>(null);
 
   const [notifOpen, setNotifOpen] = useState(false);
@@ -1167,7 +1173,11 @@ export default function Dashboard() {
 
   const handleProposeLoan = () => {
     if (!activeChamaId || !user?.id) {
-      toast.error("Select a chama and sign in first.");
+      setLoanOutcome({
+        kind: "error",
+        title: "Cannot request loan",
+        message: "Select a chama and sign in first.",
+      });
       return;
     }
     const open = memberOpenLoans(proposals, user.id, activeChamaId);
@@ -1176,10 +1186,13 @@ export default function Dashboard() {
         .map((p) => `${p.title} (${p.status})`)
         .slice(0, 3)
         .join("; ");
-      toast.error(
-        "You already have an open loan. Fully settle it before requesting another.",
-        { description: labels },
-      );
+      setLoanOutcome({
+        kind: "error",
+        title: "Open loan already exists",
+        message: `You already have an open loan. Fully settle it before requesting another.
+
+${labels}`,
+      });
       return;
     }
     setLoanRequestOpen(true);
@@ -1190,8 +1203,19 @@ export default function Dashboard() {
     termMonths: number;
     rate: number;
   }) => {
+    const fail = (title: string, message: string) => {
+      setLoanRequestOpen(false);
+      setLoanOutcome({ kind: "error", title, message });
+      throw new Error(message);
+    };
+    const ok = (title: string, message: string) => {
+      setLoanRequestOpen(false);
+      setLoanOutcome({ kind: "success", title, message });
+    };
+
     if (!activeChamaId || !user?.id) {
-      throw new Error("Select a chama and sign in first.");
+      fail("Cannot request loan", "Select a chama and sign in first.");
+      return;
     }
     const amount = data.amount;
     const months = Math.max(1, Math.min(24, data.termMonths));
@@ -1204,8 +1228,11 @@ export default function Dashboard() {
       p_user_id: user.id,
     });
     if (limitError) {
-      console.error(limitError);
-      toast.error(limitError.message || "Could not load your loan limit. Run kits SQL in Supabase.");
+      fail(
+        "Loan limit unavailable",
+        limitError.message ||
+          "Could not load your loan limit. Ask an official to run the kits SQL in Supabase.",
+      );
       return;
     }
     const limit = Array.isArray(limitRows) ? limitRows[0] : limitRows;
@@ -1215,7 +1242,10 @@ export default function Dashboard() {
     const mult = Number(limit?.max_multiple ?? 3);
 
     if (shares <= 0) {
-      toast.error("You have no share balance yet. Contribute to table banking, share capital, or general savings first.");
+      fail(
+        "No share balance",
+        "You have no share balance yet. Contribute to table banking, share capital, or general savings first, then try again.",
+      );
       return;
     }
     const committed = memberOpenLoans(proposals, user.id, activeChamaId).reduce(
@@ -1224,16 +1254,18 @@ export default function Dashboard() {
     );
     const availableLimit = Math.max(0, maxLoan - committed);
     if (amount > availableLimit) {
-      toast.error(
+      fail(
+        "Above your loan limit",
         availableLimit <= 0
-          ? "No remaining loan limit — settle open facilities first."
-          : `Max you can request is ${fmtKsh(availableLimit)} (${mult}× shares ${fmtKsh(shares)} minus open ${fmtKsh(committed)}).`,
+          ? "No remaining loan limit — fully settle your open loan before borrowing again."
+          : `Maximum you can request now is ${fmtKsh(availableLimit)} (${mult}× shares ${fmtKsh(shares)} minus open ${fmtKsh(committed)}).`,
       );
       return;
     }
     if (amount > fund) {
-      toast.error(
-        `Loaning pool only has ${fmtKsh(fund)}. Add to table banking, share capital, general savings or member-loans — or request less.`,
+      fail(
+        "Not enough in the loaning pool",
+        `The loaning pool only has ${fmtKsh(fund)}. The group needs more in table banking, share capital, general savings or member-loans — or request a smaller amount.`,
       );
       return;
     }
@@ -1261,7 +1293,7 @@ export default function Dashboard() {
       },
     };
 
-        try {
+    try {
       const list = await createLoanProposalOnServer({
         chamaId: activeChamaId,
         amount,
@@ -1277,7 +1309,6 @@ export default function Dashboard() {
             }
           : undefined,
       });
-      // Re-fetch so every client shape matches server (ids, votes)
       let fresh = list;
       try {
         fresh = await fetchChamaProposals(activeChamaId);
@@ -1297,10 +1328,11 @@ export default function Dashboard() {
         }
         return merged;
       });
-      toast.success("Loan request submitted for quorum vote");
       try {
         const created = fresh.find(
-          (p) => p.requesterId === user.id && p.status === "active",
+          (p) =>
+            String(p.requesterId).toLowerCase() === String(user.id).toLowerCase() &&
+            p.status === "active",
         );
         if (created?.id) {
           await supabase.rpc("notify_loan_proposed", { p_proposal_id: created.id });
@@ -1308,29 +1340,37 @@ export default function Dashboard() {
       } catch {
         /* optional */
       }
+      setLoanRequestOpen(false);
+      ok(
+        "Loan request submitted",
+        `Your request for ${fmtKsh(amount)} is on the Voting Board for quorum. Total expected repayment: ${fmtKsh(plan.totalRepay)} over ${months} month(s) (incl. ${fmtKsh(plan.totalInterest)} interest).`,
+      );
       setTab("voting");
       return;
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not save proposal on server";
       console.error("create_loan_proposal failed", e);
-      toast.error("Loan was not saved for other members", {
-        description: `${msg}. Apply supabase/proposals_ledger_persistence.sql if needed.`,
-      });
-      // Still show locally so the requester can see it while fixing server
+      // Local fallback so user still sees it on their device
+      setProposals((prev) => [newProposal, ...prev]);
+      setLedger((prev) =>
+        pushAudit(prev, {
+          memberId: user.id,
+          type: "loan-disbursed",
+          description: `Proposed ${title} · ${months} installments · ${monthlyRate}%/mo flat`,
+          amount: 0,
+        }),
+      );
+      setLoanRequestOpen(false);
+      fail(
+        "Loan not saved for the whole group",
+        `${msg}
+
+Other members may not see this request until the server accepts it. Ask an official to run supabase/fix_proposals_visibility.sql in Supabase, then try again.
+
+A local copy was kept on this device only.`,
+      );
+      return;
     }
-    setProposals((prev) => [newProposal, ...prev]);
- setLedger((prev) =>
-      pushAudit(prev, {
-        memberId: user.id,
-        type: "loan-disbursed",
-        description: `Proposed ${title} · ${months} installments · ${monthlyRate}%/mo flat`,
-        amount: 0,
-      }),
-    );
-    setTab("voting");
-    toast.success("Loan request posted with repayment plan", {
-      description: `${fmtKsh(plan.installmentAmount)} × ${months} mo · total ${fmtKsh(plan.totalRepay)} (incl. ${fmtKsh(plan.totalInterest)} interest)`,
-    });
   };
 
   const switchTab = (t: Tab) => {
@@ -1894,6 +1934,35 @@ export default function Dashboard() {
         )}
       </AnimatePresence>
 
+
+      <AppModal
+        open={!!loanOutcome}
+        onClose={() => setLoanOutcome(null)}
+        title={loanOutcome?.title ?? ""}
+        subtitle={loanOutcome?.kind === "success" ? "Success" : "Could not complete"}
+        size="md"
+        footer={
+          <button
+            type="button"
+            className={`rounded-xl px-4 py-2.5 text-sm font-bold text-white ${
+              loanOutcome?.kind === "success"
+                ? "bg-emerald-500 hover:bg-emerald-400"
+                : "bg-rose-500 hover:bg-rose-400"
+            }`}
+            onClick={() => {
+              const kind = loanOutcome?.kind;
+              setLoanOutcome(null);
+              if (kind === "success") setTab("voting");
+            }}
+          >
+            {loanOutcome?.kind === "success" ? "Go to Voting Board" : "Close"}
+          </button>
+        }
+      >
+        <p className="whitespace-pre-wrap text-sm text-slate-300">
+          {loanOutcome?.message}
+        </p>
+      </AppModal>
 
       <LoanRequestModal
         open={loanRequestOpen}
