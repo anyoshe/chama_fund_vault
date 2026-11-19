@@ -349,6 +349,7 @@ export default function Dashboard() {
     if (user?.id) setCurrentMemberId(user.id);
   }, [user?.id]);
   const [tab, setTab] = useState<Tab>("home");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [contribOpen, setContribOpen] = useState(false);
   const [contribPrefill, setContribPrefill] = useState<{
     amount?: number;
@@ -1464,21 +1465,23 @@ export default function Dashboard() {
         currentUserName={user?.profile?.full_name ?? user?.email}
       />
 
-      {/* Tab rail */}
+      {/* Tab rail: desktop horizontal · mobile hamburger */}
       <div className="sticky top-16 z-30 border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 sm:px-6">
-          {TABS.map((t) => {
-            const active = tab === t.id;
+        {/* Desktop / tablet */}
+        <div className="mx-auto hidden max-w-7xl gap-1 overflow-x-auto px-4 md:flex sm:px-6">
+          {TABS.map((tItem) => {
+            const active = tab === tItem.id;
             return (
               <button
-                key={t.id}
-                onClick={() => switchTab(t.id)}
+                key={tItem.id}
+                type="button"
+                onClick={() => switchTab(tItem.id)}
                 className={`relative whitespace-nowrap px-4 py-3 text-sm font-semibold transition ${
                   active ? "text-white" : "text-slate-500 hover:text-slate-300"
                 }`}
               >
-                {t.label}
-                {t.id === "voting" && unreadNotifications > 0 && (
+                {tItem.label}
+                {tItem.id === "voting" && unreadNotifications > 0 && (
                   <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-400 px-1 text-[9px] font-bold text-slate-950">
                     {unreadNotifications}
                   </span>
@@ -1494,7 +1497,87 @@ export default function Dashboard() {
             );
           })}
         </div>
+
+        {/* Mobile: current page + hamburger */}
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2.5 md:hidden">
+          <p className="truncate text-sm font-bold text-white">
+            {TABS.find((x) => x.id === tab)?.label ?? "Menu"}
+          </p>
+          <button
+            type="button"
+            aria-label="Open menu"
+            onClick={() => setMobileNavOpen(true)}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-200 hover:border-emerald-500/40"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
       </div>
+
+      {/* Mobile nav sheet — centered modal style */}
+      <AnimatePresence>
+        {mobileNavOpen && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 md:hidden">
+            <motion.button
+              type="button"
+              aria-label="Close menu"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-950/75 backdrop-blur-sm"
+              onClick={() => setMobileNavOpen(false)}
+            />
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              className="relative z-10 w-full max-w-xs overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl"
+            >
+              <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+                <p className="text-sm font-bold text-white">Go to</p>
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-slate-400 hover:text-white"
+                  onClick={() => setMobileNavOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+              <nav className="flex flex-col p-2">
+                {TABS.map((tItem) => {
+                  const active = tab === tItem.id;
+                  return (
+                    <button
+                      key={tItem.id}
+                      type="button"
+                      onClick={() => {
+                        switchTab(tItem.id);
+                        setMobileNavOpen(false);
+                      }}
+                      className={`rounded-xl px-4 py-3 text-left text-sm font-semibold transition ${
+                        active
+                          ? "bg-emerald-500/15 text-emerald-200"
+                          : "text-slate-300 hover:bg-slate-800"
+                      }`}
+                    >
+                      {tItem.label}
+                      {tItem.id === "voting" && unreadNotifications > 0 && (
+                        <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400 px-1.5 text-[10px] font-bold text-slate-950">
+                          {unreadNotifications}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         <AnimatePresence mode="wait">
