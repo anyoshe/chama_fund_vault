@@ -1407,11 +1407,15 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
       {/* Expenses desk */}
       <div className={`space-y-4 ${deskPanel === "expenses" ? "" : "hidden"}`}>
         <div className="rounded-2xl border border-orange-500/30 bg-slate-900/80 p-4">
-          <p className="text-sm font-bold text-white">Pots (live balances)</p>
-          <p className="mt-1 text-xs text-slate-400">
-            Recording an expense debits the selected pot immediately.
-          </p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-bold text-white">Pots (live)</p>
+              <p className="text-[11px] text-slate-500">
+                Tap a pot to select · expense debits it
+              </p>
+            </div>
+          </div>
+          <div className="mt-2 flex max-h-[4.75rem] flex-wrap gap-1.5 overflow-y-auto">
             {kits
               .slice()
               .sort((a, b) => a.kit_code.localeCompare(b.kit_code))
@@ -1422,18 +1426,18 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                   onClick={() =>
                     setExpenseForm((f) => ({ ...f, kitCode: k.kit_code }))
                   }
-                  className={`rounded-xl border px-3 py-2.5 text-left ${
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-left ${
                     expenseForm.kitCode === k.kit_code
-                      ? "border-orange-500/50 bg-orange-500/10"
-                      : "border-slate-800 bg-slate-950/50 hover:border-slate-600"
+                      ? "border-orange-500/60 bg-orange-500/15"
+                      : "border-slate-800 bg-slate-950/60 hover:border-slate-600"
                   }`}
                 >
-                  <p className="text-[11px] font-semibold text-slate-300">
+                  <span className="max-w-[7.5rem] truncate text-[10px] font-semibold text-slate-300">
                     {k.label || k.kit_code}
-                  </p>
-                  <p className="mt-0.5 font-mono text-sm font-bold text-white">
+                  </span>
+                  <span className="font-mono text-[10px] font-bold text-white">
                     {fmtKsh(Number(k.balance) || 0)}
-                  </p>
+                  </span>
                 </button>
               ))}
             {kits.length === 0 && (
