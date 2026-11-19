@@ -311,53 +311,88 @@ function OpsReportCards({
     );
   };
 
-  const appliedCount = activeVotes.length + awaitingDisburse.length + rejected.length;
-
   return (
     <div className="space-y-4">
       <p className="text-xs text-slate-500">
-        Loans & ledger · four groups — tap one for full lists
+        Group loan book · tap a card for lists and breakdowns
       </p>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Card
-          id="book"
-          label="Active loan book"
+          id="balances"
+          label="Loan balances outstanding"
           value={fmtKsh(outstandingPrincipal)}
-          sub={
-            outstandingPrincipal > 0
-              ? `${fmtKsh(outstandingInterest)} interest due · ${duesList.length} installment(s) upcoming`
-              : "No money out on loans"
-          }
+          sub={`${fmtKsh(outstandingInterest)} interest still due`}
           accent="rose"
         />
         <Card
-          id="pipeline"
-          label="Applications & disbursement"
-          value={String(appliedCount + awaitingDisburse.length)}
-          sub={`${activeVotes.length} voting · ${awaitingDisburse.length} ready to disburse`}
-          accent="violet"
-        />
-        <Card
-          id="movement"
-          label="Liquidity & collections"
+          id="available"
+          label="Available for loaning"
           value={fmtKsh(loaningPool)}
-          sub={
-            `To lend ${fmtKsh(loaningPool)} · repaid ${fmtKsh(repaidPrincipal)} · interest in ${fmtKsh(interestCollected)}`
-          }
+          sub="4 liquidity kits"
           accent="emerald"
         />
         <Card
-          id="external"
-          label="External borrowing"
-          value="—"
-          sub="Bank or inter-chama debt (group as borrower)"
+          id="dues"
+          label="Loan payments due"
+          value={String(duesList.length)}
+          sub={
+            duesList[0]
+              ? `Next ${fmtKsh(duesList[0].amount)} · ${fmtLongDate(duesList[0].dueDate)}`
+              : "No upcoming installments"
+          }
+          accent="amber"
+        />
+        <Card
+          id="applied"
+          label="Loans applied"
+          value={String(activeVotes.length + awaitingDisburse.length + rejected.length)}
+          sub={`${activeVotes.length} voting · ${awaitingDisburse.length} approved`}
+          accent="violet"
+        />
+        <Card
+          id="approved"
+          label="Approved for disbursement"
+          value={String(awaitingDisburse.length)}
+          sub={
+            awaitingDisburse.length
+              ? fmtKsh(awaitingDisburse.reduce((s, p) => s + p.amount, 0))
+              : "Queue empty"
+          }
+          accent="sky"
+        />
+        <Card
+          id="month-disb"
+          label={`Disbursed · ${monthLabel}`}
+          value={fmtKsh(disbursedThisMonthAmt)}
+          sub={`Interest expected ${fmtKsh(interestExpectedThisMonth)}`}
+          accent="violet"
+        />
+        <Card
+          id="repaid"
+          label="Principal repaid"
+          value={fmtKsh(repaidPrincipal)}
+          sub={`Interest in ${fmtKsh(interestCollected)}`}
+          accent="emerald"
+        />
+        <Card
+          id="interest"
+          label="Interest report"
+          value={fmtKsh(interestAccrued)}
+          sub={`Reserve ${fmtKsh(reserveBalance)}`}
+          accent="amber"
+        />
+        <Card
+          id="deposits"
+          label="Member deposits"
+          value={fmtKsh(totalContributions)}
+          sub={`${completedContributions.length} records`}
           accent="sky"
         />
       </div>
 
       {opsCard && (
         <div className="rounded-2xl border border-slate-700 bg-slate-900/80 p-4">
-          {(opsCard === "balances" || opsCard === "book") && (
+          {opsCard === "balances" && (
             <div className="space-y-2">
               <p className="text-sm font-bold text-white">Outstanding balances</p>
               {disbursed.length === 0 ? (
@@ -383,7 +418,7 @@ function OpsReportCards({
               )}
             </div>
           )}
-          {(opsCard === "available" || opsCard === "movement") && (
+          {opsCard === "available" && (
             <div className="grid gap-2 sm:grid-cols-2">
               {kits
                 .filter((k) => liquidityCodes.has(k.kit_code))
@@ -400,7 +435,7 @@ function OpsReportCards({
                 ))}
             </div>
           )}
-          {(opsCard === "dues" || opsCard === "book") && (
+          {opsCard === "dues" && (
             <div className="space-y-2">
               <p className="text-sm font-bold text-white">Payments due</p>
               {duesList.length === 0 ? (
@@ -427,7 +462,7 @@ function OpsReportCards({
               )}
             </div>
           )}
-          {(opsCard === "applied" || opsCard === "pipeline") && (
+          {opsCard === "applied" && (
             <div className="space-y-2">
               <p className="text-sm font-bold text-white">Applications</p>
               {[...activeVotes, ...awaitingDisburse, ...rejected].map((p) => {
@@ -453,7 +488,7 @@ function OpsReportCards({
               })}
             </div>
           )}
-          {(opsCard === "approved" || opsCard === "pipeline") && (
+          {opsCard === "approved" && (
             <div className="space-y-2">
               <p className="text-sm font-bold text-white">Awaiting disbursement</p>
               {awaitingDisburse.map((p) => {
@@ -472,7 +507,7 @@ function OpsReportCards({
               })}
             </div>
           )}
-          {(opsCard === "month-disb" || opsCard === "movement") && (
+          {opsCard === "month-disb" && (
             <div className="space-y-2">
               <p className="text-sm font-bold text-white">Disbursed in {monthLabel}</p>
               {disbursedThisMonth.length === 0 ? (
@@ -493,13 +528,13 @@ function OpsReportCards({
               )}
             </div>
           )}
-          {(opsCard === "repaid" || opsCard === "movement") && (
+          {opsCard === "repaid" && (
             <p className="text-xs text-slate-400">
               Principal restored to kits (book): {fmtKsh(repaidPrincipal)}. Interest collected:{" "}
               {fmtKsh(interestCollected)}. See Audit Ledger for line items.
             </p>
           )}
-          {(opsCard === "interest" || opsCard === "movement") && (
+          {opsCard === "interest" && (
             <ul className="space-y-1 text-xs text-slate-400">
               <li>Accrued: {fmtKsh(interestAccrued)}</li>
               <li>Collected: {fmtKsh(interestCollected)}</li>
@@ -507,7 +542,7 @@ function OpsReportCards({
               <li>Reserve kit: {fmtKsh(reserveBalance)}</li>
             </ul>
           )}
-          {(opsCard === "deposits" || opsCard === "movement") && (
+          {opsCard === "deposits" && (
             <div className="max-h-56 space-y-2 overflow-y-auto">
               {completedContributions.slice(0, 20).map((c) => (
                 <div
@@ -523,19 +558,16 @@ function OpsReportCards({
               ))}
             </div>
           )}
-          {(opsCard === "external") && (
-            <div className="space-y-2">
-              <p className="text-sm font-bold text-white">External borrowing</p>
-              <p className="text-xs text-slate-400">
-                Loans this chama takes from a bank or another chama. Member facilities stay under Active loan book.
-              </p>
-              <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/40 px-3 py-6 text-center text-[11px] text-slate-500">
-                No external facilities yet
-              </div>
-            </div>
-          )}
         </div>
       )}
+
+      <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/40 p-4">
+        <p className="text-sm font-bold text-white">External borrowing (chama as borrower)</p>
+        <p className="mt-1 text-xs text-slate-500">
+          Placeholder for bank or inter-chama debt. Member facilities stay in the group loan book
+          above; this section will track loans the chama itself takes.
+        </p>
+      </div>
     </div>
   );
 }
@@ -2541,7 +2573,7 @@ Welfare / emergency kitty</p>
             monthLabel={monthLabel}
           />
 
-          <div className={`rounded-2xl border border-slate-800 bg-slate-900/70 p-4 ${opsCard === "pipeline" || opsCard === "approved" ? "" : "hidden"}`}>
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
             <p className="text-sm font-bold text-white">Disbursement queue</p>
             <p className="mt-1 text-[11px] text-slate-500">
               Treasurer confirms the applicant and releases funds from the loaning pool. Personal
@@ -2586,7 +2618,7 @@ Welfare / emergency kitty</p>
             </div>
           </div>
 
-          <div className={`rounded-2xl border border-slate-800 bg-slate-900/70 p-4 ${opsCard === "movement" || opsCard === "book" || opsCard === null ? "" : "hidden"}`}>
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
             <p className="text-sm font-bold text-white">Group audit (recent)</p>
             <p className="mt-1 text-[11px] text-slate-500">
               High-level trail only — not personal loan management.
