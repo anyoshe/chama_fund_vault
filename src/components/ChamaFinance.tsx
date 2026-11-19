@@ -909,6 +909,8 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
   const [deskPanel, setDeskPanel] = useState<
     null | "settings" | "pending" | "report" | "command" | "operations" | "expenses"
   >(null);
+  const [draftEnabledKits, setDraftEnabledKits] = useState<string[] | null>(null);
+  const [savingKits, setSavingKits] = useState(false);
   const [groupExpenses, setGroupExpenses] = useState<
     {
       id: string;
@@ -1135,8 +1137,8 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
     "general-savings",
     "member-loans",
   ]);
-  const groupPool = kits.reduce((s, k) => s + (Number(k.balance) || 0), 0);
-  const loaningPool = kits
+  const groupPool = visibleKits.reduce((s, k) => s + (Number(k.balance) || 0), 0);
+  const loaningPool = visibleKits
     .filter((k) => liquidityCodes.has(k.kit_code))
     .reduce((s, k) => s + (Number(k.balance) || 0), 0);
   const reserveKit = kits.find((k) => k.kit_code === "group-reserve");
@@ -1339,81 +1341,120 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
           <div className="rounded-2xl border border-orange-500/25 bg-slate-900/80 p-4">
             <p className="text-sm font-bold text-white">Active pots</p>
             <p className="mt-1 text-[11px] text-slate-500">
-              Tick only the pots this chama uses. Unticked pots stay hidden for members and group screens.
+              Tick the pots this chama uses, then press <strong className="text-slate-300">Save pots</strong>.
+              Unticked pots are hidden on Overview, Home, My Finance, and expenses.
             </p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {(
-                kits.length
-                  ? Array.from(
-                      new Map(
-                        [
-                          ...kits.map(
-                            (k) =>
-                              [k.kit_code, k.label || k.kit_code] as [
-                                string,
-                                string,
-                              ],
-                          ),
-                          ...potOptionsForChama(chama).map(
-                            (a) => [a.value, a.label] as [string, string],
-                          ),
-                        ],
-                      ).entries(),
-                    )
-                  : potOptionsForChama(chama).map(
-                      (a) => [a.value, a.label] as [string, string],
-                    )
-              ).map(([code, label]) => {
-                const enabledList =
-                  chama.constitution?.enabledKitCodes ??
-                  kits.map((k) => k.kit_code);
-                const checked =
-                  !chama.constitution?.enabledKitCodes?.length ||
-                  enabledList.includes(code);
-                return (
-                  <label
-                    key={code}
-                    className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-2.5 py-2 text-xs text-slate-200"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={async (e) => {
-                        const on = e.target.checked;
-                        const current =
-                          chama.constitution?.enabledKitCodes ??
-                          kits.map((k) => k.kit_code);
-                        const next = on
-                          ? Array.from(new Set([...current, code]))
-                          : current.filter((x) => x !== code);
-                        if (next.length === 0) {
-                          toast.error("Keep at least one pot enabled");
-                          return;
-                        }
-                        const constitution = {
-                          ...chama.constitution,
-                          enabledKitCodes: next,
-                        };
-                        const { error } = await supabase
-                          .from("chamas")
-                          .update({ constitution })
-                          .eq("id", chamaId);
-                        if (error) {
-                          toast.error(error.message);
-                          return;
-                        }
-                        toast.success(
-                          on ? `${label} shown in app` : `${label} hidden`,
-                        );
-                        window.setTimeout(() => window.location.reload(), 400);
-                      }}
-                    />
-                    <span className="truncate">{label}</span>
-                  </label>
+              {(() => {
+                const choices = Array.from(
+                  new Map(
+                    [
+                      ...kits.map(
+                        (k) =>
+                          [k.kit_code, k.label || k.kit_code] as [string, string],
+                      ),
+                      ...[
+                        "table-banking",
+                        "share-capital",
+                        "general-savings",
+                        "member-loans",
+                        "merry-go-round",
+                        "welfare",
+                        "registration-fees",
+                        "contingency",
+                        "group-reserve",
+                      ].map((code) => {
+                        const lab =
+                          kits.find((k) => k.kit_code === code)?.label ||
+                          code;
+                        return [code, lab] as [string, string];
+                      }),
+                    ],
+                  ).entries(),
                 );
-              })}
+                const saved =
+                  chama.constitution?.enabledKitCodes &&
+                  chama.constitution.enabledKitCodes.length > 0
+                    ? [...chama.constitution.enabledKitCodes]
+                    : choices.map(([c]) => c);
+                const selected = draftEnabledKits ?? saved;
+                return choices.map(([code, label]) => {
+                  const checked = selected.includes(code);
+                  return (
+                    <label
+                      key={code}
+                      className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-2.5 py-2 text-xs text-slate-200"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          const base = draftEnabledKits ?? saved;
+                          const next = checked
+                            ? base.filter((x) => x !== code)
+                            : [...base, code];
+                          setDraftEnabledKits(next);
+                        }}
+                      />
+                      <span className="truncate">{label}</span>
+                    </label>
+                  );
+                });
+              })()}
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={savingKits || draftEnabledKits === null}
+                className="rounded-xl bg-orange-500 px-4 py-2 text-xs font-bold text-white hover:bg-orange-400 disabled:opacity-40"
+                onClick={async () => {
+                  if (!draftEnabledKits || draftEnabledKits.length === 0) {
+                    toast.error("Keep at least one pot enabled");
+                    return;
+                  }
+                  setSavingKits(true);
+                  try {
+                    const constitution = {
+                      ...chama.constitution,
+                      enabledKitCodes: draftEnabledKits,
+                      activities: draftEnabledKits as typeof chama.constitution.activities,
+                    };
+                    const { error } = await supabase
+                      .from("chamas")
+                      .update({ constitution })
+                      .eq("id", chamaId);
+                    if (error) throw error;
+                    toast.success("Active pots saved");
+                    setDraftEnabledKits(null);
+                    window.setTimeout(() => window.location.reload(), 500);
+                  } catch (e) {
+                    toast.error(
+                      e instanceof Error ? e.message : "Could not save pots",
+                    );
+                  } finally {
+                    setSavingKits(false);
+                  }
+                }}
+              >
+                {savingKits ? "Saving…" : "Save pots"}
+              </button>
+              {draftEnabledKits !== null && (
+                <button
+                  type="button"
+                  className="rounded-xl border border-slate-600 px-3 py-2 text-xs font-semibold text-slate-300 hover:border-slate-400"
+                  onClick={() => setDraftEnabledKits(null)}
+                >
+                  Cancel
+                </button>
+              )}
+              {draftEnabledKits !== null && (
+                <span className="text-[10px] text-amber-300/90">
+                  Unsaved changes
+                </span>
+              )}
             </div>
           </div>
+
         </div>
       )}
 
@@ -2226,7 +2267,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
               <p className="text-sm font-bold text-white">Kit balances</p>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {kits.map((k) => (
+                {visibleKits.map((k) => (
                   <div
                     key={k.kit_code}
                     className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2"
@@ -3343,7 +3384,7 @@ Welfare / emergency kitty</p>
             outstandingPrincipal={outstandingPrincipal}
             outstandingInterest={outstandingInterest}
             loaningPool={loaningPool}
-            kits={kits}
+            kits={visibleKits}
             interestAccrued={interestAccrued}
             interestCollected={interestCollected}
             repaidPrincipal={[...chamaProposals.filter((p) => p.status === "disbursed" || p.status === "settled")].reduce((s, p) => {

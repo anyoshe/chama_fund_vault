@@ -14,6 +14,7 @@ import {
 import { motion } from "framer-motion";
 import { CHAMA_ACTIVITIES, type Chama, type ChamaActivity, type ChamaKit, type Contribution, type Member, type Proposal } from "../types/chama";
 import { fmtKsh } from "../data/mockChamaData";
+import { filterVisibleKits } from "@/lib/kitVisibility";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -101,9 +102,13 @@ export default function ChamaOverview({
   availableLoanLimit,
 }: ChamaOverviewProps) {
   const [viewRule, setViewRule] = useState(false);
-  const activities: ChamaActivity[] = chama.constitution?.activities?.length
-    ? (chama.constitution.activities as ChamaActivity[])
-    : ["general-savings"];
+  const activities: ChamaActivity[] = (
+    chama.constitution?.enabledKitCodes?.length
+      ? chama.constitution.enabledKitCodes
+      : chama.constitution?.activities?.length
+        ? chama.constitution.activities
+        : ["general-savings"]
+  ) as ChamaActivity[];
   const [selectedAccount, setSelectedAccount] = useState<ChamaActivity>(activities[0]);
   useEffect(() => {
     if (!activities.includes(selectedAccount)) setSelectedAccount(activities[0]);
@@ -118,8 +123,13 @@ export default function ChamaOverview({
       : accountContributions.reduce((sum, contribution) => sum + contribution.amount, 0);
   const loanFund = kits.find((k) => k.is_loan_fund || k.kit_code === "member-loans");
   const liquidityCodes = new Set(["table-banking", "share-capital", "general-savings", "member-loans"]);
+  const enabledSet = new Set(activities as string[]);
   const loaningPoolTotal = kits
-    .filter((k) => liquidityCodes.has(k.kit_code))
+    .filter(
+      (k) =>
+        liquidityCodes.has(k.kit_code) &&
+        (enabledSet.size === 0 || enabledSet.has(k.kit_code)),
+    )
     .reduce((sum, k) => sum + (Number(k.balance) || 0), 0);
   const loaningPoolRate = Math.min(
     100,
@@ -357,15 +367,15 @@ export default function ChamaOverview({
         />
       </div>
 
-      {/* Kit balances (separate pots) */}
-      {kits.length > 0 && (
+      {/* Kit balances (separate pots) — only pots leaders enabled */}
+      {filterVisibleKits(kits, chama).length > 0 && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
           <h3 className="text-sm font-bold text-white">Kits (separate pots)</h3>
           <p className="mt-1 text-[11px] text-slate-500">
             Money stays in the kit you contribute to. Loan fund is separate from shares.
           </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {kits.map((kit) => (
+            {filterVisibleKits(kits, chama).map((kit) => (
               <button
                 key={kit.kit_code}
                 type="button"
