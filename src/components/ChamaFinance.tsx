@@ -46,7 +46,7 @@ interface ChamaFinanceProps {
   proposals: Proposal[];
   kits: ChamaKit[];
   memberBalances: MemberBalance[];
-  ledger: AuditEvent[];
+  ledger: { id: string; chamaId: string; description: string; amount: number }[];
   canDisburse: boolean;
   onRepay: (proposalId: string) => void;
   onReschedule: (
@@ -176,6 +176,7 @@ function CollapseSection({
 
 function OpsReportCards({
   chama,
+  chamaId,
   members,
   chamaProposals,
   paidLoans,
@@ -195,8 +196,12 @@ function OpsReportCards({
   opsCard,
   setOpsCard,
   monthLabel,
+  ledger,
+  canDisburse,
+  onDisburse,
 }: {
   chama: Chama;
+  chamaId: string;
   members: Member[];
   chamaProposals: Proposal[];
   paidLoans: Proposal[];
@@ -216,6 +221,9 @@ function OpsReportCards({
   opsCard: string | null;
   setOpsCard: (id: string | null) => void;
   monthLabel: string;
+  ledger: { id: string; chamaId: string; description: string; amount: number }[];
+  canDisburse?: boolean;
+  onDisburse?: (id: string) => void | Promise<void>;
 }) {
   const liquidityCodes = new Set([
     "table-banking",
@@ -277,300 +285,481 @@ function OpsReportCards({
     0,
   );
 
-  const Card = ({
+  const detailTitle: Record<string, string> = {
+    balances: "Loan balances outstanding",
+    available: "Available for loaning",
+    dues: "Loan payments due",
+    applied: "Loans applied",
+    approved: "Approved for disbursement",
+    "month-disb": `Disbursed · ${monthLabel}`,
+    repaid: "Principal repaid",
+    interest: "Interest report",
+    deposits: "Member deposits",
+  };
+
+  const BookMini = ({
     id,
     label,
     value,
     sub,
-    accent,
   }: {
     id: string;
     label: string;
     value: string;
     sub?: string;
-    accent: string;
-  }) => {
-    const open = opsCard === id;
-    return (
-      <button
-        type="button"
-        onClick={() => setOpsCard(open ? null : id)}
-        className={`rounded-2xl border bg-slate-900/70 p-4 text-left transition ${
-          open ? "border-violet-500/40 bg-violet-500/10" : "border-slate-800 hover:border-slate-600"
-        }`}
-      >
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-          {label}
-        </p>
-        <p className="mt-1.5 font-mono text-lg font-bold text-white">{value}</p>
-        {sub && <p className="mt-1 text-[11px] text-slate-500">{sub}</p>}
-        <p className="mt-2 text-[10px] font-semibold text-slate-400">
-          {open ? "Hide details" : "Tap for details"}
-        </p>
-      </button>
-    );
+  }) => (
+    <button
+      type="button"
+      onClick={() => setOpsCard(id)}
+      className="rounded-xl border border-slate-700 bg-slate-950/50 p-3 text-left hover:border-violet-500/40"
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <p className="mt-1 font-mono text-base font-bold text-white">{value}</p>
+      {sub ? <p className="mt-0.5 text-[10px] text-slate-500">{sub}</p> : null}
+      <p className="mt-1.5 text-[10px] font-semibold text-violet-300/80">
+        Tap for details
+      </p>
+    </button>
+  );
+
+  const detailBody = () => {
+    if (!opsCard) return null;
+    if (opsCard === "balances") {
+      return (
+        <div className="space-y-2">
+          {disbursed.length === 0 ? (
+            <p className="text-xs text-slate-500">None.</p>
+          ) : (
+            disbursed.map((p) => {
+              const e = exp(p);
+              const who = members.find((m) => m.id === p.requesterId)?.name ?? "Member";
+              return (
+                <div
+                  key={p.id}
+                  className="flex justify-between gap-2 rounded-xl border border-slate-800 px-3 py-2 text-xs"
+                >
+                  <span className="text-slate-300">
+                    {who} · {p.title}
+                  </span>
+                  <span className="font-mono text-rose-300">
+                    {fmtKsh(e.principalOut)} + int {fmtKsh(e.interestOut)}
+                  </span>
+                </div>
+              );
+            })
+          )}
+        </div>
+      );
+    }
+    if (opsCard === "available") {
+      return (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {kits
+            .filter((k) => liquidityCodes.has(k.kit_code))
+            .map((k) => (
+              <div
+                key={k.kit_code}
+                className="flex justify-between rounded-xl border border-slate-800 px-3 py-2 text-xs"
+              >
+                <span className="text-slate-300">{k.label}</span>
+                <span className="font-mono text-emerald-300">
+                  {fmtKsh(Number(k.balance) || 0)}
+                </span>
+              </div>
+            ))}
+        </div>
+      );
+    }
+    if (opsCard === "dues") {
+      return (
+        <div className="space-y-2">
+          {duesList.length === 0 ? (
+            <p className="text-xs text-slate-500">No open installments.</p>
+          ) : (
+            duesList.map((d) => (
+              <div
+                key={d.id}
+                className="flex justify-between gap-2 rounded-xl border border-slate-800 px-3 py-2 text-xs"
+              >
+                <div>
+                  <p className="font-semibold text-slate-200">
+                    {d.who} · {d.title}
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    Due {fmtLongDate(d.dueDate)}
+                  </p>
+                </div>
+                <span className="font-mono font-bold text-amber-300">
+                  {fmtKsh(d.amount)}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      );
+    }
+    if (opsCard === "applied") {
+      return (
+        <div className="space-y-2">
+          {[...activeVotes, ...awaitingDisburse, ...rejected].length === 0 ? (
+            <p className="text-xs text-slate-500">No applications.</p>
+          ) : (
+            [...activeVotes, ...awaitingDisburse, ...rejected].map((p) => {
+              const who = members.find((m) => m.id === p.requesterId)?.name ?? "Member";
+              const votes = Object.values(p.votes || {});
+              const approve = votes.filter((v) => v === "approve").length;
+              return (
+                <div
+                  key={p.id}
+                  className="flex justify-between gap-2 rounded-xl border border-slate-800 px-3 py-2 text-xs"
+                >
+                  <span className="text-slate-300">
+                    {who} · {p.title} · {p.status}
+                  </span>
+                  <span className="text-slate-500">
+                    {approve}/{votes.length} approve
+                  </span>
+                </div>
+              );
+            })
+          )}
+        </div>
+      );
+    }
+    if (opsCard === "approved") {
+      return (
+        <div className="space-y-2">
+          {awaitingDisburse.length === 0 ? (
+            <p className="text-xs text-slate-500">Queue empty.</p>
+          ) : (
+            awaitingDisburse.map((p) => {
+              const who = members.find((m) => m.id === p.requesterId)?.name ?? "Member";
+              return (
+                <div
+                  key={p.id}
+                  className="flex justify-between gap-2 rounded-xl border border-slate-800 px-3 py-2 text-xs"
+                >
+                  <span className="text-slate-300">
+                    {who} · {p.title}
+                  </span>
+                  <span className="font-mono text-sky-300">{fmtKsh(p.amount)}</span>
+                </div>
+              );
+            })
+          )}
+        </div>
+      );
+    }
+    if (opsCard === "month-disb") {
+      return (
+        <div className="space-y-2">
+          <p className="text-xs text-slate-400">
+            Total {fmtKsh(disbursedThisMonthAmt)} · interest expected{" "}
+            {fmtKsh(interestExpectedThisMonth)}
+          </p>
+          {disbursedThisMonth.length === 0 ? (
+            <p className="text-xs text-slate-500">None this month.</p>
+          ) : (
+            disbursedThisMonth.map((p) => (
+              <div
+                key={p.id}
+                className="flex justify-between rounded-xl border border-slate-800 px-3 py-2 text-xs"
+              >
+                <span className="text-slate-300">
+                  {members.find((m) => m.id === p.requesterId)?.name ?? "Member"} ·{" "}
+                  {p.title}
+                </span>
+                <span className="font-mono text-violet-300">{fmtKsh(p.amount)}</span>
+              </div>
+            ))
+          )}
+        </div>
+      );
+    }
+    if (opsCard === "repaid") {
+      return (
+        <ul className="space-y-1 text-xs text-slate-400">
+          <li>Principal repaid: {fmtKsh(repaidPrincipal)}</li>
+          <li>Interest collected: {fmtKsh(interestCollected)}</li>
+          <li>Settled loans: {paidLoans.length}</li>
+        </ul>
+      );
+    }
+    if (opsCard === "interest") {
+      return (
+        <ul className="space-y-1 text-xs text-slate-400">
+          <li>Accrued: {fmtKsh(interestAccrued)}</li>
+          <li>Collected: {fmtKsh(interestCollected)}</li>
+          <li>Still due: {fmtKsh(outstandingInterest)}</li>
+          <li>Reserve kit: {fmtKsh(reserveBalance)}</li>
+        </ul>
+      );
+    }
+    if (opsCard === "deposits") {
+      return (
+        <div className="max-h-56 space-y-2 overflow-y-auto">
+          {completedContributions.slice(0, 20).map((c) => (
+            <div
+              key={c.id}
+              className="flex justify-between rounded-xl border border-slate-800 px-3 py-2 text-xs"
+            >
+              <span className="text-slate-300">
+                {members.find((m) => m.id === c.memberId)?.name ?? "Member"} ·{" "}
+                {c.destination} · {fmtLongDate(c.date)}
+              </span>
+              <span className="font-mono text-emerald-300">{fmtKsh(c.amount)}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    return null;
   };
 
   return (
     <div className="space-y-4">
       <p className="text-xs text-slate-500">
-        Group loan book · tap a card for lists and breakdowns
+        Four areas · open Loan book for metrics · details open in a modal
       </p>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Card
-          id="balances"
-          label="Loan balances outstanding"
-          value={fmtKsh(outstandingPrincipal)}
-          sub={`${fmtKsh(outstandingInterest)} interest still due`}
-          accent="rose"
-        />
-        <Card
-          id="available"
-          label="Available for loaning"
-          value={fmtKsh(loaningPool)}
-          sub="4 liquidity kits"
-          accent="emerald"
-        />
-        <Card
-          id="dues"
-          label="Loan payments due"
-          value={String(duesList.length)}
-          sub={
-            duesList[0]
-              ? `Next ${fmtKsh(duesList[0].amount)} · ${fmtLongDate(duesList[0].dueDate)}`
-              : "No upcoming installments"
-          }
-          accent="amber"
-        />
-        <Card
-          id="applied"
-          label="Loans applied"
-          value={String(activeVotes.length + awaitingDisburse.length + rejected.length)}
-          sub={`${activeVotes.length} voting · ${awaitingDisburse.length} approved`}
-          accent="violet"
-        />
-        <Card
-          id="approved"
-          label="Approved for disbursement"
-          value={String(awaitingDisburse.length)}
-          sub={
-            awaitingDisburse.length
-              ? fmtKsh(awaitingDisburse.reduce((s, p) => s + p.amount, 0))
-              : "Queue empty"
-          }
-          accent="sky"
-        />
-        <Card
-          id="month-disb"
-          label={`Disbursed · ${monthLabel}`}
-          value={fmtKsh(disbursedThisMonthAmt)}
-          sub={`Interest expected ${fmtKsh(interestExpectedThisMonth)}`}
-          accent="violet"
-        />
-        <Card
-          id="repaid"
-          label="Principal repaid"
-          value={fmtKsh(repaidPrincipal)}
-          sub={`Interest in ${fmtKsh(interestCollected)}`}
-          accent="emerald"
-        />
-        <Card
-          id="interest"
-          label="Interest report"
-          value={fmtKsh(interestAccrued)}
-          sub={`Reserve ${fmtKsh(reserveBalance)}`}
-          accent="amber"
-        />
-        <Card
-          id="deposits"
-          label="Member deposits"
-          value={fmtKsh(totalContributions)}
-          sub={`${completedContributions.length} records`}
-          accent="sky"
-        />
+      <div className="grid gap-3 sm:grid-cols-2">
+        {/* 1. Loan book */}
+        <div className="rounded-2xl border border-violet-500/25 bg-slate-900/80 p-4 sm:col-span-2">
+          <p className="text-sm font-bold text-white">Loan book</p>
+          <p className="mt-1 text-xs text-slate-400">
+            Balances, pipeline, liquidity and collections — tap a tile for the full list
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <BookMini
+              id="balances"
+              label="Loan balances outstanding"
+              value={fmtKsh(outstandingPrincipal)}
+              sub={`${fmtKsh(outstandingInterest)} interest still due`}
+            />
+            <BookMini
+              id="available"
+              label="Available for loaning"
+              value={fmtKsh(loaningPool)}
+              sub="4 liquidity kits"
+            />
+            <BookMini
+              id="dues"
+              label="Loan payments due"
+              value={String(duesList.length)}
+              sub={
+                duesList[0]
+                  ? `Next ${fmtKsh(duesList[0].amount)} · ${fmtLongDate(duesList[0].dueDate)}`
+                  : "No upcoming installments"
+              }
+            />
+            <BookMini
+              id="applied"
+              label="Loans applied"
+              value={String(activeVotes.length + awaitingDisburse.length + rejected.length)}
+              sub={`${activeVotes.length} voting · ${awaitingDisburse.length} approved`}
+            />
+            <BookMini
+              id="approved"
+              label="Approved for disbursement"
+              value={String(awaitingDisburse.length)}
+              sub={
+                awaitingDisburse.length
+                  ? fmtKsh(awaitingDisburse.reduce((s, p) => s + p.amount, 0))
+                  : "Queue empty"
+              }
+            />
+            <BookMini
+              id="month-disb"
+              label={`Disbursed · ${monthLabel}`}
+              value={fmtKsh(disbursedThisMonthAmt)}
+              sub={`Interest expected ${fmtKsh(interestExpectedThisMonth)}`}
+            />
+            <BookMini
+              id="repaid"
+              label="Principal repaid"
+              value={fmtKsh(repaidPrincipal)}
+              sub={`Interest in ${fmtKsh(interestCollected)}`}
+            />
+            <BookMini
+              id="interest"
+              label="Interest report"
+              value={fmtKsh(interestAccrued)}
+              sub={`Reserve ${fmtKsh(reserveBalance)}`}
+            />
+            <BookMini
+              id="deposits"
+              label="Member deposits"
+              value={fmtKsh(totalContributions)}
+              sub={`${completedContributions.length} records`}
+            />
+          </div>
+        </div>
+
+        {/* 2. External */}
+        <button
+          type="button"
+          onClick={() => setOpsCard(opsCard === "external" ? null : "external")}
+          className={`rounded-2xl border p-4 text-left transition ${
+            opsCard === "external"
+              ? "border-sky-500/40 bg-sky-500/10"
+              : "border-slate-800 bg-slate-900/80 hover:border-slate-600"
+          }`}
+        >
+          <p className="text-sm font-bold text-white">External borrowing</p>
+          <p className="mt-1 text-xs text-slate-400">
+            Bank or inter-chama debt when this chama borrows
+          </p>
+          <p className="mt-2 text-[10px] font-semibold text-slate-500">
+            {opsCard === "external" ? "Hide" : "Tap to open"}
+          </p>
+        </button>
+
+        {/* 3. Disbursement queue */}
+        <button
+          type="button"
+          onClick={() => setOpsCard(opsCard === "disburse-queue" ? null : "disburse-queue")}
+          className={`rounded-2xl border p-4 text-left transition ${
+            opsCard === "disburse-queue"
+              ? "border-emerald-500/40 bg-emerald-500/10"
+              : "border-slate-800 bg-slate-900/80 hover:border-slate-600"
+          }`}
+        >
+          <p className="text-sm font-bold text-white">Disbursement queue</p>
+          <p className="mt-1 font-mono text-lg font-bold text-white">
+            {awaitingDisburse.length}
+          </p>
+          <p className="mt-1 text-xs text-slate-400">
+            Treasurer releases funds from the loaning pool
+          </p>
+        </button>
+
+        {/* 4. Group audit */}
+        <button
+          type="button"
+          onClick={() => setOpsCard(opsCard === "audit" ? null : "audit")}
+          className={`rounded-2xl border p-4 text-left transition sm:col-span-2 ${
+            opsCard === "audit"
+              ? "border-amber-500/40 bg-amber-500/10"
+              : "border-slate-800 bg-slate-900/80 hover:border-slate-600"
+          }`}
+        >
+          <p className="text-sm font-bold text-white">Group audit</p>
+          <p className="mt-1 text-xs text-slate-400">
+            Recent high-level trail (not personal loan management)
+          </p>
+          <p className="mt-2 text-[10px] font-semibold text-slate-500">
+            {opsCard === "audit" ? "Hide" : "Tap to open"}
+          </p>
+        </button>
       </div>
 
-      {opsCard && (
-        <div className="rounded-2xl border border-slate-700 bg-slate-900/80 p-4">
-          {opsCard === "balances" && (
-            <div className="space-y-2">
-              <p className="text-sm font-bold text-white">Outstanding balances</p>
-              {disbursed.length === 0 ? (
-                <p className="text-xs text-slate-500">None.</p>
-              ) : (
-                disbursed.map((p) => {
-                  const e = exp(p);
-                  const who = members.find((m) => m.id === p.requesterId)?.name ?? "Member";
-                  return (
-                    <div
-                      key={p.id}
-                      className="flex justify-between gap-2 rounded-xl border border-slate-800 px-3 py-2 text-xs"
-                    >
-                      <span className="text-slate-300">
-                        {who} · {p.title}
-                      </span>
-                      <span className="font-mono text-rose-300">
-                        {fmtKsh(e.principalOut)} + int {fmtKsh(e.interestOut)}
-                      </span>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          )}
-          {opsCard === "available" && (
-            <div className="grid gap-2 sm:grid-cols-2">
-              {kits
-                .filter((k) => liquidityCodes.has(k.kit_code))
-                .map((k) => (
+      {/* Expanded panels for external / queue / audit (not loan-book metrics) */}
+      {opsCard === "external" && (
+        <div className="rounded-2xl border border-sky-500/25 bg-slate-900/80 p-4">
+          <p className="text-sm font-bold text-white">External borrowing</p>
+          <p className="mt-1 text-xs text-slate-400">
+            Loans this chama takes from a bank or another chama. Member facilities stay in the Loan book.
+          </p>
+          <div className="mt-3 rounded-xl border border-dashed border-slate-700 bg-slate-950/40 px-3 py-6 text-center text-[11px] text-slate-500">
+            No external facilities yet
+          </div>
+        </div>
+      )}
+      {opsCard === "disburse-queue" && (
+        <div className="rounded-2xl border border-emerald-500/25 bg-slate-900/80 p-4">
+          <p className="text-sm font-bold text-white">Disbursement queue</p>
+          <p className="mt-1 text-[11px] text-slate-500">
+            Confirm the applicant and release funds. Personal repayments stay on My Finance.
+          </p>
+          <div className="mt-3 space-y-2">
+            {awaitingDisburse.length === 0 ? (
+              <p className="text-xs text-slate-500">No loans waiting for disbursement.</p>
+            ) : (
+              awaitingDisburse.map((p) => {
+                const who = members.find((m) => m.id === p.requesterId)?.name ?? "Member";
+                return (
                   <div
-                    key={k.kit_code}
-                    className="flex justify-between rounded-xl border border-slate-800 px-3 py-2 text-xs"
-                  >
-                    <span className="text-slate-300">{k.label}</span>
-                    <span className="font-mono text-emerald-300">
-                      {fmtKsh(Number(k.balance) || 0)}
-                    </span>
-                  </div>
-                ))}
-            </div>
-          )}
-          {opsCard === "dues" && (
-            <div className="space-y-2">
-              <p className="text-sm font-bold text-white">Payments due</p>
-              {duesList.length === 0 ? (
-                <p className="text-xs text-slate-500">No open installments.</p>
-              ) : (
-                duesList.map((d) => (
-                  <div
-                    key={d.id}
-                    className="flex justify-between gap-2 rounded-xl border border-slate-800 px-3 py-2 text-xs"
+                    key={p.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5"
                   >
                     <div>
-                      <p className="font-semibold text-slate-200">
-                        {d.who} · {d.title}
+                      <p className="text-xs font-semibold text-slate-200">
+                        {who} · {p.title}
                       </p>
                       <p className="text-[10px] text-slate-500">
-                        Due {fmtLongDate(d.dueDate)}
+                        {fmtKsh(p.amount)} · {p.status}
                       </p>
                     </div>
-                    <span className="font-mono font-bold text-amber-300">
-                      {fmtKsh(d.amount)}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-          {opsCard === "applied" && (
-            <div className="space-y-2">
-              <p className="text-sm font-bold text-white">Applications</p>
-              {[...activeVotes, ...awaitingDisburse, ...rejected].map((p) => {
-                const who = members.find((m) => m.id === p.requesterId)?.name ?? "Member";
-                const votes = Object.values(p.votes || {});
-                const approve = votes.filter((v) => v === "approve").length;
-                const need = Math.ceil(quorumVoterCount * (p.quorumThreshold || 0.6));
-                return (
-                  <div key={p.id} className="rounded-xl border border-slate-800 px-3 py-2 text-xs">
-                    <div className="flex justify-between gap-2">
-                      <span className="font-semibold text-slate-200">
-                        {who} · {p.title}
-                      </span>
-                      <span className="text-[10px] font-bold uppercase text-slate-400">
-                        {p.status}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-slate-500">
-                      {fmtKsh(p.amount)} · {approve} yes votes · need {need} for quorum
-                    </p>
+                    <button
+                      type="button"
+                      disabled={!canDisburse}
+                      onClick={() => void onDisburse?.(p.id)}
+                      className={`rounded-xl px-3 py-1.5 text-[11px] font-bold ${
+                        canDisburse
+                          ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
+                          : "cursor-not-allowed bg-slate-800 text-slate-500"
+                      }`}
+                    >
+                      {canDisburse ? "Disburse" : "Treasurer only"}
+                    </button>
                   </div>
                 );
-              })}
-            </div>
-          )}
-          {opsCard === "approved" && (
-            <div className="space-y-2">
-              <p className="text-sm font-bold text-white">Awaiting disbursement</p>
-              {awaitingDisburse.map((p) => {
-                const who = members.find((m) => m.id === p.requesterId)?.name ?? "Member";
-                return (
-                  <div
-                    key={p.id}
-                    className="flex justify-between rounded-xl border border-sky-500/20 px-3 py-2 text-xs"
-                  >
-                    <span className="text-slate-200">
-                      {who} · {p.title}
-                    </span>
-                    <span className="font-mono text-sky-300">{fmtKsh(p.amount)}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {opsCard === "month-disb" && (
-            <div className="space-y-2">
-              <p className="text-sm font-bold text-white">Disbursed in {monthLabel}</p>
-              {disbursedThisMonth.length === 0 ? (
-                <p className="text-xs text-slate-500">None this month.</p>
-              ) : (
-                disbursedThisMonth.map((p) => (
-                  <div
-                    key={p.id}
-                    className="flex justify-between rounded-xl border border-slate-800 px-3 py-2 text-xs"
-                  >
-                    <span className="text-slate-300">
-                      {members.find((m) => m.id === p.requesterId)?.name ?? "Member"} ·{" "}
-                      {fmtLongDate(p.disbursedAt || "")}
-                    </span>
-                    <span className="font-mono text-violet-300">{fmtKsh(p.amount)}</span>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-          {opsCard === "repaid" && (
-            <p className="text-xs text-slate-400">
-              Principal restored to kits (book): {fmtKsh(repaidPrincipal)}. Interest collected:{" "}
-              {fmtKsh(interestCollected)}. See Audit Ledger for line items.
-            </p>
-          )}
-          {opsCard === "interest" && (
-            <ul className="space-y-1 text-xs text-slate-400">
-              <li>Accrued: {fmtKsh(interestAccrued)}</li>
-              <li>Collected: {fmtKsh(interestCollected)}</li>
-              <li>Still due: {fmtKsh(outstandingInterest)}</li>
-              <li>Reserve kit: {fmtKsh(reserveBalance)}</li>
-            </ul>
-          )}
-          {opsCard === "deposits" && (
-            <div className="max-h-56 space-y-2 overflow-y-auto">
-              {completedContributions.slice(0, 20).map((c) => (
+              })
+            )}
+          </div>
+        </div>
+      )}
+      {opsCard === "audit" && (
+        <div className="rounded-2xl border border-amber-500/25 bg-slate-900/80 p-4">
+          <p className="text-sm font-bold text-white">Group audit (recent)</p>
+          <div className="mt-3 max-h-64 space-y-1.5 overflow-y-auto">
+            {ledger
+              .filter((e) => e.chamaId === chamaId)
+              .slice(0, 20)
+              .map((e) => (
                 <div
-                  key={c.id}
-                  className="flex justify-between rounded-xl border border-slate-800 px-3 py-2 text-xs"
+                  key={e.id}
+                  className="flex justify-between gap-2 rounded-lg border border-slate-800/80 px-2.5 py-1.5 text-[11px]"
                 >
-                  <span className="text-slate-300">
-                    {members.find((m) => m.id === c.memberId)?.name ?? "Member"} ·{" "}
-                    {c.destination} · {fmtLongDate(c.date)}
+                  <span className="truncate text-slate-400">{e.description}</span>
+                  <span className="shrink-0 font-mono text-slate-300">
+                    {fmtKsh(e.amount)}
                   </span>
-                  <span className="font-mono text-emerald-300">{fmtKsh(c.amount)}</span>
                 </div>
               ))}
-            </div>
-          )}
+            {ledger.filter((e) => e.chamaId === chamaId).length === 0 && (
+              <p className="text-xs text-slate-500">No audit events yet.</p>
+            )}
+          </div>
         </div>
       )}
 
-      <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/40 p-4">
-        <p className="text-sm font-bold text-white">External borrowing (chama as borrower)</p>
-        <p className="mt-1 text-xs text-slate-500">
-          Placeholder for bank or inter-chama debt. Member facilities stay in the group loan book
-          above; this section will track loans the chama itself takes.
-        </p>
-      </div>
+      {/* Loan book metric details → modal */}
+      <AppModal
+        open={Boolean(
+          opsCard &&
+            !["external", "disburse-queue", "audit"].includes(opsCard),
+        )}
+        onClose={() => setOpsCard(null)}
+        title={opsCard ? detailTitle[opsCard] || "Details" : "Details"}
+        size="lg"
+        footer={
+          <button
+            type="button"
+            className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white"
+            onClick={() => setOpsCard(null)}
+          >
+            Close
+          </button>
+        }
+      >
+        <div className="max-h-[60vh] overflow-y-auto">{detailBody()}</div>
+      </AppModal>
     </div>
   );
 }
+
 
 export default function ChamaFinance(props: ChamaFinanceProps) {
   const {
@@ -2571,78 +2760,11 @@ Welfare / emergency kitty</p>
             opsCard={opsCard}
             setOpsCard={setOpsCard}
             monthLabel={monthLabel}
+            ledger={ledger}
+            chamaId={chamaId}
+            canDisburse={props.canDisburse}
+            onDisburse={props.onDisburse}
           />
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-            <p className="text-sm font-bold text-white">Disbursement queue</p>
-            <p className="mt-1 text-[11px] text-slate-500">
-              Treasurer confirms the applicant and releases funds from the loaning pool. Personal
-              repayments stay on <span className="text-emerald-300">My Finance</span>.
-            </p>
-            <div className="mt-3 space-y-2">
-              {awaitingDisburse.length === 0 ? (
-                <p className="text-xs text-slate-500">No loans waiting for disbursement.</p>
-              ) : (
-                awaitingDisburse.map((p) => {
-                  const who =
-                    members.find((m) => m.id === p.requesterId)?.name ?? "Member";
-                  return (
-                    <div
-                      key={p.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5"
-                    >
-                      <div>
-                        <p className="text-xs font-semibold text-slate-200">
-                          {who} · {p.title}
-                        </p>
-                        <p className="text-[10px] text-slate-500">
-                          {fmtKsh(p.amount)} · status {p.status}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={!props.canDisburse}
-                        onClick={() => void props.onDisburse(p.id)}
-                        className={`rounded-xl px-3 py-1.5 text-[11px] font-bold ${
-                          props.canDisburse
-                            ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
-                            : "cursor-not-allowed bg-slate-800 text-slate-500"
-                        }`}
-                      >
-                        {props.canDisburse ? "Disburse" : "Treasurer only"}
-                      </button>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-            <p className="text-sm font-bold text-white">Group audit (recent)</p>
-            <p className="mt-1 text-[11px] text-slate-500">
-              High-level trail only — not personal loan management.
-            </p>
-            <div className="mt-3 max-h-48 space-y-1.5 overflow-y-auto">
-              {ledger
-                .filter((e) => e.chamaId === chamaId)
-                .slice(0, 12)
-                .map((e) => (
-                  <div
-                    key={e.id}
-                    className="flex justify-between gap-2 rounded-lg border border-slate-800/80 px-2.5 py-1.5 text-[11px]"
-                  >
-                    <span className="truncate text-slate-400">{e.description}</span>
-                    <span className="shrink-0 font-mono text-slate-300">
-                      {fmtKsh(e.amount)}
-                    </span>
-                  </div>
-                ))}
-              {ledger.filter((e) => e.chamaId === chamaId).length === 0 && (
-                <p className="text-xs text-slate-500">No audit events yet.</p>
-              )}
-            </div>
-          </div>
         </motion.div>
       ) : null}
     </div>
