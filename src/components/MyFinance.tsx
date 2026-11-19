@@ -157,6 +157,8 @@ export default function MyFinance({
   canRequestLoan = true,
   availableLoanLimit,
   onPartialRepay,
+  onRequestLoanRepay,
+  onRequestObligationPay,
   onReallocateContribution,
 }: MyFinanceProps) {
   const [repayOpen, setRepayOpen] = useState(false);
@@ -441,10 +443,15 @@ export default function MyFinance({
             type="button"
             onClick={() => {
               if (!primaryLoan) return;
-              setRepayAmount(String(Math.round(primaryOutstanding * 100) / 100));
+              const amt = Math.round(primaryOutstanding * 100) / 100;
+              if (onRequestLoanRepay) {
+                onRequestLoanRepay(primaryLoan.id, amt);
+                return;
+              }
+              setRepayAmount(String(amt));
               setRepayOpen((v) => !v);
             }}
-            disabled={!primaryLoan || !onPartialRepay}
+            disabled={!primaryLoan || (!onPartialRepay && !onRequestLoanRepay)}
             title={
               !primaryLoan
                 ? "No disbursed loan to repay"
@@ -722,37 +729,15 @@ export default function MyFinance({
                       setPayingId(o.id);
                       try {
                         const ref = `OBL${Date.now().toString().slice(-8)}`;
-                        const { data, error } = await supabase.rpc(
-                          "pay_contribution_obligation",
-                          {
-                            p_obligation_id: o.id,
-                            p_amount: o.outstanding,
-                            p_method: "Other",
-                            p_reference: ref,
-                            p_phone: null,
-                            p_payment_details: "Phase1 self-pay",
-                          },
-                        );
-                        if (error) throw error;
-                        toast.success(
-                          `Paid ${fmtKsh(o.outstanding)} · ${o.planName}`,
-                        );
-                        const st = data as { status?: string; outstanding?: number };
-                        setObligations((prev) =>
-                          prev
-                            .map((x) =>
-                              x.id === o.id
-                                ? {
-                                    ...x,
-                                    paidAmount: x.expectedAmount,
-                                    outstanding: 0,
-                                    status: "paid" as const,
-                                  }
-                                : x,
-                            )
-                            .filter((x) => x.status === "pending" || x.status === "partial"),
-                        );
-                        void st;
+                        if (onRequestObligationPay) {
+                          onRequestObligationPay(
+                            o.id,
+                            o.outstanding,
+                            o.planName || "Obligation",
+                          );
+                          return;
+                        }
+                        toast.error("Update the app to pay via Manual or M-Pesa channel");
                       } catch (e) {
                         toast.error(
                           e instanceof Error ? e.message : "Payment failed",

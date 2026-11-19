@@ -59,6 +59,7 @@ interface SimpleMemberHomeProps {
   onOpenContributeToKit: (kit: string) => void;
   /** Open payment modal for an obligation (amount + note) */
   onPayOwe?: (amount: number, note: string, destination?: string) => void;
+  onRequestLoanRepay?: (proposalId: string, amount: number) => void;
   onProposeLoan: () => void;
   onPartialRepay: (
     proposalId: string,
@@ -115,6 +116,7 @@ export default function SimpleMemberHome({
   onOpenContribute,
   onOpenContributeToKit,
   onPayOwe,
+  onRequestLoanRepay,
   onProposeLoan,
   onPartialRepay,
   canRequestLoan,

@@ -353,6 +353,14 @@ export default function Dashboard() {
   const [tab, setTab] = useState<Tab>("home");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [contribOpen, setContribOpen] = useState(false);
+  const [paymentIntent, setPaymentIntent] = useState<null | {
+    kind: "contribution" | "loan_repay" | "obligation";
+    amount?: number;
+    destination?: string;
+    proposalId?: string;
+    obligationId?: string;
+    note?: string;
+  }>(null);
   const [contribPrefill, setContribPrefill] = useState<{
     amount?: number;
     note?: string;
@@ -465,6 +473,18 @@ export default function Dashboard() {
     }
   };
 
+  const openMemberPayment = (intent: {
+    kind: "contribution" | "loan_repay" | "obligation";
+    amount?: number;
+    destination?: string;
+    proposalId?: string;
+    obligationId?: string;
+    note?: string;
+  }) => {
+    setPaymentIntent(intent);
+    setContribOpen(true);
+  };
+
   const handleContribute = async (contribution: Contribution) => {
     const mode = chama?.constitution?.paymentMode;
     if (!mode) {
@@ -474,7 +494,26 @@ export default function Dashboard() {
       throw new Error("Payment mode not configured");
     }
 
-    const dest = contribution.destination ?? "general-savings";
+    let dest = contribution.destination ?? "general-savings";
+    let paymentDetails = contribution.paymentDetails || "";
+    if (paymentIntent?.kind === "loan_repay" && paymentIntent.proposalId) {
+      dest = "loan-repay";
+      paymentDetails = [
+        paymentDetails,
+        `proposalId=${paymentIntent.proposalId}`,
+      ]
+        .filter(Boolean)
+        .join(" | ");
+    }
+    if (paymentIntent?.kind === "obligation" && paymentIntent.obligationId) {
+      dest = "obligation";
+      paymentDetails = [
+        paymentDetails,
+        `obligationId=${paymentIntent.obligationId}`,
+      ]
+        .filter(Boolean)
+        .join(" | ");
+    }
     const wantsStk =
       contribution.method === "M-Pesa STK Push" ||
       contribution.method === "Airtel Money";
@@ -537,9 +576,39 @@ export default function Dashboard() {
           ...contribution,
           id: cid,
           status: "pending",
+          destination: dest as Contribution["destination"],
+          paymentDetails,
         },
         ...prev,
       ]);
+      // When STK is live and confirms, callback credits. For loan_repay with confirmed STK
+      // in environments that return ok immediately, apply loan allocation now.
+      if (paymentIntent?.kind === "loan_repay" && paymentIntent.proposalId && stk.ok) {
+        try {
+          await handlePartialRepay(
+            paymentIntent.proposalId,
+            contribution.amount,
+            "M-Pesa STK Push",
+          );
+        } catch (e) {
+          console.warn("loan repay after STK", e);
+        }
+      }
+      if (paymentIntent?.kind === "obligation" && paymentIntent.obligationId && stk.ok) {
+        try {
+          await supabase.rpc("pay_contribution_obligation", {
+            p_obligation_id: paymentIntent.obligationId,
+            p_amount: contribution.amount,
+            p_method: "M-Pesa STK Push",
+            p_reference: contribution.reference || `OBL${Date.now()}`,
+            p_phone: null,
+            p_payment_details: "STK confirmed",
+          });
+        } catch (e) {
+          console.warn("obligation after STK", e);
+        }
+      }
+      setPaymentIntent(null);
       return { id: cid, channel: "mpesa" as const };
     }
 
@@ -551,11 +620,17 @@ export default function Dashboard() {
       p_method: contribution.method,
       p_reference: contribution.reference,
       p_payment_date: (contribution.date || new Date().toISOString()).slice(0, 10),
-      p_payment_details: contribution.paymentDetails || null,
+      p_payment_details: paymentDetails || null,
       p_phone: null,
     });
     if (error) throw error;
-    toast.success("Submitted — treasurer must confirm before pots update");
+    toast.success(
+      paymentIntent?.kind === "loan_repay"
+        ? "Repayment submitted — treasurer confirms, then your loan balance updates"
+        : paymentIntent?.kind === "obligation"
+          ? "Submitted — treasurer confirms, then this obligation clears"
+          : "Submitted — treasurer must confirm before pots update",
+    );
     const cid = (data as { id?: string })?.id || contribution.id;
     setContributions((prev) => [
       {
@@ -1700,7 +1775,39 @@ A local copy was kept on this device only.`,
                   setContribOpen(true);
                 }}
                 onProposeLoan={handleProposeLoan}
+                onRequestLoanRepay={(proposalId, amount) =>
+                  openMemberPayment({
+                    kind: "loan_repay",
+                    proposalId,
+                    amount,
+                    note: "Loan repayment — choose Manual or M-Pesa",
+                  })
+                }
+                onRequestObligationPay={(obligationId, amount, note) =>
+                  openMemberPayment({
+                    kind: "obligation",
+                    obligationId,
+                    amount,
+                    note: note || "Pay obligation",
+                  })
+                }
                 onPartialRepay={handlePartialRepay}
+                onRequestLoanRepay={(proposalId, amount) =>
+                  openMemberPayment({
+                    kind: "loan_repay",
+                    proposalId,
+                    amount,
+                    note: "Loan repayment — choose Manual or M-Pesa",
+                  })
+                }
+                onRequestObligationPay={(obligationId, amount, note) =>
+                  openMemberPayment({
+                    kind: "obligation",
+                    obligationId,
+                    amount,
+                    note: note || "Pay obligation",
+                  })
+                }
                 canRequestLoan={canRequestLoan}
                 availableLoanLimit={availableLoanLimit}
                 pendingVotes={
@@ -1732,6 +1839,22 @@ A local copy was kept on this device only.`,
                   setContribOpen(true);
                 }}
                 onProposeLoan={handleProposeLoan}
+                onRequestLoanRepay={(proposalId, amount) =>
+                  openMemberPayment({
+                    kind: "loan_repay",
+                    proposalId,
+                    amount,
+                    note: "Loan repayment — choose Manual or M-Pesa",
+                  })
+                }
+                onRequestObligationPay={(obligationId, amount, note) =>
+                  openMemberPayment({
+                    kind: "obligation",
+                    obligationId,
+                    amount,
+                    note: note || "Pay obligation",
+                  })
+                }
                 canRequestLoan={canRequestLoan}
                 availableLoanLimit={availableLoanLimit}
               />
@@ -1814,6 +1937,22 @@ A local copy was kept on this device only.`,
                   setContribOpen(true);
                 }}
                 onProposeLoan={handleProposeLoan}
+                onRequestLoanRepay={(proposalId, amount) =>
+                  openMemberPayment({
+                    kind: "loan_repay",
+                    proposalId,
+                    amount,
+                    note: "Loan repayment — choose Manual or M-Pesa",
+                  })
+                }
+                onRequestObligationPay={(obligationId, amount, note) =>
+                  openMemberPayment({
+                    kind: "obligation",
+                    obligationId,
+                    amount,
+                    note: note || "Pay obligation",
+                  })
+                }
                 canRequestLoan={canRequestLoan}
                 availableLoanLimit={availableLoanLimit}
                 onPartialRepay={handlePartialRepay}
@@ -2005,10 +2144,34 @@ A local copy was kept on this device only.`,
           setContribOpen(false);
           setContribKitLock(null);
           setContribPrefill(null);
+          setPaymentIntent(null);
         }}
-        lockedDestination={contribKitLock}
-        prefillAmount={contribPrefill?.amount}
-        prefillNote={contribPrefill?.note}
+        lockedDestination={
+          paymentIntent?.kind === "loan_repay"
+            ? "loan-repay"
+            : paymentIntent?.kind === "obligation"
+              ? "obligation"
+              : contribKitLock
+        }
+        hideDestination={
+          paymentIntent?.kind === "loan_repay" ||
+          paymentIntent?.kind === "obligation"
+        }
+        purposeLabel={
+          paymentIntent?.kind === "loan_repay"
+            ? "Loan repayment"
+            : paymentIntent?.kind === "obligation"
+              ? "Pay obligation"
+              : paymentIntent?.kind === "contribution"
+                ? "Contribution"
+                : null
+        }
+        prefillAmount={
+          paymentIntent?.amount ?? contribPrefill?.amount ?? null
+        }
+        prefillNote={
+          paymentIntent?.note ?? contribPrefill?.note ?? null
+        }
         chama={chama}
         currentMember={currentMember}
         onSubmit={handleContribute}

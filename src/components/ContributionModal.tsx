@@ -32,6 +32,10 @@ interface ContributionModalProps {
   /** Prefill amount (e.g. from "you owe") */
   prefillAmount?: number | null;
   prefillNote?: string | null;
+  /** Shown under title e.g. Loan repayment */
+  purposeLabel?: string | null;
+  /** Hide kit picker (loan repay / obligation) */
+  hideDestination?: boolean;
 }
 
 type Step = "channel" | "details" | "confirm" | "processing" | "stk-wait" | "success" | "failed" | "receipt";
@@ -55,6 +59,8 @@ export default function ContributionModal({
   payToLabel = null,
   prefillAmount = null,
   prefillNote = null,
+  purposeLabel = null,
+  hideDestination = false,
 }: ContributionModalProps) {
   const effectiveMode =
     paymentMode || chama.constitution?.paymentMode || null;
@@ -209,7 +215,9 @@ export default function ContributionModal({
                   <Receipt size={19} />
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-white">Make a payment</h2>
+                  <h2 className="text-sm font-bold text-white">
+                    {purposeLabel || "Make a payment"}
+                  </h2>
                   <p className="text-[11px] text-slate-400">{chama.name}</p>
                 </div>
               </div>
@@ -343,26 +351,36 @@ export default function ContributionModal({
                     </div>
                   )}
 
-                  <label className="block text-xs font-semibold uppercase text-slate-400">
-                    Pot / account
-                    <select
-                      value={destination}
-                      disabled={!!lockedDestination}
-                      onChange={(e) =>
-                        setDestination(e.target.value as ChamaActivity)
-                      }
-                      className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white disabled:opacity-70"
-                    >
-                      {(potOptions.length
-                        ? potOptions
-                        : CHAMA_ACTIVITIES
-                      ).map((a) => (
-                        <option key={a.value} value={a.value}>
-                          {a.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  {!hideDestination && (
+                    <label className="block text-xs font-semibold uppercase text-slate-400">
+                      Pot / account
+                      <select
+                        value={destination}
+                        disabled={!!lockedDestination}
+                        onChange={(e) =>
+                          setDestination(e.target.value as ChamaActivity)
+                        }
+                        className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white disabled:opacity-70"
+                      >
+                        {(potOptions.length
+                          ? potOptions
+                          : CHAMA_ACTIVITIES
+                        ).map((a) => (
+                          <option key={a.value} value={a.value}>
+                            {a.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {hideDestination && purposeLabel && (
+                    <p className="rounded-xl border border-slate-700 bg-slate-950/60 px-3 py-2 text-xs text-slate-300">
+                      {purposeLabel}
+                      {prefillAmount && prefillAmount > 0
+                        ? ` · ${fmtKsh(prefillAmount)}`
+                        : ""}
+                    </p>
+                  )}
 
                   <label className="block text-xs font-semibold uppercase text-slate-400">
                     Amount (KES)
