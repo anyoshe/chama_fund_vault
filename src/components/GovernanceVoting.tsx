@@ -42,7 +42,7 @@ export default function GovernanceVoting({
   onCastVote,
 }: GovernanceVotingProps) {
   const [openId, setOpenId] = useState<string | null>(null);
-  const active = proposals.filter((p) => p.chamaId === chamaId && p.status === "active");
+  const active = proposals.filter((p) => String(p.chamaId).toLowerCase() === String(chamaId).toLowerCase() && p.status === "active");
 
   return (
     <section className="space-y-4">

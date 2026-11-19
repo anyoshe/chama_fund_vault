@@ -21,6 +21,7 @@ import {
   createLoanProposalOnServer,
   fetchChamaAudit,
   fetchChamaProposals,
+  mergeProposalsForChama,
   updateProposalOnServer,
 } from "@/lib/proposalsApi";
 import type { ChamaKit,
@@ -585,13 +586,7 @@ export default function Dashboard() {
           );
         }
         if (cancelled) return;
-        if (plist.length || true) {
-          setProposals((prev) => {
-            // Prefer server rows for this chama; keep other chamas local if any
-            const others = prev.filter((p) => p.chamaId !== activeChamaId);
-            return [...plist, ...others];
-          });
-        }
+        setProposals((prev) => mergeProposalsForChama(prev, activeChamaId, plist));
         if (alist.length) {
           setLedger((prev) => {
             const others = prev.filter((e) => e.chamaId !== activeChamaId);
@@ -616,11 +611,7 @@ export default function Dashboard() {
       try {
         const plist = await fetchChamaProposals(activeChamaId);
         if (cancelled) return;
-        setProposals((prev) => {
-          const others = prev.filter((p) => p.chamaId !== activeChamaId);
-          // Prefer server list for this chama (multi-device truth)
-          return [...plist, ...others];
-        });
+        setProposals((prev) => mergeProposalsForChama(prev, activeChamaId, plist));
       } catch {
         /* offline / SQL not applied */
       }
@@ -1252,9 +1243,9 @@ export default function Dashboard() {
     const quorumThreshold = (chama?.constitution?.quorumPercent ?? 60) / 100;
     const newProposal: Proposal = {
       id,
-      chamaId: activeChamaId,
+      chamaId: String(activeChamaId).toLowerCase(),
       type: "loan",
-      requesterId: user.id,
+      requesterId: String(user.id).toLowerCase(),
       title,
       reason: `Principal ${fmtKsh(amount)}. ${months} months × ${monthlyRate}% flat = ${fmtKsh(plan.monthlyInterest)}/mo interest. Total repay ${fmtKsh(plan.totalRepay)} (${fmtKsh(plan.installmentAmount)} × ${months}). Shares ${fmtKsh(shares)}.`,
       amount,
@@ -1294,17 +1285,17 @@ export default function Dashboard() {
         /* use list from create */
       }
       setProposals((prev) => {
-        const others = prev.filter((p) => p.chamaId !== activeChamaId);
+        const merged = mergeProposalsForChama(prev, activeChamaId, fresh);
         const hasActive = fresh.some(
           (p) =>
-            p.requesterId === user.id &&
+            String(p.requesterId).toLowerCase() === String(user.id).toLowerCase() &&
             p.status === "active" &&
             Math.abs(p.amount - amount) < 0.5,
         );
         if (!hasActive) {
-          return [newProposal, ...fresh, ...others];
+          return [newProposal, ...merged.filter((p) => p.id !== newProposal.id)];
         }
-        return [...fresh, ...others];
+        return merged;
       });
       toast.success("Loan request submitted for quorum vote");
       try {
@@ -1347,10 +1338,7 @@ export default function Dashboard() {
     if (t === "voting" && activeChamaId) {
       void fetchChamaProposals(activeChamaId)
         .then((plist) => {
-          setProposals((prev) => {
-            const others = prev.filter((p) => p.chamaId !== activeChamaId);
-            return [...plist, ...others];
-          });
+          setProposals((prev) => mergeProposalsForChama(prev, activeChamaId, plist));
         })
         .catch(() => {});
     }

@@ -998,7 +998,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
   const [opsCard, setOpsCard] = useState<string | null>(null);
 
   const chamaProposals = useMemo(
-    () => proposals.filter((p) => p.chamaId === chamaId && p.type === "loan"),
+    () => proposals.filter((p) => String(p.chamaId).toLowerCase() === String(chamaId).toLowerCase() && p.type === "loan"),
     [proposals, chamaId],
   );
 
