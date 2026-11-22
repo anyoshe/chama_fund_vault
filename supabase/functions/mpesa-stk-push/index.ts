@@ -1,16 +1,8 @@
 /**
- * Supabase Edge Function: Initiate Safaricom Daraja STK Push
+ * Daraja STK Push — uses per-chama credentials from chama_mpesa_credentials
+ * (saved in Chama Finance → Settings). Falls back to MPESA_* Edge secrets.
  *
- * Secrets (Dashboard → Edge Functions → Secrets):
- *   MPESA_CONSUMER_KEY
- *   MPESA_CONSUMER_SECRET
- *   MPESA_PASSKEY
- *   MPESA_SHORTCODE          (Paybill or Till)
- *   MPESA_ENV                (sandbox | production)
- *   MPESA_CALLBACK_URL       (https://<project>.supabase.co/functions/v1/mpesa-callback)
- *   SUPABASE_SERVICE_ROLE_KEY (auto in many setups)
- *
- * Body JSON: { chamaId, amount, destination, phone, contributionId? }
+ * Body: { chamaId, amount, destination, phone, contributionId? }
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -56,66 +48,80 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const consumerKey = Deno.env.get("MPESA_CONSUMER_KEY");
-    const consumerSecret = Deno.env.get("MPESA_CONSUMER_SECRET");
-    const passkey = Deno.env.get("MPESA_PASSKEY");
-    const shortcode = Deno.env.get("MPESA_SHORTCODE");
-    const env = Deno.env.get("MPESA_ENV") || "sandbox";
-    const callbackUrl = Deno.env.get("MPESA_CALLBACK_URL");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+    const callbackUrl =
+      Deno.env.get("MPESA_CALLBACK_URL") ||
+      `${supabaseUrl}/functions/v1/mpesa-callback`;
 
-    if (!consumerKey || !consumerSecret || !passkey || !shortcode || !callbackUrl) {
+    const authHeader = req.headers.get("Authorization") || "";
+    const userClient = createClient(supabaseUrl, anonKey || serviceKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const admin = createClient(supabaseUrl, serviceKey);
+
+    const body = await req.json();
+    const chamaId = body.chamaId as string;
+    const amount = Number(body.amount);
+    const destination = String(body.destination || "general-savings");
+    const phone = normalizePhone(String(body.phone || ""));
+    let contributionId = body.contributionId as string | undefined;
+
+    if (!chamaId || !amount || amount < 1 || phone.length < 12) {
+      return new Response(
+        JSON.stringify({ error: "chamaId, amount and valid phone required" }),
+        { status: 400, headers: { ...cors, "Content-Type": "application/json" } },
+      );
+    }
+
+    // Load per-chama Daraja credentials
+    const { data: credJson } = await admin.rpc(
+      "get_chama_mpesa_credentials_internal",
+      { p_chama_id: chamaId },
+    );
+
+    let consumerKey = credJson?.consumerKey as string | undefined;
+    let consumerSecret = credJson?.consumerSecret as string | undefined;
+    let passkey = credJson?.passkey as string | undefined;
+    let shortcode = credJson?.shortcode as string | undefined;
+    let env = (credJson?.environment as string) || "sandbox";
+    let accountRef =
+      (credJson?.accountReference as string) || shortcode || "ChamaVault";
+    let txDesc = (credJson?.transactionDesc as string) || "ChamaVault";
+
+    // Fallback to project-level secrets
+    if (!consumerKey || !consumerSecret || !passkey || !shortcode) {
+      consumerKey = Deno.env.get("MPESA_CONSUMER_KEY") || consumerKey;
+      consumerSecret = Deno.env.get("MPESA_CONSUMER_SECRET") || consumerSecret;
+      passkey = Deno.env.get("MPESA_PASSKEY") || passkey;
+      shortcode = Deno.env.get("MPESA_SHORTCODE") || shortcode;
+      env = Deno.env.get("MPESA_ENV") || env;
+    }
+
+    if (!consumerKey || !consumerSecret || !passkey || !shortcode) {
       return new Response(
         JSON.stringify({
           error:
-            "M-Pesa is not configured. Set MPESA_* secrets on Edge Functions.",
+            "M-Pesa credentials not set for this chama. Chair/Treasurer: Chama Finance → Settings → M-Pesa setup.",
         }),
         { status: 503, headers: { ...cors, "Content-Type": "application/json" } },
       );
     }
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...cors, "Content-Type": "application/json" },
-      });
-    }
-
-    const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const {
-      data: { user },
-    } = await userClient.auth.getUser();
-    if (!user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...cors, "Content-Type": "application/json" },
-      });
-    }
-
-    const body = await req.json();
-    const amount = Math.round(Number(body.amount));
-    const phone = normalizePhone(String(body.phone || ""));
-    const destination = String(body.destination || "general-savings");
-    const chamaId = String(body.chamaId || "");
-    let contributionId = body.contributionId as string | undefined;
-
-    if (!chamaId || !amount || amount < 1 || phone.length < 12) {
-      return new Response(
-        JSON.stringify({ error: "chamaId, amount, and valid phone required" }),
-        { status: 400, headers: { ...cors, "Content-Type": "application/json" } },
-      );
-    }
-
-    const admin = createClient(supabaseUrl, serviceKey);
-
     // Ensure pending contribution exists
     if (!contributionId) {
-      const ref = `STK-${crypto.randomUUID().slice(0, 10)}`;
-      const { data: row, error: insErr } = await admin
+      const {
+        data: { user },
+      } = await userClient.auth.getUser();
+      if (!user) {
+        return new Response(JSON.stringify({ error: "Not authenticated" }), {
+          status: 401,
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+      const ref = `STK${Date.now().toString().slice(-10)}`;
+      const { data: ins, error: insErr } = await admin
         .from("contributions")
         .insert({
           chama_id: chamaId,
@@ -126,71 +132,71 @@ Deno.serve(async (req) => {
           phone,
           reference: ref,
           status: "pending",
-          payment_date: new Date().toISOString().slice(0, 10),
           payment_details: "STK initiated",
+          created_by: user.id,
         })
         .select("id")
         .single();
-      if (insErr) throw insErr;
-      contributionId = row.id;
+      if (insErr) {
+        return new Response(JSON.stringify({ error: insErr.message }), {
+          status: 400,
+          headers: { ...cors, "Content-Type": "application/json" },
+        });
+      }
+      contributionId = ins.id;
     }
 
     const token = await getAccessToken(consumerKey, consumerSecret, env);
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[^0-9]/g, "")
-      .slice(0, 14);
-    const password = btoa(`${shortcode}${passkey}${timestamp}`);
     const base =
       env === "production"
         ? "https://api.safaricom.co.ke"
         : "https://sandbox.safaricom.co.ke";
 
-    const stkBody = {
-      BusinessShortCode: shortcode,
-      Password: password,
-      Timestamp: timestamp,
-      TransactionType: "CustomerPayBillOnline",
-      Amount: amount,
-      PartyA: phone,
-      PartyB: shortcode,
-      PhoneNumber: phone,
-      CallBackURL: callbackUrl,
-      AccountReference: String(contributionId).slice(0, 12),
-      TransactionDesc: `Chama ${destination}`.slice(0, 20),
-    };
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[^0-9]/g, "")
+      .slice(0, 14);
+    const password = btoa(`${shortcode}${passkey}${timestamp}`);
 
-    const stkRes = await fetch(
-      `${base}/mpesa/stkpush/v1/processrequest`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(stkBody),
+    const stkRes = await fetch(`${base}/mpesa/stkpush/v1/processrequest`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
-    );
-    const stkJson = await stkRes.json();
+      body: JSON.stringify({
+        BusinessShortCode: shortcode,
+        Password: password,
+        Timestamp: timestamp,
+        TransactionType: "CustomerPayBillOnline",
+        Amount: Math.round(amount),
+        PartyA: phone,
+        PartyB: shortcode,
+        PhoneNumber: phone,
+        CallBackURL: callbackUrl,
+        AccountReference: String(accountRef).slice(0, 12),
+        TransactionDesc: String(txDesc).slice(0, 13),
+      }),
+    });
 
+    const stkJson = await stkRes.json();
     if (!stkRes.ok || stkJson.ResponseCode !== "0") {
       await admin
         .from("contributions")
-        .update({
-          status: "failed",
-          payment_details: JSON.stringify(stkJson).slice(0, 500),
-        })
+        .update({ status: "failed", payment_details: JSON.stringify(stkJson) })
         .eq("id", contributionId);
       return new Response(
         JSON.stringify({
-          error: stkJson.errorMessage || stkJson.ResponseDescription || "STK failed",
+          error:
+            stkJson.errorMessage ||
+            stkJson.ResponseDescription ||
+            "STK failed",
           details: stkJson,
         }),
         { status: 400, headers: { ...cors, "Content-Type": "application/json" } },
       );
     }
 
-    // Store CheckoutRequestID for callback match
     await admin
       .from("contributions")
       .update({
@@ -198,7 +204,6 @@ Deno.serve(async (req) => {
       })
       .eq("id", contributionId);
 
-    // Optional: store mapping table
     await admin.from("mpesa_stk_requests").upsert(
       {
         contribution_id: contributionId,
@@ -207,9 +212,10 @@ Deno.serve(async (req) => {
         phone,
         amount,
         chama_id: chamaId,
+        status: "pending",
       },
       { onConflict: "checkout_request_id" },
-    ).catch(() => null);
+    );
 
     return new Response(
       JSON.stringify({
@@ -217,8 +223,7 @@ Deno.serve(async (req) => {
         contributionId,
         checkoutRequestId: stkJson.CheckoutRequestID,
         customerMessage:
-          stkJson.CustomerMessage ||
-          "Check your phone and enter M-Pesa PIN",
+          stkJson.CustomerMessage || "Check your phone and enter M-Pesa PIN",
       }),
       { headers: { ...cors, "Content-Type": "application/json" } },
     );

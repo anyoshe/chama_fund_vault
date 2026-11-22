@@ -950,6 +950,21 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
   const [settingsModal, setSettingsModal] = useState<
     null | "privacy" | "payment" | "mpesa" | "rates"
   >(null);
+  const [mpesaStatus, setMpesaStatus] = useState<{
+    configured?: boolean;
+    shortcode?: string;
+    environment?: string;
+  } | null>(null);
+  const [mpesaForm, setMpesaForm] = useState({
+    consumerKey: "",
+    consumerSecret: "",
+    passkey: "",
+    shortcode: "",
+    shortcodeType: "paybill",
+    environment: "sandbox",
+    accountReference: "",
+  });
+  const [mpesaSaving, setMpesaSaving] = useState(false);
   const [rejectPayId, setRejectPayId] = useState<string | null>(null);
   const [treasuryCard, setTreasuryCard] = useState<
     null | "pots" | "contributions" | "welfare" | "mgr" | "shares"
@@ -1332,7 +1347,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             >
               <p className="text-sm font-bold text-white">M-Pesa setup</p>
               <p className="mt-1 text-xs text-slate-400">
-                Set up phone payments for members.
+                Enter Daraja credentials from Safaricom to enable STK payments.
               </p>
             </button>
           </div>
@@ -3536,30 +3551,183 @@ Welfare / emergency kitty</p>
       <AppModal
         open={settingsModal === "mpesa"}
         onClose={() => setSettingsModal(null)}
-        title="M-Pesa setup"
-        subtitle="Credentials stay on the server — not in this app"
+        title="M-Pesa / Daraja credentials"
+        subtitle="From Safaricom Daraja portal — saved for this chama only"
         footer={
-          <button
-            type="button"
-            className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-white"
-            onClick={() => setSettingsModal(null)}
-          >
-            Close
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded-xl border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-300"
+              onClick={() => setSettingsModal(null)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={mpesaSaving}
+              className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+              onClick={async () => {
+                setMpesaSaving(true);
+                try {
+                  const { data, error } = await supabase.rpc(
+                    "upsert_chama_mpesa_credentials",
+                    {
+                      p_chama_id: chamaId,
+                      p_consumer_key: mpesaForm.consumerKey,
+                      p_consumer_secret: mpesaForm.consumerSecret,
+                      p_passkey: mpesaForm.passkey,
+                      p_shortcode: mpesaForm.shortcode,
+                      p_shortcode_type: mpesaForm.shortcodeType,
+                      p_environment: mpesaForm.environment,
+                      p_account_reference:
+                        mpesaForm.accountReference || mpesaForm.shortcode,
+                      p_transaction_desc: "ChamaVault",
+                    },
+                  );
+                  if (error) throw error;
+                  toast.success("M-Pesa credentials saved for this chama");
+                  setMpesaStatus({
+                    configured: true,
+                    shortcode: mpesaForm.shortcode,
+                    environment: mpesaForm.environment,
+                  });
+                  // Clear secrets from form memory
+                  setMpesaForm((f) => ({
+                    ...f,
+                    consumerKey: "",
+                    consumerSecret: "",
+                    passkey: "",
+                  }));
+                  setSettingsModal(null);
+                } catch (e) {
+                  toast.error(
+                    e instanceof Error ? e.message : "Could not save credentials",
+                  );
+                } finally {
+                  setMpesaSaving(false);
+                }
+              }}
+            >
+              {mpesaSaving ? "Saving…" : "Save credentials"}
+            </button>
+          </div>
         }
       >
-        <div className="space-y-2 text-sm text-slate-300">
-          <p>
-            STK Push uses Supabase Edge secrets (Consumer Key, Secret, Passkey, Shortcode).
-            Officials never type those into the browser.
+        <div className="space-y-3 text-sm">
+          {mpesaStatus?.configured ? (
+            <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+              Configured · shortcode {mpesaStatus.shortcode} ·{" "}
+              {mpesaStatus.environment}. Re-enter secrets only if you need to change them.
+            </p>
+          ) : (
+            <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+              Not configured yet. Get keys from{" "}
+              <span className="font-semibold">developer.safaricom.co.ke</span> (Daraja).
+            </p>
+          )}
+          <label className="block text-xs text-slate-400">
+            Consumer Key
+            <input
+              type="password"
+              autoComplete="off"
+              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+              value={mpesaForm.consumerKey}
+              onChange={(e) =>
+                setMpesaForm((f) => ({ ...f, consumerKey: e.target.value }))
+              }
+              placeholder="From Daraja app"
+            />
+          </label>
+          <label className="block text-xs text-slate-400">
+            Consumer Secret
+            <input
+              type="password"
+              autoComplete="off"
+              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+              value={mpesaForm.consumerSecret}
+              onChange={(e) =>
+                setMpesaForm((f) => ({ ...f, consumerSecret: e.target.value }))
+              }
+            />
+          </label>
+          <label className="block text-xs text-slate-400">
+            Passkey (Lipa Na M-Pesa Online)
+            <input
+              type="password"
+              autoComplete="off"
+              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+              value={mpesaForm.passkey}
+              onChange={(e) =>
+                setMpesaForm((f) => ({ ...f, passkey: e.target.value }))
+              }
+            />
+          </label>
+          <label className="block text-xs text-slate-400">
+            Business shortcode (Paybill / Till)
+            <input
+              type="text"
+              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+              value={mpesaForm.shortcode}
+              onChange={(e) =>
+                setMpesaForm((f) => ({ ...f, shortcode: e.target.value }))
+              }
+              placeholder="e.g. 174379"
+            />
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block text-xs text-slate-400">
+              Type
+              <select
+                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                value={mpesaForm.shortcodeType}
+                onChange={(e) =>
+                  setMpesaForm((f) => ({
+                    ...f,
+                    shortcodeType: e.target.value,
+                  }))
+                }
+              >
+                <option value="paybill">Paybill</option>
+                <option value="till">Till</option>
+              </select>
+            </label>
+            <label className="block text-xs text-slate-400">
+              Environment
+              <select
+                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                value={mpesaForm.environment}
+                onChange={(e) =>
+                  setMpesaForm((f) => ({
+                    ...f,
+                    environment: e.target.value,
+                  }))
+                }
+              >
+                <option value="sandbox">Sandbox (test)</option>
+                <option value="production">Production (live)</option>
+              </select>
+            </label>
+          </div>
+          <label className="block text-xs text-slate-400">
+            Account reference (optional)
+            <input
+              type="text"
+              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+              value={mpesaForm.accountReference}
+              onChange={(e) =>
+                setMpesaForm((f) => ({
+                  ...f,
+                  accountReference: e.target.value,
+                }))
+              }
+              placeholder="Shown on M-Pesa prompt"
+            />
+          </label>
+          <p className="text-[11px] text-slate-500">
+            After saving, set <strong className="text-slate-400">How members pay</strong> to
+            M-Pesa or Both. Deploy Edge functions once on the project; each chama only
+            needs its own Daraja keys here.
           </p>
-          <ol className="list-decimal space-y-1 pl-4 text-xs text-slate-400">
-            <li>Deploy functions mpesa-stk-push and mpesa-callback</li>
-            <li>Set MPESA_* secrets in Supabase</li>
-            <li>Set payment mode to mpesa_stk or both</li>
-            <li>Members pay via STK; pots update on callback</li>
-          </ol>
-          <p className="text-xs text-slate-500">Full steps: docs/MPESA_SETUP.md in the repo</p>
         </div>
       </AppModal>
 
