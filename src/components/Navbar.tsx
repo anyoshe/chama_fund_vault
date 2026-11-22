@@ -56,7 +56,7 @@ export default function Navbar({
         <div className="flex min-w-0 items-center gap-2.5">
           <ChamaVaultLogo size={42} showWordmark className="min-w-0" />
           <p className="hidden text-[10px] font-medium uppercase tracking-[0.18em] text-slate-400 lg:block">
-            Zero-cash treasury
+            Group savings
           </p>
         </div>
 
@@ -113,11 +113,13 @@ export default function Navbar({
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          {/* Live balance ticker */}
-          <div className="hidden items-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 md:flex">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-400">Pool</span>
-            <span className="font-mono text-sm font-bold tabular-nums text-emerald-300">
-              {fmtKsh(activeChama.poolBalance)}
+          {/* Live balance — compact on phone, full on larger screens */}
+          <div className="flex max-w-[42vw] items-center gap-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-2 py-1.5 sm:max-w-none sm:gap-2 sm:px-3 sm:py-2">
+            <span className="shrink-0 text-[9px] font-semibold uppercase tracking-[0.12em] text-emerald-400 sm:text-[10px] sm:tracking-[0.14em]">
+              Pool
+            </span>
+            <span className="truncate font-mono text-xs font-bold tabular-nums text-emerald-300 sm:text-sm">
+              {fmtKsh(activeChama?.poolBalance ?? 0)}
             </span>
           </div>
 
