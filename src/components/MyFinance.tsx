@@ -21,6 +21,7 @@ import type {
   Proposal,
 } from "../types/chama";
 import { potOptionsForChama } from "@/lib/kitVisibility";
+import { downloadMemberStatementPdf } from "@/lib/memberStatementPdf";
 import { fmtKsh } from "../data/mockChamaData";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -418,7 +419,27 @@ export default function MyFinance({
             }}
             className="inline-flex items-center gap-2 rounded-xl border border-slate-600 bg-slate-800/80 px-4 py-2 text-xs font-bold text-slate-200 hover:bg-slate-800"
           >
-            <Receipt size={16} /> Download statement
+            <Receipt size={16} /> Download CSV
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-200"
+              onClick={() => {
+                downloadMemberStatementPdf({
+                  chamaName: chama.name,
+                  memberName: me?.name || "Member",
+                  lines: contributions
+                    .filter((c) => c.memberId === me?.id)
+                    .map((c) => ({
+                      date: String(c.date).slice(0, 10),
+                      pot: c.destination || "—",
+                      amount: Number(c.amount) || 0,
+                      status: c.status,
+                    })),
+                });
+              }}
+            >
+              Download PDF
           </button>
           <button
             type="button"

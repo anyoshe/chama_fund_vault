@@ -11,6 +11,7 @@ import {
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { potOptionsForChama } from "@/lib/kitVisibility";
+import { downloadMemberStatementPdf } from "@/lib/memberStatementPdf";
 import { fmtKsh } from "@/data/mockChamaData";
 import type {
   Contribution,
@@ -531,8 +532,34 @@ export default function SimpleMemberHome({
     return (
       <div className="mx-auto max-w-lg space-y-4 pb-8">
         <Back onClick={() => setPanel("home")} />
-        <h2 className="text-2xl font-bold text-white">My statement</h2>
-        <p className="text-sm text-slate-400">Every payment — date, pot, amount.</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-bold text-white">My statement</h2>
+            <p className="text-sm text-slate-400">Every payment — date, pot, amount.</p>
+          </div>
+          <button
+            type="button"
+            className="rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-200 hover:bg-emerald-500/25"
+            onClick={() => {
+              downloadMemberStatementPdf({
+                chamaName,
+                memberName: me?.name || "Member",
+                lines: myHistory.map((c) => ({
+                  date: String(c.date).slice(0, 10),
+                  pot: potName(c.destination),
+                  amount: Number(c.amount) || 0,
+                  status: c.status || "paid",
+                })),
+                potBalances: myPots.map((p) => ({
+                  label: p.label,
+                  balance: p.balance,
+                })),
+              });
+            }}
+          >
+            Download PDF
+          </button>
+        </div>
         {myHistory.length === 0 ? (
           <p className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-center text-sm text-slate-500">
             No payments yet
