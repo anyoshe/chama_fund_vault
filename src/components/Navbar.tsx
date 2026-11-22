@@ -50,8 +50,8 @@ export default function Navbar({
   const activeChama = chamas.find((c) => c.id === activeChamaId) ?? chamas[0];
 
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-7xl items-center gap-2 overflow-x-hidden px-3 sm:gap-3 sm:px-6">
+    <header className="sticky top-0 z-50 border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 max-w-7xl items-center gap-2 px-3 sm:gap-3 sm:px-6">
         {/* Brand */}
         <div className="flex min-w-0 items-center gap-2.5">
           <ChamaVaultLogo size={42} showWordmark className="min-w-0" />
@@ -79,7 +79,7 @@ export default function Navbar({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -6, scale: 0.98 }}
                 transition={{ duration: 0.16, ease: "easeOut" }}
-                className="absolute left-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900 shadow-2xl shadow-black/50"
+                className="absolute left-0 top-full z-[100] mt-2 w-72 overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900 shadow-2xl shadow-black/50"
               >
                 <div className="border-b border-slate-800 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
                   My Chamas
@@ -137,7 +137,7 @@ export default function Navbar({
             )}
           </button>
 
-          <div className="relative">
+          <div className="relative z-[90]">
             <button
               onClick={() => {
                 setAccountOpen((v) => !v);
@@ -162,7 +162,7 @@ export default function Navbar({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -6, scale: 0.98 }}
                   transition={{ duration: 0.16, ease: "easeOut" }}
-                  className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900 shadow-2xl shadow-black/50"
+                  className="absolute right-0 top-full z-[100] mt-2 w-64 overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900 shadow-2xl shadow-black/50"
                 >
                   <div className="flex items-center gap-3 border-b border-slate-800 px-4 py-3">
                     <UserCircle size={24} className="text-emerald-400" />

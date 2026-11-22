@@ -1625,7 +1625,7 @@ A local copy was kept on this device only.`,
       />
 
       {/* Tab rail: desktop horizontal · mobile hamburger */}
-      <div className="sticky top-16 z-30 border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-xl">
+      <div className="sticky top-16 z-40 border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-xl">
         {/* Desktop / tablet */}
         <div className="mx-auto hidden max-w-7xl gap-1 overflow-x-auto px-4 md:flex sm:px-6">
           {TABS.map((tItem) => {
