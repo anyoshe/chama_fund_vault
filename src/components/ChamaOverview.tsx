@@ -340,7 +340,7 @@ export default function ChamaOverview({
           icon={<HandCoins size={19} />}
           label="Pending Votes"
           value={String(pendingVotes)}
-          sub="quorum-governed"
+          sub="waiting for member votes"
           accent="gold"
         >
           {pendingVotes > 0 && (
@@ -355,7 +355,7 @@ export default function ChamaOverview({
           icon={<Receipt size={19} />}
           label="Approved Up Next"
           value={String(approvedLoans.length)}
-          sub={approvedBorrowers ? `awaiting disbursement · ${approvedBorrowers}` : "awaiting disbursement"}
+          sub={approvedBorrowers ? `ready to pay out · ${approvedBorrowers}` : "none waiting"}
           accent="sky"
         />
         <MetricCard
@@ -420,7 +420,7 @@ export default function ChamaOverview({
         >
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2 text-sm font-bold text-white">
-              <ShieldCheck size={18} className="text-emerald-400" /> Zero-Cash Constitution
+              <ShieldCheck size={18} className="text-emerald-400" /> Group rules
             </span>
             <span className="text-[11px] font-medium text-slate-500">{viewRule ? "Hide" : "View"} rules</span>
           </div>
@@ -428,7 +428,7 @@ export default function ChamaOverview({
         </button>
         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
           <div className="flex items-center gap-2 text-sm font-bold text-white">
-            <Calculator size={18} className="text-violet-400" /> Loan Eligibility
+            <Calculator size={18} className="text-violet-400" /> Your loan limit
           </div>
           <p className="mt-2 text-xs text-slate-400">
             Your loan limit is based on{" "}
@@ -467,10 +467,10 @@ export default function ChamaOverview({
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {[
-              "No treasurer touches cash",
-              "Votes ≥ quorum to execute",
-              "Interest auto-computed",
-              "Audit trail every event",
+              "Money moves by vote, not by one person",
+              "Enough members must approve first",
+              "Interest is calculated by the system",
+              "Every payment is recorded",
             ].map((t) => (
               <span
                 key={t}
@@ -487,9 +487,9 @@ export default function ChamaOverview({
       <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-bold text-white">Member savings standings</h3>
+            <h3 className="text-sm font-bold text-white">Member contributions</h3>
             <p className="mt-1 text-[11px] text-slate-500">
-              Deposits plus interest credits for the selected kit
+              Who has paid into this pot
             </p>
           </div>
           <select

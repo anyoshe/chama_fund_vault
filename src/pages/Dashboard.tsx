@@ -123,7 +123,7 @@ interface PersistedState {
 
 function loadPersisted(): PersistedState | null {
   try {
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = saved on this device.getItem(LS_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PersistedState;
     if (!Array.isArray(parsed.contributions) || !Array.isArray(parsed.proposals) || !Array.isArray(parsed.ledger)) {
@@ -499,7 +499,7 @@ export default function Dashboard() {
     const mode = chama?.constitution?.paymentMode;
     if (!mode) {
       toast.error(
-        "Leaders must set how this chama receives money first (Chama Finance → How members pay).",
+        "Leaders must choose how members pay first (Chama Finance → Settings).",
       );
       throw new Error("Payment mode not configured");
     }
@@ -643,7 +643,7 @@ export default function Dashboard() {
         ? "Repayment submitted — treasurer confirms, then your loan balance updates"
         : paymentIntent?.kind === "obligation"
           ? "Submitted — treasurer confirms, then this obligation clears"
-          : "Submitted — treasurer must confirm before pots update",
+          : "Submitted — treasurer confirms, then your pot updates",
     );
     const cid = (data as { id?: string })?.id || contribution.id;
     setContributions((prev) => [
@@ -1221,7 +1221,7 @@ export default function Dashboard() {
             : "Repayment posted to kits but proposal status may need SQL fix",
         );
       }
-      // Reload from DB so outstanding matches server (not only localStorage)
+      // Reload from DB so outstanding matches server (not only saved on this device)
       try {
         const list = await fetchChamaProposals(activeChamaId);
         setProposals((prev) => {
@@ -2188,7 +2188,7 @@ A local copy was kept on this device only.`,
       <footer className="border-t border-slate-800/80 py-6">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 text-center sm:flex-row sm:px-6 sm:text-left">
           <p className="text-xs text-slate-500">
-            (c) 2025 ChamaVault | Zero-cash treasury - money moves by rail, governance by quorum.
+            (c) 2025 ChamaVault | Group savings & loans - money moves by rail, governance by quorum.
           </p>
           <p className="flex items-center gap-1.5 text-[11px] text-slate-600">
             <ShieldCheck size={13} className="text-emerald-500" />

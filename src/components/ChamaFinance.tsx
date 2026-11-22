@@ -320,7 +320,7 @@ function OpsReportCards({
       <p className="mt-1 font-mono text-base font-bold text-white">{value}</p>
       {sub ? <p className="mt-0.5 text-[10px] text-slate-500">{sub}</p> : null}
       <p className="mt-1.5 text-[10px] font-semibold text-violet-300/80">
-        Tap for details
+        View details
       </p>
     </button>
   );
@@ -579,7 +579,7 @@ function OpsReportCards({
               id="available"
               label="Available for loaning"
               value={fmtKsh(loaningPool)}
-              sub="4 liquidity kits"
+              sub="available to lend"
             />
             <BookMini
               id="dues"
@@ -642,7 +642,7 @@ function OpsReportCards({
         >
           <p className="text-sm font-bold text-white">External borrowing</p>
           <p className="mt-1 text-xs text-slate-400">
-            Bank or inter-chama debt when this chama borrows
+            Loans this chama takes from banks or other groups
           </p>
           <p className="mt-2 text-[10px] font-semibold text-slate-500">Tap to open</p>
         </button>
@@ -658,20 +658,20 @@ function OpsReportCards({
             {awaitingDisburse.length}
           </p>
           <p className="mt-1 text-xs text-slate-400">
-            Treasurer releases funds from the loaning pool
+            Treasurer pays out approved loans
           </p>
           <p className="mt-2 text-[10px] font-semibold text-slate-500">Tap to open</p>
         </button>
 
-        {/* 4. Group audit */}
+        {/* 4. Group activity log */}
         <button
           type="button"
           onClick={() => setOpsCard("audit")}
           className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 text-left hover:border-amber-500/40 sm:col-span-2"
         >
-          <p className="text-sm font-bold text-white">Group audit</p>
+          <p className="text-sm font-bold text-white">Group activity log</p>
           <p className="mt-1 text-xs text-slate-400">
-            Recent high-level trail (not personal loan management)
+            Recent group activity
           </p>
           <p className="mt-2 text-[10px] font-semibold text-slate-500">Tap to open</p>
         </button>
@@ -681,7 +681,7 @@ function OpsReportCards({
         open={opsCard === "external"}
         onClose={() => setOpsCard(null)}
         title="External borrowing"
-        subtitle="Bank or inter-chama debt when this chama borrows"
+        subtitle="Loans this chama takes from banks or other groups"
         size="lg"
         footer={
           <button type="button" className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white" onClick={() => setOpsCard(null)}>
@@ -701,7 +701,7 @@ function OpsReportCards({
         open={opsCard === "disburse-queue"}
         onClose={() => setOpsCard(null)}
         title="Disbursement queue"
-        subtitle="Treasurer releases funds from the loaning pool"
+        subtitle="Treasurer pays out approved loans"
         size="lg"
         footer={
           <button type="button" className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white" onClick={() => setOpsCard(null)}>
@@ -743,7 +743,7 @@ function OpsReportCards({
       <AppModal
         open={opsCard === "audit"}
         onClose={() => setOpsCard(null)}
-        title="Group audit"
+        title="Group activity log"
         subtitle="Recent high-level trail"
         size="lg"
         footer={
@@ -1226,7 +1226,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
       {deskPanel === null && (
         <div className="space-y-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Open a card for details
+            Open a section for more
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <button type="button" onClick={() => setDeskPanel("pending")}
@@ -1285,7 +1285,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
         <div className="space-y-3">
           <h3 className="text-lg font-bold text-white">Settings</h3>
           <p className="text-xs text-slate-400">
-            Tap a card to change settings in a form — no browser prompts.
+            Tap a card to change settings.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <button
@@ -1330,10 +1330,9 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
               onClick={() => setSettingsModal("mpesa")}
               className="rounded-2xl border border-emerald-500/30 bg-slate-900/80 p-4 text-left hover:border-emerald-400/50"
             >
-              <p className="text-sm font-bold text-white">M-Pesa / Daraja</p>
+              <p className="text-sm font-bold text-white">M-Pesa setup</p>
               <p className="mt-1 text-xs text-slate-400">
-                STK uses server secrets — never enter Consumer Key/Secret in the app.
-                View setup checklist here.
+                Set up phone payments for members.
               </p>
             </button>
           </div>
@@ -1472,7 +1471,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
           <span className="font-bold text-sky-300">
             {chama.constitution?.memberFinanceVisibility === "all_members"
               ? "all_members — everyone sees everyone"
-              : "private — self + officials only"}
+              : "private — only you and officials"}
           </span>
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -1490,7 +1489,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                   .update({ constitution })
                   .eq("id", chamaId);
                 if (error) throw error;
-                toast.success("Privacy: private (self + officials only)");
+                toast.success("Privacy set to private");
                 window.location.reload();
               } catch (e) {
                 toast.error(e instanceof Error ? e.message : "Could not save");
@@ -1540,7 +1539,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             <div>
               <p className="text-sm font-bold text-white">Pots (live)</p>
               <p className="text-[11px] text-slate-500">
-                Tap a pot to select · expense debits it
+                Tap a pot — expense comes from that balance
               </p>
             </div>
           </div>
@@ -2027,7 +2026,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
         <p className="mt-1 text-xs text-slate-400">
           <strong className="text-slate-300">Manual:</strong> member pays till/cash, records in app, you approve.
           {" "}
-          <strong className="text-slate-300">M-Pesa STK:</strong> phone prompt; ledger updates when payment confirms (Daraja later).
+          <strong className="text-slate-300">M-Pesa STK:</strong> member enters PIN on phone; money posts when confirmed.
         </p>
         <p className="mt-2 text-xs text-slate-300">
           Mode:{" "}
@@ -2285,14 +2284,14 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             </div>
           )}
 
-          {/* Phase 1 — Contribution plans */}
+          {/* Contribution plans */}
 
           <div className={`rounded-2xl border border-emerald-500/25 bg-slate-900/70 p-4 ${treasuryCard === "contributions" ? "" : "hidden"}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-bold text-white">Contribution plans</p>
                 <p className="mt-1 text-[11px] text-slate-500">
-                  Define monthly / registration / one-off amounts. Generate obligations, then members pay from My Finance.
+                  Set what members should pay. They will see it under What I owe.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -2408,7 +2407,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                         }
                       }}
                     >
-                      Generate obligations
+                      Create dues for members
                     </button>
                   </div>
                 ))
@@ -2457,7 +2456,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                   className="rounded-lg border border-slate-600 px-2.5 py-1 text-[10px] font-bold text-slate-300"
                   onClick={async () => {
                     const pol = window.prompt(
-                      "Spending policy: officials | member_quorum | leader_report",
+                      "Who can approve spending? (officials / members / report only)",
                       "officials",
                     );
                     if (!pol) return;
@@ -2616,7 +2615,7 @@ Welfare / emergency kitty</p>
                   className="rounded-xl border border-slate-600 px-2.5 py-1 text-[10px] font-bold text-slate-300"
                   onClick={async () => {
                     const mode = window.prompt(
-                      "Expense approval: officials OR member_quorum?",
+                      "Who approves expenses? (officials or members)",
                       chama.constitution?.welfareExpenseApproval ?? "officials",
                     );
                     if (!mode) return;
@@ -2764,7 +2763,7 @@ Welfare / emergency kitty</p>
                               }
                             }}
                           >
-                            Execute after quorum
+                            Pay out after enough votes
                           </button>
                         )}
                       </div>
@@ -2774,7 +2773,7 @@ Welfare / emergency kitty</p>
             )}
           </div>
 
-{/* Phase 2–4 — Treasurer, penalties, welfare */}
+{/* Treasurer, penalties, welfare */}
           <div className="grid gap-3 sm:grid-cols-2">
             <button
               type="button"
@@ -2824,7 +2823,7 @@ Welfare / emergency kitty</p>
               }}
               className={`rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-left text-xs font-bold text-sky-200 hover:bg-sky-500/15 ${treasuryCard === "contributions" ? "" : "hidden"}`}
             >
-              Record member payment (treasurer)
+              Record a member's payment
               <span className="mt-1 block text-[10px] font-normal text-slate-400">
                 Cash / offline — marks obligation paid for that member
               </span>
@@ -2851,7 +2850,7 @@ Welfare / emergency kitty</p>
                 }
               }}
             >
-              Assess overdue penalties
+              Add late fines
               <span className="mt-1 block text-[10px] font-normal text-slate-400">
                 Uses plan penalty rules (fixed / % + grace days)
               </span>
@@ -3056,9 +3055,9 @@ Welfare / emergency kitty</p>
               }}
               className={`rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-left text-xs font-bold text-amber-200 hover:bg-amber-500/15 ${treasuryCard === "contributions" ? "" : "hidden"}`}
             >
-              Close contribution cycle & post fines
+              Close the month and post fines
               <span className="mt-1 block text-[10px] font-normal text-slate-400">
-                Officials only · uses constitution late fine %
+                Officials · applies the group late fine
               </span>
             </button>
             <button
@@ -3077,7 +3076,7 @@ Welfare / emergency kitty</p>
               }}
               className={`rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-left text-xs font-bold text-sky-200 hover:bg-sky-500/15 ${treasuryCard === "mgr" ? "" : "hidden"}`}
             >
-              Advance merry-go-round turn
+              Next merry-go-round turn
               <span className="mt-1 block text-[10px] font-normal text-slate-400">
                 Rotates next recipient among active members
               </span>
@@ -3108,7 +3107,7 @@ Welfare / emergency kitty</p>
             >
               Pay merry-go-round beneficiary
               <span className="mt-1 block text-[10px] font-normal text-slate-400">
-                Debits MGR kit → audit trail + notify recipient
+                Pays the current merry-go-round recipient
               </span>
             </button>
             <button
@@ -3118,7 +3117,7 @@ Welfare / emergency kitty</p>
             >
               Record expense from a kit
               <span className="mt-1 block text-[10px] font-normal text-slate-400">
-                Registration, contingency, reserve, welfare — full audit trail
+                Paid from the chosen pot and recorded
               </span>
             </button>
             <button
@@ -3170,7 +3169,7 @@ Welfare / emergency kitty</p>
             >
               Close contingency & pay out
               <span className="mt-1 block text-[10px] font-normal text-slate-400">
-                Debits contingency kit and marks campaign closed
+                Pays out contingency and closes the campaign
               </span>
             </button>
             <button
@@ -3537,7 +3536,7 @@ Welfare / emergency kitty</p>
       <AppModal
         open={settingsModal === "mpesa"}
         onClose={() => setSettingsModal(null)}
-        title="M-Pesa / Daraja"
+        title="M-Pesa setup"
         subtitle="Credentials stay on the server — not in this app"
         footer={
           <button
