@@ -1,11 +1,28 @@
-/** Minimal single-page (or multi-page) text PDF — no external deps */
+/**
+ * Bank-style member statement PDF (no external deps).
+ * Clean header, summary strip, tabular movements, footer.
+ */
 
-function pdfEscape(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+function esc(s: string): string {
+  return String(s ?? "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)");
 }
 
-function fmtMoney(n: number): string {
-  return `KES ${Math.round(n).toLocaleString("en-KE")}`;
+function money(n: number): string {
+  const v = Math.round(Number(n) || 0);
+  return `KES ${v.toLocaleString("en-KE")}`;
+}
+
+function padRight(s: string, n: number): string {
+  const t = String(s ?? "");
+  return t.length >= n ? t.slice(0, n) : t + " ".repeat(n - t.length);
+}
+
+function padLeft(s: string, n: number): string {
+  const t = String(s ?? "");
+  return t.length >= n ? t.slice(0, n) : " ".repeat(n - t.length) + t;
 }
 
 export type StatementLine = {
@@ -13,7 +30,276 @@ export type StatementLine = {
   pot: string;
   amount: number;
   status?: string;
+  reference?: string;
 };
+
+type DrawCmd = string;
+
+function textAt(x: number, y: number, size: number, str: string): DrawCmd {
+  return `BT /F1 ${size} Tf 1 0 0 1 ${x.toFixed(1)} ${y.toFixed(1)} Tm (${esc(str)}) Tj ET`;
+}
+
+function boldAt(x: number, y: number, size: number, str: string): DrawCmd {
+  return `BT /F2 ${size} Tf 1 0 0 1 ${x.toFixed(1)} ${y.toFixed(1)} Tm (${esc(str)}) Tj ET`;
+}
+
+function line(x1: number, y1: number, x2: number, y2: number, w = 0.6): DrawCmd {
+  return `${w} w ${x1.toFixed(1)} ${y1.toFixed(1)} m ${x2.toFixed(1)} ${y2.toFixed(1)} l S`;
+}
+
+function rectStroke(x: number, y: number, w: number, h: number, lw = 0.8): DrawCmd {
+  return `${lw} w ${x.toFixed(1)} ${y.toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re S`;
+}
+
+function rectFillGray(x: number, y: number, w: number, h: number, gray: number): DrawCmd {
+  return `${gray} g ${x.toFixed(1)} ${y.toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)} re f 0 g`;
+}
+
+function buildPageContent(opts: {
+  chamaName: string;
+  memberName: string;
+  lines: StatementLine[];
+  potBalances?: { label: string; balance: number }[];
+  generatedAt: Date;
+  pageNum: number;
+  pageCount: number;
+  sliceStart: number;
+  sliceEnd: number;
+  totalPaid: number;
+  isFirst: boolean;
+  isLast: boolean;
+}): string {
+  const W = 595;
+  const H = 842;
+  const L = 40;
+  const R = W - 40;
+  const cmds: DrawCmd[] = [];
+
+  let y = H - 36;
+
+  // Top brand bar
+  cmds.push(rectFillGray(0, H - 28, W, 28, 0.12));
+  cmds.push("1 g");
+  cmds.push(boldAt(L, H - 18, 11, "ChamaVault"));
+  cmds.push(textAt(R - 130, H - 18, 9, "MEMBER STATEMENT"));
+  cmds.push("0 g");
+
+  y = H - 48;
+  cmds.push(boldAt(L, y, 16, "Account statement"));
+  y -= 16;
+  cmds.push(textAt(L, y, 9, "Zero-cash treasury  ·  Confidential — for member records"));
+  y -= 10;
+  cmds.push(line(L, y, R, y, 1.2));
+
+  y -= 18;
+  // Two-column account block
+  cmds.push(rectStroke(L, y - 52, R - L, 58, 0.7));
+  cmds.push(boldAt(L + 8, y - 12, 9, "CHAMA"));
+  cmds.push(textAt(L + 8, y - 26, 11, opts.chamaName.slice(0, 42)));
+  cmds.push(boldAt(L + 8, y - 42, 9, "MEMBER"));
+  cmds.push(textAt(L + 8, y - 54, 11, opts.memberName.slice(0, 42)));
+
+  const mid = L + (R - L) / 2 + 8;
+  cmds.push(boldAt(mid, y - 12, 9, "STATEMENT DATE"));
+  cmds.push(
+    textAt(
+      mid,
+      y - 26,
+      10,
+      opts.generatedAt.toLocaleDateString("en-KE", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      }),
+    ),
+  );
+  cmds.push(boldAt(mid, y - 42, 9, "CURRENCY"));
+  cmds.push(textAt(mid, y - 54, 10, "Kenya Shilling (KES)"));
+
+  y -= 72;
+
+  if (opts.isFirst) {
+    // Summary strip
+    cmds.push(rectFillGray(L, y - 36, R - L, 42, 0.94));
+    cmds.push(rectStroke(L, y - 36, R - L, 42, 0.5));
+    const colW = (R - L) / 3;
+    cmds.push(boldAt(L + 10, y - 12, 8, "TOTAL CREDITED"));
+    cmds.push(boldAt(L + 10, y - 28, 12, money(opts.totalPaid)));
+    cmds.push(boldAt(L + colW + 10, y - 12, 8, "TRANSACTIONS"));
+    cmds.push(boldAt(L + colW + 10, y - 28, 12, String(opts.lines.length)));
+    cmds.push(boldAt(L + colW * 2 + 10, y - 12, 8, "POTS WITH BALANCE"));
+    cmds.push(
+      boldAt(
+        L + colW * 2 + 10,
+        y - 28,
+        12,
+        String(opts.potBalances?.filter((p) => p.balance > 0).length ?? 0),
+      ),
+    );
+    y -= 52;
+
+    // Pot balances section
+    if (opts.potBalances && opts.potBalances.length > 0) {
+      cmds.push(boldAt(L, y, 10, "Balances by pot"));
+      y -= 6;
+      cmds.push(line(L, y, R, y, 0.5));
+      y -= 14;
+      for (const p of opts.potBalances) {
+        if (y < 80) break;
+        cmds.push(textAt(L + 4, y, 9, p.label.slice(0, 36)));
+        cmds.push(boldAt(R - 90, y, 9, money(p.balance)));
+        y -= 13;
+      }
+      y -= 8;
+    }
+
+    cmds.push(boldAt(L, y, 10, "Payment history"));
+    y -= 6;
+    cmds.push(line(L, y, R, y, 0.8));
+    y -= 4;
+  }
+
+  // Table header
+  cmds.push(rectFillGray(L, y - 16, R - L, 18, 0.9));
+  cmds.push(boldAt(L + 6, y - 12, 8, "DATE"));
+  cmds.push(boldAt(L + 78, y - 12, 8, "DESCRIPTION / POT"));
+  cmds.push(boldAt(R - 100, y - 12, 8, "AMOUNT"));
+  y -= 22;
+
+  const slice = opts.lines.slice(opts.sliceStart, opts.sliceEnd);
+  let row = 0;
+  for (const item of slice) {
+    if (y < 70) break;
+    if (row % 2 === 1) {
+      cmds.push(rectFillGray(L, y - 4, R - L, 14, 0.96));
+    }
+    const d = String(item.date).slice(0, 10);
+    const pot = (item.pot || "Contribution").slice(0, 40);
+    cmds.push(textAt(L + 6, y, 9, d));
+    cmds.push(textAt(L + 78, y, 9, pot));
+    cmds.push(boldAt(R - 100, y, 9, money(item.amount)));
+    y -= 14;
+    row++;
+  }
+
+  if (opts.isLast) {
+    y -= 6;
+    cmds.push(line(L, y, R, y, 1));
+    y -= 16;
+    cmds.push(boldAt(L + 6, y, 10, "Closing total (all listed payments)"));
+    cmds.push(boldAt(R - 100, y, 11, money(opts.totalPaid)));
+    y -= 20;
+    cmds.push(rectStroke(L, y - 36, R - L, 40, 0.5));
+    cmds.push(
+      textAt(
+        L + 8,
+        y - 14,
+        8,
+        "This statement summarises contributions recorded in ChamaVault for your membership.",
+      ),
+    );
+    cmds.push(
+      textAt(
+        L + 8,
+        y - 26,
+        8,
+        "It is not a bank advice. For disputes, contact your chama treasurer with the date and amount.",
+      ),
+    );
+  }
+
+  // Footer
+  cmds.push(line(L, 48, R, 48, 0.4));
+  cmds.push(
+    textAt(
+      L,
+      36,
+      8,
+      `Page ${opts.pageNum} of ${opts.pageCount}  ·  ChamaVault  ·  ${opts.chamaName.slice(0, 28)}`,
+    ),
+  );
+  cmds.push(textAt(R - 120, 36, 8, "www — keep for your records"));
+
+  return cmds.join("\n");
+}
+
+function assemblePdf(pageStreams: string[]): Blob {
+  const W = 595;
+  const H = 842;
+  const parts: string[] = [];
+  const offsets: number[] = [0];
+
+  const encoder = new TextEncoder();
+  let length = 0;
+  const push = (s: string) => {
+    parts.push(s);
+    length += encoder.encode(s).length;
+  };
+
+  push("%PDF-1.4\n");
+
+  const objPositions: number[] = [];
+  const startObj = () => {
+    objPositions.push(length);
+  };
+
+  // 1 Catalog
+  startObj();
+  push("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+
+  // 2 Pages (kids filled after we know page count)
+  const pageCount = pageStreams.length;
+  const pageObjNums = pageStreams.map((_, i) => 3 + i * 2); // 3,5,7,...
+  const contentObjNums = pageStreams.map((_, i) => 4 + i * 2); // 4,6,8,...
+
+  startObj();
+  push(
+    `2 0 obj\n<< /Type /Pages /Kids [${pageObjNums.map((n) => `${n} 0 R`).join(" ")}] /Count ${pageCount} >>\nendobj\n`,
+  );
+
+  // Font objects at end: F1 Helvetica, F2 Helvetica-Bold
+  const fontRegular = 3 + pageCount * 2;
+  const fontBold = fontRegular + 1;
+
+  for (let i = 0; i < pageCount; i++) {
+    const pageNo = pageObjNums[i];
+    const contentNo = contentObjNums[i];
+    const stream = pageStreams[i];
+
+    startObj();
+    push(
+      `${pageNo} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Contents ${contentNo} 0 R /Resources << /Font << /F1 ${fontRegular} 0 R /F2 ${fontBold} 0 R >> >> >>\nendobj\n`,
+    );
+
+    startObj();
+    push(
+      `${contentNo} 0 obj\n<< /Length ${encoder.encode(stream).length} >>\nstream\n${stream}\nendstream\nendobj\n`,
+    );
+  }
+
+  startObj();
+  push(
+    `${fontRegular} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n`,
+  );
+  startObj();
+  push(
+    `${fontBold} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>\nendobj\n`,
+  );
+
+  const xrefPos = length;
+  const totalObjs = 2 + pageCount * 2 + 2; // catalog, pages, pages*2, 2 fonts
+  let xref = `xref\n0 ${totalObjs + 1}\n`;
+  xref += "0000000000 65535 f \n";
+  for (let i = 0; i < totalObjs; i++) {
+    xref += `${String(objPositions[i]).padStart(10, "0")} 00000 n \n`;
+  }
+  push(xref);
+  push(
+    `trailer\n<< /Size ${totalObjs + 1} /Root 1 0 R >>\nstartxref\n${xrefPos}\n%%EOF\n`,
+  );
+
+  return new Blob(parts, { type: "application/pdf" });
+}
 
 export function downloadMemberStatementPdf(opts: {
   chamaName: string;
@@ -22,204 +308,52 @@ export function downloadMemberStatementPdf(opts: {
   potBalances?: { label: string; balance: number }[];
   generatedAt?: Date;
 }): void {
-  const when = opts.generatedAt ?? new Date();
-  const title = "ChamaVault member statement";
-  const header = [
-    title,
-    `Chama: ${opts.chamaName}`,
-    `Member: ${opts.memberName}`,
-    `Generated: ${when.toLocaleString("en-KE")}`,
-    "",
-  ];
+  const generatedAt = opts.generatedAt ?? new Date();
+  const lines = [...opts.lines].sort((a, b) =>
+    String(b.date).localeCompare(String(a.date)),
+  );
+  const totalPaid = lines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
 
-  const potLines: string[] = [];
-  if (opts.potBalances && opts.potBalances.length) {
-    potLines.push("Balances by pot");
-    for (const p of opts.potBalances) {
-      potLines.push(`  ${p.label}: ${fmtMoney(p.balance)}`);
+  // Rows per page (first page has less room due to header/summary)
+  const firstPageRows = 18;
+  const nextPageRows = 36;
+  const slices: { start: number; end: number }[] = [];
+  if (lines.length === 0) {
+    slices.push({ start: 0, end: 0 });
+  } else {
+    let i = 0;
+    slices.push({ start: 0, end: Math.min(firstPageRows, lines.length) });
+    i = firstPageRows;
+    while (i < lines.length) {
+      slices.push({ start: i, end: Math.min(i + nextPageRows, lines.length) });
+      i += nextPageRows;
     }
-    potLines.push("");
   }
 
-  potLines.push("Payment history");
-  potLines.push("Date         Pot                      Amount");
-  potLines.push("----------------------------------------------");
-
-  const body: string[] = [];
-  let total = 0;
-  for (const row of opts.lines) {
-    total += Number(row.amount) || 0;
-    const d = String(row.date).slice(0, 10).padEnd(12);
-    const pot = (row.pot || "—").slice(0, 22).padEnd(22);
-    const amt = fmtMoney(row.amount);
-    body.push(`${d}${pot}${amt}`);
-  }
-  if (body.length === 0) {
-    body.push("(No payments recorded yet)");
-  }
-  body.push("----------------------------------------------");
-  body.push(`Total paid: ${fmtMoney(total)}`);
-  body.push("");
-  body.push("This statement is for your records. Keep for chama meetings.");
-
-  const allLines = [...header, ...potLines, ...body];
-
-  // Build PDF content stream (Helvetica, 10pt, top-down)
-  const pageWidth = 595; // A4
-  const pageHeight = 842;
-  const margin = 50;
-  const lineHeight = 14;
-  const maxLinesPerPage = Math.floor((pageHeight - margin * 2) / lineHeight);
-
-  const pages: string[][] = [];
-  for (let i = 0; i < allLines.length; i += maxLinesPerPage) {
-    pages.push(allLines.slice(i, i + maxLinesPerPage));
-  }
-  if (pages.length === 0) pages.push([title]);
-
-  const objects: string[] = [];
-  // 1 catalog
-  objects.push("<< /Type /Catalog /Pages 2 0 R >>");
-  // 2 pages — filled later
-  const kids: string[] = [];
-  let objIndex = 3; // next object number
-
-  const pageObjs: { contentObj: number; pageObj: number; stream: string }[] = [];
-
-  for (const pageLines of pages) {
-    const contentObj = objIndex++;
-    const pageObj = objIndex++;
-    kids.push(`${pageObj} 0 R`);
-
-    let y = pageHeight - margin;
-    const ops: string[] = ["BT", "/F1 10 Tf", "14 TL"];
-    let first = true;
-    for (const line of pageLines) {
-      const text = pdfEscape(line);
-      if (first) {
-        ops.push(`1 0 0 1 ${margin} ${y} Tm (${text}) Tj`);
-        first = false;
-      } else {
-        ops.push(`T* (${text}) Tj`);
-      }
-    }
-    ops.push("ET");
-    const stream = ops.join("\n");
-    pageObjs.push({ contentObj, pageObj, stream });
-  }
-
-  // Rebuild object list in order
-  const out: string[] = [];
-  out.push("%PDF-1.4");
-
-  const offsets: number[] = [0];
-
-  function addObj(n: number, body: string) {
-    offsets[n] = out.join("\n").length + 1;
-    out.push(`${n} 0 obj`);
-    out.push(body);
-    out.push("endobj");
-  }
-
-  addObj(1, "<< /Type /Catalog /Pages 2 0 R >>");
-  addObj(
-    2,
-    `<< /Type /Pages /Kids [${kids.join(" ")}] /Count ${pages.length} >>`,
+  const pageCount = slices.length;
+  const streams = slices.map((sl, idx) =>
+    buildPageContent({
+      chamaName: opts.chamaName,
+      memberName: opts.memberName,
+      lines,
+      potBalances: opts.potBalances,
+      generatedAt,
+      pageNum: idx + 1,
+      pageCount,
+      sliceStart: sl.start,
+      sliceEnd: sl.end,
+      totalPaid,
+      isFirst: idx === 0,
+      isLast: idx === pageCount - 1,
+    }),
   );
 
-  // Font object
-  const fontObj = objIndex++;
-  addObj(fontObj, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
-
-  for (const p of pageObjs) {
-    addObj(
-      p.contentObj,
-      `<< /Length ${p.stream.length} >>\nstream\n${p.stream}\nendstream`,
-    );
-    addObj(
-      p.pageObj,
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Contents ${p.contentObj} 0 R /Resources << /Font << /F1 ${fontObj} 0 R >> >> >>`,
-    );
-  }
-
-  const xrefStart = out.join("\n").length + 1;
-  const maxObj = fontObj;
-  // recount - we used objects up to fontObj and page objs
-  const totalObjs = offsets.length - 1;
-  // Fix offsets: rebuild properly
-  const pdfParts: string[] = ["%PDF-1.4\n"];
-  const off: number[] = [0];
-  let n = 1;
-
-  function writeObj(content: string) {
-    off[n] = pdfParts.reduce((s, x) => s + x.length, 0);
-    pdfParts.push(`${n} 0 obj\n${content}\nendobj\n`);
-    n++;
-  }
-
-  writeObj("<< /Type /Catalog /Pages 2 0 R >>");
-  // pages kids need correct numbers - build pages after we know structure
-  // Simpler approach: one page only with truncated lines for reliability
-
-  // --- Simplified single-file rebuild ---
-  const linesForPdf = allLines.slice(0, 50);
-  let streamLines = ["BT", "/F1 10 Tf", `${margin} ${pageHeight - margin} Td`, "12 TL"];
-  linesForPdf.forEach((line, i) => {
-    const t = pdfEscape(line);
-    if (i === 0) streamLines.push(`(${t}) Tj`);
-    else streamLines.push(`T* (${t}) Tj`);
-  });
-  streamLines.push("ET");
-  const stream = streamLines.join("\n");
-
-  const final: string[] = [];
-  const xref: number[] = [];
-  const push = (s: string) => {
-    xref.push(final.join("").length);
-    final.push(s);
-  };
-
-  push("%PDF-1.4\n");
-  // obj 1
-  xref[1] = final.join("").length;
-  final.push("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
-  // obj 2
-  xref[2] = final.join("").length;
-  final.push(
-    "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
-  );
-  // obj 3 page
-  xref[3] = final.join("").length;
-  final.push(
-    `3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n`,
-  );
-  // obj 4 content
-  xref[4] = final.join("").length;
-  final.push(
-    `4 0 obj\n<< /Length ${stream.length} >>\nstream\n${stream}\nendstream\nendobj\n`,
-  );
-  // obj 5 font
-  xref[5] = final.join("").length;
-  final.push(
-    "5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
-  );
-
-  const xrefPos = final.join("").length;
-  let xrefTable = `xref\n0 6\n0000000000 65535 f \n`;
-  for (let i = 1; i <= 5; i++) {
-    xrefTable += `${String(xref[i]).padStart(10, "0")} 00000 n \n`;
-  }
-  final.push(xrefTable);
-  final.push(
-    `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefPos}\n%%EOF\n`,
-  );
-
-  const blob = new Blob(final, { type: "application/pdf" });
+  const blob = assemblePdf(streams);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  const safeName = opts.memberName.replace(/[^a-zA-Z0-9]+/g, "-").slice(0, 24);
+  const safe = opts.memberName.replace(/[^a-zA-Z0-9]+/g, "-").slice(0, 24);
   a.href = url;
-  a.download = `ChamaVault-statement-${safeName}-${when.toISOString().slice(0, 10)}.pdf`;
+  a.download = `ChamaVault-Statement-${safe}-${generatedAt.toISOString().slice(0, 10)}.pdf`;
   a.click();
   URL.revokeObjectURL(url);
 }
