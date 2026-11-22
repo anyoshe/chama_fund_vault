@@ -281,7 +281,7 @@ export default function ChamaOverview({
               className="group flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/30 transition hover:from-emerald-400 hover:to-teal-500 active:scale-[0.98]"
             >
               <Plus size={18} weight="bold" className="transition-transform group-hover:rotate-90" />
-              Contribute Now · M-Pesa / Bank
+              Contribute
             </button>
             <button
               onClick={() => { if (canRequestLoan) onProposeLoan(); }}
@@ -289,7 +289,7 @@ export default function ChamaOverview({
               className={`${!canRequestLoan ? "opacity-40 cursor-not-allowed " : ""}flex items-center justify-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/10 px-6 py-2.5 text-sm font-bold text-amber-300 transition hover:bg-amber-400/20 active:scale-[0.98]`}
             >
               <HandCoins size={18} />
-              Propose Loan / Withdrawal
+              Request a loan
             </button>
           </div>
         </div>
@@ -315,10 +315,7 @@ export default function ChamaOverview({
             />
           </div>
           <p className="mt-1.5 text-[11px] text-slate-500">
-            Kit totals follow member deposits (contributions). Available to lend is deposits
-            minus principal still out. Pooled from table banking, share capital, general savings and member-loans.
-            Loans draw from this pool by % share of each kit. Your personal contributions stay
-            intact for interest.
+            Money available for members to borrow this month.
           </p>
         </div>
       </div>
@@ -431,38 +428,16 @@ export default function ChamaOverview({
             <Calculator size={18} className="text-violet-400" /> Your loan limit
           </div>
           <p className="mt-2 text-xs text-slate-400">
-            Your loan limit is based on{" "}
-            <span className="font-semibold text-slate-300">your shares</span> (table banking, share
-            capital, general savings — including interest credits), not the whole group pot.
-            Shares now:{" "}
-            <span className="font-mono font-bold text-slate-200">
-              {fmtKsh(memberShareBalance)}
-            </span>
-            . Limit:{" "}
-            <span className="font-mono font-bold text-slate-200">
-              {fmtKsh(effectiveLimit)}
-            </span>{" "}
-            ({maxMultiple}× shares
-            {availableLoanLimit != null && availableLoanLimit < maxLoanFromShares
-              ? ", reduced by open loans"
-              : ""}
-            ). Loaning pool available:{" "}
-            <span className="font-mono font-bold text-emerald-300">
-              {fmtKsh(loaningPoolTotal)}
-            </span>
-            . Max you can take now:{" "}
+            Based on your shares ({fmtKsh(memberShareBalance)}). You can borrow up to{" "}
             <span className="font-mono font-bold text-violet-300">
               {fmtKsh(canRequestLoan ? maxBorrowable : 0)}
             </span>
             {!canRequestLoan && (
               <span className="text-amber-300">
                 {" "}
-                · Borrowing locked until your current loan is fully settled.
+                — finish your current loan before borrowing again.
               </span>
             )}
-            {loanFund
-              ? ` · ${loanFund.label} kit ${fmtKsh(Number(loanFund.balance) || 0)}`
-              : ""}
             .
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
