@@ -383,8 +383,7 @@ export default function MyFinance({
         </p>
         <h2 className="mt-1 text-xl font-bold text-white">{me.name}</h2>
         <p className="mt-1 text-xs text-slate-400">
-          Personal contributions, balances, loans, and fines for{" "}
-          <span className="font-semibold text-slate-300">{chama.name}</span>
+          Your money in <span className="font-semibold text-slate-300">{chama.name}</span>
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <button
@@ -624,7 +623,7 @@ export default function MyFinance({
                 {myContributions.length} contribution records
               </p>
               <p className="mt-1 text-xs text-slate-400">
-                Past payments · move a contribution to another kit
+                Date, pot, and amount for each payment
               </p>
             </button>
           </div>
@@ -647,7 +646,7 @@ export default function MyFinance({
       >
         <p className="text-sm font-bold text-white">My statement</p>
         <p className="mt-1 text-[11px] text-slate-500">
-          Expected vs paid vs balance (obligations and penalties)
+          What was expected, what you paid, and what is left
         </p>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[28rem] text-left text-[11px]">
@@ -664,7 +663,7 @@ export default function MyFinance({
               {statementRows.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-3 text-slate-500">
-                    No statement rows yet. Pay obligations or wait for plans to be generated.
+                    No statement lines yet.
                   </td>
                 </tr>
               ) : (
@@ -696,7 +695,7 @@ export default function MyFinance({
         </div>
       </div>
 
-      {/* Phase 1 — What I owe (from contribution plans) */}
+      {/* What I owe */}
       <div className={`rounded-2xl border border-amber-500/25 bg-gradient-to-br from-slate-900 to-amber-950/30 p-4 sm:p-5 ${financePanel === "dues" ? "" : "hidden"}`}>
         <div className="flex items-center justify-between gap-2">
           <div>
@@ -704,10 +703,7 @@ export default function MyFinance({
               What I owe
             </p>
             <p className="mt-1 text-xs text-slate-400">
-              Open amounts you still owe. <strong className="text-slate-300">Pay</strong> =
-              you pay yourself (Method A). If you gave cash to the treasurer, they must
-              use <strong className="text-slate-300">Chama Finance → Record member payment</strong>
-              — that clears this row and updates the kit (you should not need to Pay again).
+              Amounts you still need to pay. Tap <strong className="text-slate-300">Pay</strong> to settle.
             </p>
           </div>
           {oblLoading ? (
@@ -716,7 +712,7 @@ export default function MyFinance({
         </div>
         {obligations.length === 0 && !oblLoading ? (
           <p className="mt-3 text-xs text-slate-500">
-            No open obligations. Officials generate these from contribution plans in Chama Finance.
+            Nothing outstanding right now.
           </p>
         ) : (
           <div className="mt-3 space-y-2">
@@ -781,13 +777,9 @@ export default function MyFinance({
 
 {/* Kit cards — click to contribute to the right pot */}
       <div className={financePanel === "kits" ? "space-y-3" : "hidden"}>
-        <p className="mb-1 text-sm font-bold text-white">
-          Contribute to a kit — pick the pot first
-        </p>
+        <p className="mb-1 text-sm font-bold text-white">My pots</p>
         <p className="mb-3 text-xs text-slate-400">
-          Tap a card to open contribution locked to that kit. Use{" "}
-          <span className="font-semibold text-amber-200">Move kit</span> in your
-          history below if you already paid into the wrong pot.
+          Tap a pot to contribute to it.
         </p>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {potOptionsForChama(chama).map((act) => {
@@ -819,13 +811,9 @@ export default function MyFinance({
           })}
         </div>
         <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-          <p className="text-xs font-bold text-white">Share / table-banking withdrawal</p>
+          <p className="text-xs font-bold text-white">Request withdrawal</p>
           <p className="mt-1 text-[11px] text-slate-500">
-            Mode: {chama.constitution?.shareWithdrawMode ?? "locked"}
-            {(chama.constitution?.shareLockMonths
-              ? ` · lock ${chama.constitution.shareLockMonths} months`
-              : " · typically locked until anniversary or break-up")}
-            . Registration fees are never withdrawable. Member-loans kit is lending capital only.
+            Ask officials to release shares or savings when your chama rules allow.
           </p>
           <button
             type="button"
@@ -974,14 +962,13 @@ export default function MyFinance({
                 <th className="pb-2 font-semibold">Kit</th>
                 <th className="pb-2 font-semibold">Method</th>
                 <th className="pb-2 text-right font-semibold">Amount</th>
-                    <th className="pb-2 text-right font-semibold text-slate-500">Fix</th>
               </tr>
             </thead>
             <tbody>
               {myContributions.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-4 text-slate-500">
-                    No contributions recorded yet.
+                  <td colSpan={4} className="py-4 text-slate-500">
+                    No payments yet.
                   </td>
                 </tr>
               ) : (
@@ -995,17 +982,6 @@ export default function MyFinance({
                     <td className="py-2 text-right font-mono font-semibold text-emerald-300">
                       {fmtKsh(c.amount)}
                     </td>
-                    <td className="py-2 text-right">
-                      {onReallocateContribution ? (
-                        <button
-                          type="button"
-                          className="rounded-lg border border-slate-700 px-2 py-1 text-[10px] font-semibold text-amber-200 hover:border-amber-500/40 hover:bg-amber-500/10"
-                          onClick={() => setMoveKitId(c.id)}
-                        >
-                          Move to correct kit
-                        </button>
-                      ) : null}
-                    </td>
                   </tr>
                 ))
               )}
@@ -1013,9 +989,7 @@ export default function MyFinance({
           </table>
         </div>
         <p className="mt-2 text-[11px] text-slate-500">
-          Lifetime deposited (contribution rows): {fmtKsh(totalContributed)}.
-          Wrong pot? Use <span className="text-amber-200">Move to correct kit</span>{" "}
-          on that row (requires SQL: reallocate_contribution).
+          Total paid: {fmtKsh(totalContributed)}
         </p>
       </div>
 
@@ -1120,36 +1094,7 @@ export default function MyFinance({
           toast.success("Withdrawal request submitted for officials");
         }}
       />
-      <ChoiceModal
-        open={Boolean(moveKitId)}
-        onClose={() => setMoveKitId(null)}
-        title="Move contribution to another kit"
-        subtitle="Correct a payment that went to the wrong pot"
-        options={Array.from(
-          new Set([
-            ...(chama.constitution.activities ?? []),
-            "member-loans",
-            "table-banking",
-            "share-capital",
-            "general-savings",
-            "registration-fees",
-            "contingency",
-          ]),
-        )
-          .filter((code) => {
-            const row = myContributions.find((c) => c.id === moveKitId);
-            return code !== row?.destination;
-          })
-          .map((code) => ({
-            id: code,
-            label: kitLabel(code),
-          }))}
-        confirmLabel="Move funds"
-        onConfirm={async (kit) => {
-          if (!moveKitId || !onReallocateContribution) return;
-          await onReallocateContribution(moveKitId, kit);
-        }}
-      />
+
 
     </>
   );
