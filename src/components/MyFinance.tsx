@@ -393,100 +393,33 @@ export default function MyFinance({
           >
             <PiggyBank size={16} /> Contribute
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              const lines = [
-                "ChamaVault personal statement",
-                `Member,${me?.name ?? ""}`,
-                `Chama,${chama.name}`,
-                `Generated,${new Date().toISOString()}`,
-                "",
-                "Date,Kit,Method,Amount",
-                ...myContributions.map(
-                  (c) =>
-                    `${(c.date || "").slice(0, 10)},${c.destination},${c.method},${c.amount}`,
-                ),
-              ];
-              const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = `chamavault-statement-${(me?.name || "member").replace(/\s+/g, "-")}.csv`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-600 bg-slate-800/80 px-4 py-2 text-xs font-bold text-slate-200 hover:bg-slate-800"
-          >
-            <Receipt size={16} /> Download CSV
-            </button>
+          {canRequestLoan ? (
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-200"
-              onClick={() => {
-                downloadMemberStatementPdf({
-                  chamaName: chama.name,
-                  memberName: me?.name || "Member",
-                  lines: contributions
-                    .filter((c) => c.memberId === me?.id)
-                    .map((c) => ({
-                      date: String(c.date).slice(0, 10),
-                      pot: c.destination || "—",
-                      amount: Number(c.amount) || 0,
-                      status: c.status,
-                    })),
-                });
-              }}
+              onClick={() => onProposeLoan()}
+              className="inline-flex items-center gap-2 rounded-xl border border-violet-500/40 bg-violet-500/10 px-4 py-2 text-xs font-bold text-violet-300 hover:bg-violet-500/20"
             >
-              Download PDF
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (canRequestLoan) onProposeLoan();
-            }}
-            disabled={!canRequestLoan}
-            title={
-              !canRequestLoan
-                ? "Settle your open loan fully before borrowing again"
-                : "Request loan"
-            }
-            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-bold ${
-              canRequestLoan
-                ? "border-violet-500/40 bg-violet-500/10 text-violet-300 hover:bg-violet-500/20"
-                : "cursor-not-allowed border-slate-700 bg-slate-800 text-slate-500"
-            }`}
-          >
-            <HandCoins size={16} />{" "}
-            {canRequestLoan ? "Request loan" : "Loan locked — settle first"}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (!primaryLoan) return;
-              const amt = Math.round(primaryOutstanding * 100) / 100;
-              if (onRequestLoanRepay) {
-                onRequestLoanRepay(primaryLoan.id, amt);
-                return;
-              }
-              setRepayAmount(String(amt));
-              setRepayOpen((v) => !v);
-            }}
-            disabled={!primaryLoan || (!onPartialRepay && !onRequestLoanRepay)}
-            title={
-              !primaryLoan
-                ? "No disbursed loan to repay"
-                : "Repay your outstanding loan"
-            }
-            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-xs font-bold ${
-              primaryLoan && onPartialRepay
-                ? "border-amber-400/40 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20"
-                : "cursor-not-allowed border-slate-700 bg-slate-800 text-slate-500"
-            }`}
-          >
-            <Receipt size={16} />{" "}
-            {primaryLoan ? "Repay loan" : "No loan to repay"}
-          </button>
+              <HandCoins size={16} /> Request loan
+            </button>
+          ) : null}
+          {primaryLoan ? (
+            <button
+              type="button"
+              onClick={() => {
+                const amt = Math.round(primaryOutstanding * 100) / 100;
+                if (onRequestLoanRepay) {
+                  onRequestLoanRepay(primaryLoan.id, amt);
+                  return;
+                }
+                setRepayAmount(String(amt));
+                setRepayOpen((v) => !v);
+              }}
+              disabled={!onPartialRepay && !onRequestLoanRepay}
+              className="inline-flex items-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-2 text-xs font-bold text-amber-200 hover:bg-amber-400/20 disabled:opacity-50"
+            >
+              <Receipt size={16} /> Repay loan
+            </button>
+          ) : null}
         </div>
 
         {repayOpen && primaryLoan && onPartialRepay && (
@@ -644,7 +577,27 @@ export default function MyFinance({
           financePanel === "statement" ? "" : "hidden"
         }`}
       >
-        <p className="text-sm font-bold text-white">My statement</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-bold text-white">My statement</p>
+          <button
+            type="button"
+            className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-200"
+            onClick={() => {
+              downloadMemberStatementPdf({
+                chamaName: chama.name,
+                memberName: me?.name || "Member",
+                lines: myContributions.map((c) => ({
+                  date: String(c.date).slice(0, 10),
+                  pot: kitLabel(c.destination),
+                  amount: Number(c.amount) || 0,
+                  status: c.status,
+                })),
+              });
+            }}
+          >
+            Download PDF
+          </button>
+        </div>
         <p className="mt-1 text-[11px] text-slate-500">
           What was expected, what you paid, and what is left
         </p>
