@@ -91,20 +91,22 @@ function buildPageContent(opts: {
   y -= 10;
   cmds.push(line(L, y, R, y, 1.2));
 
-  y -= 18;
-  // Two-column account block
-  cmds.push(rectStroke(L, y - 52, R - L, 58, 0.7));
-  cmds.push(boldAt(L + 8, y - 12, 9, "CHAMA"));
-  cmds.push(textAt(L + 8, y - 26, 11, opts.chamaName.slice(0, 42)));
-  cmds.push(boldAt(L + 8, y - 42, 9, "MEMBER"));
-  cmds.push(textAt(L + 8, y - 54, 11, opts.memberName.slice(0, 42)));
-
-  const mid = L + (R - L) / 2 + 8;
-  cmds.push(boldAt(mid, y - 12, 9, "STATEMENT DATE"));
+  y -= 20;
+  // Account biodata box — generous padding so labels never collide with values
+  const boxH = 78;
+  const boxBottom = y - boxH;
+  cmds.push(rectStroke(L, boxBottom, R - L, boxH, 0.7));
+  const padX = 14;
+  const leftX = L + padX;
+  const midX = L + (R - L) / 2 + padX;
+  // Row 1: CHAMA / STATEMENT DATE
+  cmds.push(boldAt(leftX, y - 16, 8, "CHAMA"));
+  cmds.push(boldAt(midX, y - 16, 8, "STATEMENT DATE"));
+  cmds.push(textAt(leftX, y - 32, 10, opts.chamaName.slice(0, 36)));
   cmds.push(
     textAt(
-      mid,
-      y - 26,
+      midX,
+      y - 32,
       10,
       opts.generatedAt.toLocaleDateString("en-KE", {
         year: "numeric",
@@ -113,10 +115,13 @@ function buildPageContent(opts: {
       }),
     ),
   );
-  cmds.push(boldAt(mid, y - 42, 9, "CURRENCY"));
-  cmds.push(textAt(mid, y - 54, 10, "Kenya Shilling (KES)"));
+  // Row 2: MEMBER / CURRENCY (extra vertical gap from row 1)
+  cmds.push(boldAt(leftX, y - 50, 8, "MEMBER"));
+  cmds.push(boldAt(midX, y - 50, 8, "CURRENCY"));
+  cmds.push(textAt(leftX, y - 66, 10, opts.memberName.slice(0, 36)));
+  cmds.push(textAt(midX, y - 66, 10, "Kenya Shilling (KES)"));
 
-  y -= 72;
+  y = boxBottom - 16;
 
   if (opts.isFirst) {
     // Summary strip
