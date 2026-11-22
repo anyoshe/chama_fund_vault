@@ -50,7 +50,7 @@ export const RPC_TO_SQL: Record<string, { file: string; purpose: string }> = {
     file: "arrears_and_fines_tracking.sql",
     purpose: "Late fines under Welfare · fines",
   },
-  create_contribution_plan: {
+  upsert_contribution_plan: {
     file: "phase1_contribution_plans.sql",
     purpose: "Chair creates contribution plans",
   },
@@ -118,7 +118,7 @@ export const TABLE_TO_SQL: Record<string, string> = {
   member_penalties: "arrears_and_fines_tracking.sql",
   chama_mpesa_credentials: "chama_mpesa_credentials.sql",
   mpesa_stk_requests: "mpesa_stk_complete.sql",
-  kits: "kits_full.sql",
+  chama_kits: "kits_full.sql",
   member_kit_balances: "kits_full.sql",
   proposals: "proposals_ledger_persistence.sql",
 };
