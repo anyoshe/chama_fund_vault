@@ -1796,23 +1796,6 @@ A local copy was kept on this device only.`,
                   })
                 }
                 onPartialRepay={handlePartialRepay}
-                onRequestLoanRepay={(proposalId, amount) =>
-                  openMemberPayment({
-                    kind: "loan_repay",
-                    proposalId,
-                    amount,
-                    note: "Loan repayment — choose Manual or M-Pesa",
-                  })
-                }
-                onRequestObligationPay={(obligationId, amount, note, destinationKit) =>
-                  openMemberPayment({
-                    kind: "obligation",
-                    obligationId,
-                    amount,
-                    destination: destinationKit || undefined,
-                    note: note || "Pay obligation",
-                  })
-                }
                 canRequestLoan={canRequestLoan}
                 availableLoanLimit={availableLoanLimit}
                 pendingVotes={
