@@ -2848,26 +2848,39 @@ Welfare / emergency kitty</p>
               className={`rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-left text-xs font-bold text-rose-200 hover:bg-rose-500/15 ${treasuryCard === "contributions" ? "" : "hidden"}`}
               onClick={async () => {
                 try {
-                  const { data, error } = await supabase.rpc("assess_overdue_penalties", {
+                  // Build dues from join date → now, then apply lateFineRate
+                  await supabase.rpc("backfill_obligations_from_join", {
                     p_chama_id: chamaId,
+                    p_plan_id: null,
                   });
-                  if (error) throw error;
-                  const n = (data as { assessed?: number })?.assessed ?? 0;
-                  toast.success(`Assessed ${n} late penalties`);
-                  const { data: pen } = await supabase.rpc("list_chama_penalties", {
-                    p_chama_id: chamaId,
-                  });
-                  setPenaltyList(
-                    (Array.isArray(pen) ? pen : []) as typeof penaltyList,
+                  const { data, error } = await supabase.rpc(
+                    "assess_late_fines_for_chama",
+                    { p_chama_id: chamaId },
                   );
+                  if (error) {
+                    // fallback older RPC
+                    const r2 = await supabase.rpc("assess_overdue_penalties", {
+                      p_chama_id: chamaId,
+                    });
+                    if (r2.error) throw error;
+                    toast.success(
+                      `Assessed ${(r2.data as { assessed?: number })?.assessed ?? 0} late penalties`,
+                    );
+                  } else {
+                    const n = (data as { assessed?: number })?.assessed ?? 0;
+                    const tot = (data as { totalFines?: number })?.totalFines ?? 0;
+                    toast.success(
+                      `Late fines: ${n} assessed · total about Ksh ${tot}`,
+                    );
+                  }
                 } catch (e) {
                   toast.error(e instanceof Error ? e.message : "Assess failed");
                 }
               }}
             >
-              Add late fines
+              Update arrears & late fines
               <span className="mt-1 block text-[10px] font-normal text-slate-400">
-                Uses plan penalty rules (fixed / % + grace days)
+                Creates missed months from join date · applies late fine % under Welfare · fines
               </span>
             </button>
             <button

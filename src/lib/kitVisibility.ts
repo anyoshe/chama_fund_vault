@@ -58,6 +58,7 @@ export function potOptionsForChama(chama: Chama | null | undefined) {
   const fromList = CHAMA_ACTIVITIES.filter((a) => set.has(a.value));
   for (const code of enabled) {
     if (isRetiredWelfareExpenseKit(code)) continue;
+    // welfare-fines is a sub-pot of welfare
     if (!fromList.some((a) => a.value === code)) {
       fromList.push({
         value: code as (typeof CHAMA_ACTIVITIES)[number]["value"],

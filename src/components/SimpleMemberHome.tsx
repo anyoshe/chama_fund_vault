@@ -155,6 +155,14 @@ export default function SimpleMemberHome({
 }: SimpleMemberHomeProps) {
   const [panel, setPanel] = useState<Panel>("home");
   const [obligations, setObligations] = useState<ContributionObligation[]>([]);
+  const [fines, setFines] = useState<
+    { id: string; outstanding: number; reason?: string; destinationKit?: string }[]
+  >([]);
+  const [duesSummary, setDuesSummary] = useState({
+    principalBehind: 0,
+    finesOutstanding: 0,
+    totalToPay: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [payingId, setPayingId] = useState<string | null>(null);
   const [repayingId, setRepayingId] = useState<string | null>(null);
@@ -164,15 +172,48 @@ export default function SimpleMemberHome({
   const loadObligations = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc("list_my_obligations", {
+      const { data, error } = await supabase.rpc("list_my_payment_dues", {
         p_chama_id: chamaId,
       });
-      if (error) throw error;
-      setObligations(
-        (Array.isArray(data) ? data : []) as ContributionObligation[],
-      );
+      if (!error && data && typeof data === "object") {
+        const d = data as {
+          obligations?: ContributionObligation[];
+          fines?: {
+            id: string;
+            outstanding: number;
+            reason?: string;
+            destinationKit?: string;
+          }[];
+          principalBehind?: number;
+          finesOutstanding?: number;
+          totalToPay?: number;
+        };
+        setObligations(Array.isArray(d.obligations) ? d.obligations : []);
+        setFines(Array.isArray(d.fines) ? d.fines : []);
+        setDuesSummary({
+          principalBehind: Number(d.principalBehind) || 0,
+          finesOutstanding: Number(d.finesOutstanding) || 0,
+          totalToPay: Number(d.totalToPay) || 0,
+        });
+        return;
+      }
+      // Fallback older RPC
+      const { data: obs } = await supabase.rpc("list_my_obligations", {
+        p_chama_id: chamaId,
+      });
+      const list = (Array.isArray(obs) ? obs : []) as ContributionObligation[];
+      setObligations(list);
+      setFines([]);
+      const principal = list.reduce((s, o) => s + (Number(o.outstanding) || 0), 0);
+      setDuesSummary({
+        principalBehind: principal,
+        finesOutstanding: 0,
+        totalToPay: principal,
+      });
     } catch {
       setObligations([]);
+      setFines([]);
+      setDuesSummary({ principalBehind: 0, finesOutstanding: 0, totalToPay: 0 });
     } finally {
       setLoading(false);
     }
@@ -182,10 +223,8 @@ export default function SimpleMemberHome({
     void loadObligations();
   }, [chamaId]);
 
-  const totalOwed = useMemo(
-    () => obligations.reduce((s, o) => s + (Number(o.outstanding) || 0), 0),
-    [obligations],
-  );
+  const totalOwed = duesSummary.totalToPay ||
+    obligations.reduce((s, o) => s + (Number(o.outstanding) || 0), 0);
 
   const myPots = useMemo(() => {
     if (!myId) return [];
@@ -317,7 +356,7 @@ export default function SimpleMemberHome({
         </p>
         {loading ? (
           <p className="text-sm text-slate-500">Loading…</p>
-        ) : obligations.length === 0 ? (
+        ) : obligations.length === 0 && fines.length === 0 ? (
           <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center">
             <CheckCircle size={40} className="mx-auto text-emerald-400" weight="fill" />
             <p className="mt-3 text-lg font-bold text-white">You are up to date</p>
@@ -334,6 +373,73 @@ export default function SimpleMemberHome({
           </div>
         ) : (
           <div className="space-y-3">
+            {(duesSummary.principalBehind > 0 || duesSummary.finesOutstanding > 0) && (
+              <div className="rounded-2xl border border-rose-500/35 bg-rose-500/10 p-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-rose-300">
+                  Behind on payments
+                </p>
+                <div className="mt-2 space-y-1 text-sm text-slate-300">
+                  <div className="flex justify-between">
+                    <span>Missed contributions</span>
+                    <span className="font-mono font-bold text-white">
+                      {fmtKsh(duesSummary.principalBehind)}
+                    </span>
+                  </div>
+                  {duesSummary.finesOutstanding > 0 && (
+                    <div className="flex justify-between">
+                      <span>Late fines (Welfare · fines)</span>
+                      <span className="font-mono font-bold text-amber-200">
+                        {fmtKsh(duesSummary.finesOutstanding)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t border-rose-500/20 pt-2">
+                    <span className="font-bold text-white">Total to pay</span>
+                    <span className="font-mono text-xl font-bold text-rose-200">
+                      {fmtKsh(duesSummary.totalToPay)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {fines.map((f) => (
+              <div
+                key={f.id}
+                className="rounded-2xl border border-amber-500/30 bg-slate-900 p-4"
+              >
+                <p className="text-lg font-bold text-white">Late fine</p>
+                <p className="mt-1 text-sm text-slate-400">
+                  {f.reason || "Welfare · fines"}
+                </p>
+                <p className="mt-3 font-mono text-3xl font-bold text-amber-300">
+                  {fmtKsh(Number(f.outstanding) || 0)}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onRequestObligationPay) {
+                      onRequestObligationPay(
+                        f.id,
+                        Number(f.outstanding) || 0,
+                        f.reason || "Late fine",
+                        "welfare-fines",
+                      );
+                      return;
+                    }
+                    if (onPayOwe) {
+                      onPayOwe(
+                        Number(f.outstanding) || 0,
+                        f.reason || "Late fine",
+                        "welfare-fines",
+                      );
+                    }
+                  }}
+                  className="mt-4 w-full rounded-xl bg-amber-500 py-3 text-base font-bold text-slate-950"
+                >
+                  Pay fine
+                </button>
+              </div>
+            ))}
             {obligations.map((o) => (
               <div
                 key={o.id}
@@ -343,6 +449,10 @@ export default function SimpleMemberHome({
                 <p className="mt-1 text-sm text-slate-400">
                   {potName(o.destinationKit)}
                   {o.dueDate ? ` · pay by ${String(o.dueDate).slice(0, 10)}` : ""}
+                  {o.dueDate &&
+                  new Date(String(o.dueDate).slice(0, 10)) < new Date(new Date().toDateString())
+                    ? " · behind"
+                    : ""}
                 </p>
                 <p className="mt-3 font-mono text-3xl font-bold text-amber-300">
                   {fmtKsh(Number(o.outstanding) || 0)}
