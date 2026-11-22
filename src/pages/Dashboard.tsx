@@ -123,7 +123,7 @@ interface PersistedState {
 
 function loadPersisted(): PersistedState | null {
   try {
-    const raw = saved on this device.getItem(LS_KEY);
+    const raw = localStorage.getItem(LS_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PersistedState;
     if (!Array.isArray(parsed.contributions) || !Array.isArray(parsed.proposals) || !Array.isArray(parsed.ledger)) {
