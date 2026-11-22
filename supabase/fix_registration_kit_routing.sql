@@ -254,3 +254,150 @@ from public.chama_kits k
 join public.chamas ch on ch.id = k.chama_id
 where k.kit_code in ('registration-fees', 'welfare')
 order by ch.name, k.kit_code;
+
+-- 3) When treasurer approves a pending payment that was an obligation, mark obligation paid
+-- (kit already credited by approve_pending_contribution)
+create or replace function public.approve_pending_contribution(p_contribution_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_c public.contributions%rowtype;
+  v_dest text;
+  v_details text;
+  v_obligation_id uuid;
+  v_o public.contribution_obligations%rowtype;
+  v_new_paid numeric;
+  v_status text;
+  v_proposal_id text;
+  v_loan_ref text;
+begin
+  select * into v_c from public.contributions where id = p_contribution_id for update;
+  if not found then raise exception 'Payment not found'; end if;
+  if not public.is_chama_official(v_c.chama_id) then
+    raise exception 'Only officials can approve payments';
+  end if;
+  if v_c.status <> 'pending' then
+    raise exception 'Payment is not pending (status=%)', v_c.status;
+  end if;
+
+  v_dest := coalesce(v_c.destination, 'general-savings');
+  v_details := coalesce(v_c.payment_details, '');
+
+  -- Loan repayment special case
+  if v_dest = 'loan-repay' then
+    v_proposal_id := substring(v_details from 'proposalId=([0-9a-fA-F-]{8,})');
+    if v_proposal_id is not null then
+      begin
+        select coalesce(
+          disbursement->>'loanRef',
+          disbursement->>'reference',
+          'DISB-' || id::text
+        ) into v_loan_ref
+        from public.proposals
+        where id = v_proposal_id::uuid and chama_id = v_c.chama_id;
+      exception when others then
+        v_loan_ref := 'DISB-' || v_proposal_id;
+      end;
+      begin
+        perform public.repay_loan(
+          v_c.chama_id,
+          coalesce(v_loan_ref, 'DISB-' || v_proposal_id),
+          v_c.amount,
+          coalesce(v_c.reference, 'PAY-' || p_contribution_id::text)
+        );
+      exception when others then
+        null;
+      end;
+    end if;
+    update public.contributions set
+      status = 'completed', confirmed_at = now(),
+      approved_by = auth.uid(), approved_at = now()
+    where id = p_contribution_id;
+    return jsonb_build_object('ok', true, 'kind', 'loan_repay', 'amount', v_c.amount);
+  end if;
+
+  -- Normalize registration aliases
+  if lower(v_dest) in ('registration', 'reg-fees') then
+    v_dest := 'registration-fees';
+  end if;
+
+  -- Credit destination kit (registration-fees, table-banking, welfare, …)
+  perform public.ensure_chama_kits(v_c.chama_id);
+  insert into public.chama_kits (chama_id, kit_code, label, balance, is_loan_fund, counts_toward_loan_limit)
+  values (
+    v_c.chama_id, v_dest, public.kit_label(v_dest),
+    v_c.amount, false, public.kit_counts_toward_loan(v_dest)
+  )
+  on conflict (chama_id, kit_code) do update set
+    balance = public.chama_kits.balance + excluded.balance;
+
+  insert into public.member_kit_balances (chama_id, user_id, kit_code, balance, updated_at)
+  values (v_c.chama_id, v_c.member_id, v_dest, v_c.amount, now())
+  on conflict (chama_id, user_id, kit_code) do update set
+    balance = public.member_kit_balances.balance + excluded.balance,
+    updated_at = now();
+
+  update public.chama_members
+  set total_paid = total_paid + v_c.amount
+  where chama_id = v_c.chama_id and user_id = v_c.member_id and status = 'active';
+
+  update public.chamas
+  set pool_balance = coalesce((
+    select sum(k.balance) from public.chama_kits k where k.chama_id = public.chamas.id
+  ), 0),
+  month_collected = month_collected + v_c.amount
+  where id = v_c.chama_id;
+
+  update public.contributions set
+    status = 'completed',
+    destination = v_dest,
+    confirmed_at = now(),
+    approved_by = auth.uid(),
+    approved_at = now()
+  where id = p_contribution_id;
+
+  -- Clear linked obligation if this payment was from Home "You owe"
+  begin
+    v_obligation_id := substring(v_details from 'obligationId=([0-9a-fA-F-]{8,})')::uuid;
+  exception when others then
+    v_obligation_id := null;
+  end;
+
+  if v_obligation_id is not null then
+    select * into v_o from public.contribution_obligations where id = v_obligation_id for update;
+    if found and v_o.chama_id = v_c.chama_id then
+      v_new_paid := least(v_o.expected_amount, v_o.paid_amount + v_c.amount);
+      v_status := case
+        when v_new_paid >= v_o.expected_amount - 0.01 then 'paid'
+        when v_new_paid > 0 then 'partial'
+        else 'pending'
+      end;
+      update public.contribution_obligations set
+        paid_amount = v_new_paid,
+        status = v_status,
+        updated_at = now()
+      where id = v_obligation_id;
+    end if;
+  end if;
+
+  insert into public.audit_events (chama_id, member_id, type, description, amount, reference)
+  values (
+    v_c.chama_id, auth.uid(), 'contribution',
+    format('Payment approved · %s · member credited', v_dest),
+    v_c.amount, v_c.reference
+  );
+
+  return jsonb_build_object(
+    'ok', true,
+    'status', 'completed',
+    'amount', v_c.amount,
+    'destination', v_dest,
+    'obligationId', v_obligation_id
+  );
+end;
+$$;
+
+grant execute on function public.approve_pending_contribution(uuid) to authenticated;

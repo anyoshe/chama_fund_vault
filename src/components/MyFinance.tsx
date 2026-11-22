@@ -734,7 +734,8 @@ export default function MyFinance({
                           onRequestObligationPay(
                             o.id,
                             o.outstanding,
-                            o.planName || "Obligation",
+                            `${o.planName || "Obligation"} → ${o.destinationKit || "pot"}`,
+                            o.destinationKit,
                           );
                           return;
                         }

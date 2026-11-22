@@ -516,10 +516,14 @@ export default function Dashboard() {
         .join(" | ");
     }
     if (paymentIntent?.kind === "obligation" && paymentIntent.obligationId) {
-      dest = "obligation";
+      // Credit the plan pot (registration-fees, table-banking, welfare, …)
+      dest = normalizeKitDestination(
+        paymentIntent.destination || contribution.destination || "general-savings",
+      );
       paymentDetails = [
         paymentDetails,
         `obligationId=${paymentIntent.obligationId}`,
+        `destinationKit=${dest}`,
       ]
         .filter(Boolean)
         .join(" | ");
@@ -1764,9 +1768,14 @@ A local copy was kept on this device only.`,
                   setContribOpen(true);
                 }}
                 onPayOwe={(amount, note, destination) => {
+                  openMemberPayment({
+                    kind: "contribution",
+                    amount,
+                    destination: destination || undefined,
+                    note,
+                  });
                   setContribKitLock(destination || null);
-                  setContribPrefill({ amount, note });
-                  setContribOpen(true);
+                  setContribPrefill({ amount, note: note || null });
                 }}
                 onProposeLoan={handleProposeLoan}
                 onRequestLoanRepay={(proposalId, amount) =>
@@ -1777,11 +1786,12 @@ A local copy was kept on this device only.`,
                     note: "Loan repayment — choose Manual or M-Pesa",
                   })
                 }
-                onRequestObligationPay={(obligationId, amount, note) =>
+                onRequestObligationPay={(obligationId, amount, note, destinationKit) =>
                   openMemberPayment({
                     kind: "obligation",
                     obligationId,
                     amount,
+                    destination: destinationKit || undefined,
                     note: note || "Pay obligation",
                   })
                 }
@@ -1794,11 +1804,12 @@ A local copy was kept on this device only.`,
                     note: "Loan repayment — choose Manual or M-Pesa",
                   })
                 }
-                onRequestObligationPay={(obligationId, amount, note) =>
+                onRequestObligationPay={(obligationId, amount, note, destinationKit) =>
                   openMemberPayment({
                     kind: "obligation",
                     obligationId,
                     amount,
+                    destination: destinationKit || undefined,
                     note: note || "Pay obligation",
                   })
                 }
@@ -1841,11 +1852,12 @@ A local copy was kept on this device only.`,
                     note: "Loan repayment — choose Manual or M-Pesa",
                   })
                 }
-                onRequestObligationPay={(obligationId, amount, note) =>
+                onRequestObligationPay={(obligationId, amount, note, destinationKit) =>
                   openMemberPayment({
                     kind: "obligation",
                     obligationId,
                     amount,
+                    destination: destinationKit || undefined,
                     note: note || "Pay obligation",
                   })
                 }
@@ -1939,11 +1951,12 @@ A local copy was kept on this device only.`,
                     note: "Loan repayment — choose Manual or M-Pesa",
                   })
                 }
-                onRequestObligationPay={(obligationId, amount, note) =>
+                onRequestObligationPay={(obligationId, amount, note, destinationKit) =>
                   openMemberPayment({
                     kind: "obligation",
                     obligationId,
                     amount,
+                    destination: destinationKit || undefined,
                     note: note || "Pay obligation",
                   })
                 }
@@ -2144,12 +2157,13 @@ A local copy was kept on this device only.`,
           paymentIntent?.kind === "loan_repay"
             ? "loan-repay"
             : paymentIntent?.kind === "obligation"
-              ? "obligation"
+              ? paymentIntent.destination || contribKitLock
               : contribKitLock
         }
         hideDestination={
           paymentIntent?.kind === "loan_repay" ||
-          paymentIntent?.kind === "obligation"
+          paymentIntent?.kind === "obligation" ||
+          !!contribKitLock
         }
         purposeLabel={
           paymentIntent?.kind === "loan_repay"
