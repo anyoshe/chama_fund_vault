@@ -570,31 +570,12 @@ export default function Dashboard() {
         phone,
       });
       if (!stk.ok) {
-        // Fallback: create pending via RPC if edge not deployed yet
-        const { data, error } = await supabase.rpc("request_mpesa_stk_contribution", {
-          p_chama_id: contribution.chamaId,
-          p_amount: contribution.amount,
-          p_destination: dest,
-          p_phone: phone,
-        });
-        if (error) {
-          toast.error(stk.error || error.message);
-          throw error;
-        }
-        toast.message(
-          "STK pending — add Safaricom credentials to Edge Functions to prompt the phone",
-        );
-        const cid = (data as { id?: string })?.id || contribution.id;
-        setContributions((prev) => [
-          {
-            ...contribution,
-            id: cid,
-            reference: (data as { reference?: string })?.reference || contribution.reference,
-            status: "pending",
-          },
-          ...prev,
-        ]);
-        return { id: cid, channel: "mpesa" as const, stkConfigured: false };
+        // Do NOT create a payment row — M-Pesa never ran. Member can use Manual.
+        const msg =
+          stk.error ||
+          "M-Pesa is not connected yet. Use Manual payment, or ask leaders to finish M-Pesa setup.";
+        toast.error(msg);
+        throw new Error(msg);
       }
       toast.message(stk.customerMessage || "Enter M-Pesa PIN on your phone");
       const cid = stk.contributionId || contribution.id;

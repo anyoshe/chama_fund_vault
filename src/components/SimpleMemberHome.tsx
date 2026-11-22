@@ -230,7 +230,11 @@ export default function SimpleMemberHome({
   const myHistory = useMemo(() => {
     if (!myId) return [];
     return contributions
-      .filter((c) => c.memberId === myId)
+      .filter(
+        (c) =>
+          c.memberId === myId &&
+          (c.status === "completed" || c.status === "confirmed"),
+      )
       .slice()
       .sort((a, b) => (b.date > a.date ? 1 : -1))
       .slice(0, 40);
