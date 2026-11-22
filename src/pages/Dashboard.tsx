@@ -1657,16 +1657,28 @@ A local copy was kept on this device only.`,
           })}
         </div>
 
-        {/* Mobile: current page + hamburger */}
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2.5 md:hidden">
-          <p className="truncate text-sm font-bold text-white">
+        {/* Mobile: page title · Pool · hamburger (no horizontal scroll) */}
+        <div className="mx-auto flex max-w-7xl items-center gap-2 px-4 py-2.5 md:hidden">
+          <p className="min-w-0 flex-1 truncate text-sm font-bold text-white">
             {TABS.find((x) => x.id === tab)?.label ?? "Menu"}
           </p>
+          <div className="shrink-0 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2 py-1">
+            <p className="text-[8px] font-semibold uppercase tracking-wide text-emerald-400">
+              Pool
+            </p>
+            <p className="font-mono text-[11px] font-bold tabular-nums leading-tight text-emerald-300">
+              {fmtKsh(
+                displayChamas.find((c) => c.id === activeChamaId)?.poolBalance ??
+                  chama.poolBalance ??
+                  0,
+              )}
+            </p>
+          </div>
           <button
             type="button"
             aria-label="Open menu"
             onClick={() => setMobileNavOpen(true)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-200 hover:border-emerald-500/40"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-200 hover:border-emerald-500/40"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
               <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
