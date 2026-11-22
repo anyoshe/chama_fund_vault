@@ -16,6 +16,7 @@ import SimpleMemberHome from "@/components/SimpleMemberHome";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { initiateMpesaStk } from "@/lib/mpesa";
+import { normalizeKitDestination } from "@/lib/kitVisibility";
 import {
   appendAudit,
   castVoteOnServer,
