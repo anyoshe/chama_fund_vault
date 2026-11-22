@@ -36,8 +36,29 @@ const POT_LABEL: Record<string, string> = {
 };
 
 function potName(code?: string) {
-  if (!code) return "Savings";
-  return POT_LABEL[code] || code.replace(/-/g, " ");
+  if (!code) return "Pot";
+  const c = code.toLowerCase();
+  if (
+    /welfare.*(run|expens)/.test(c) ||
+    /run.*expens/.test(c) ||
+    c.includes("running expense") ||
+    c.includes("accoutn")
+  ) {
+    return "Welfare / emergency";
+  }
+  const map: Record<string, string> = {
+    "table-banking": "Table banking",
+    "share-capital": "Shares",
+    "general-savings": "General savings",
+    "member-loans": "Loan fund",
+    "merry-go-round": "Merry-go-round",
+    welfare: "Welfare / emergency",
+    "registration-fees": "Registration",
+    registration: "Registration",
+    contingency: "Contingency",
+    "group-reserve": "Chama reserve",
+  };
+  return map[code] || map[c] || code.replace(/-/g, " ");
 }
 
 type Panel =
