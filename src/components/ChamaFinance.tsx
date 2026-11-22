@@ -29,6 +29,7 @@ import AppModal from "./AppModal";
 import { supabase } from "@/lib/supabase";
 import { filterVisibleKits, potOptionsForChama, isRetiredWelfareExpenseKit } from "@/lib/kitVisibility";
 import { toast } from "sonner";
+import SystemHealthCheck from "./SystemHealthCheck";
 import {
   buildMonthlyPotMatrix,
   downloadTextFile,
@@ -1321,6 +1322,8 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
           <h3 className="text-lg font-bold text-white">Settings</h3>
           <p className="text-xs text-slate-400">
             Chairperson only — privacy, how members pay, M-Pesa keys, loan rates, active pots.
+
+          <SystemHealthCheck />
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <button
