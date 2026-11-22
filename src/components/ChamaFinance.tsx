@@ -882,6 +882,17 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
 
   const isChair = me?.role === "Chairperson";
   const isTreasurer = me?.role === "Treasurer";
+  const isSecretary = me?.role === "Secretary";
+  /** Chair only: constitution, privacy, payment mode, M-Pesa keys, rates, active pots */
+  const canSettings = isChair;
+  /** Treasurer primary (chair may assist): money movement */
+  const canMoneyOps = isTreasurer || isChair;
+  /** Treasurer only: approve manual pays + disburse */
+  const canApproveAndDisburse = isTreasurer;
+  /** Chair + secretary: membership-adjacent / welfare events */
+  const canWelfareAdmin = isChair || isSecretary;
+  /** All officials may view books and reports */
+  const canViewBooks = isOfficial;
 
   const [reportFromYm, setReportFromYm] = useState(() => {
     const d = new Date();
@@ -1206,8 +1217,9 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             <p className="mt-1 text-xs text-slate-400">
               Live group treasury · {monthLabel} · signed in as{" "}
               <span className="font-semibold text-slate-200">{me?.role}</span>
-              {isTreasurer && " · you can disburse approved loans"}
-              {isChair && " · you can set rates & interest rules"}
+              {isChair && " · settings & rules"}
+              {isTreasurer && " · payments, disburse, expenses"}
+              {isSecretary && " · records & welfare support"}
             </p>
           </div>
           <div className="flex gap-1.5 rounded-xl border border-slate-700 bg-slate-950/60 p-1">
@@ -1244,12 +1256,16 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             Open a section for more
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {canApproveAndDisburse || isChair ? (
             <button type="button" onClick={() => setDeskPanel("pending")}
               className="rounded-2xl border border-rose-500/25 bg-slate-900/80 p-4 text-left hover:border-rose-400/50">
               <p className="text-[10px] font-bold uppercase tracking-wide text-rose-300/80">Approvals</p>
               <p className="mt-1 text-2xl font-bold text-white">{pendingPays.length}</p>
-              <p className="mt-1 text-xs text-slate-400">Manual payments waiting for treasurer</p>
+              <p className="mt-1 text-xs text-slate-400">
+                {isTreasurer ? "Waiting for you to confirm" : "Manual payments (treasurer confirms)"}
+              </p>
             </button>
+            ) : null}
             <button type="button" onClick={() => { setSection("command"); setDeskPanel("command"); }}
               className="rounded-2xl border border-violet-500/25 bg-slate-900/80 p-4 text-left hover:border-violet-400/50">
               <p className="text-[10px] font-bold uppercase tracking-wide text-violet-300/80">Treasury</p>
@@ -1259,31 +1275,35 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             <button type="button" onClick={() => { setSection("operations"); setDeskPanel("operations"); }}
               className="rounded-2xl border border-emerald-500/25 bg-slate-900/80 p-4 text-left hover:border-emerald-400/50">
               <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-300/80">Loans & ledger</p>
-              <p className="mt-1 text-sm font-bold text-white">Disburse · rates · ops</p>
-              <p className="mt-1 text-xs text-slate-400">Day-to-day loan operations</p>
+              <p className="mt-1 text-sm font-bold text-white">
+                {isTreasurer ? "Disburse & loan book" : isChair ? "Loan book & rules" : "Loan book"}
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                {isTreasurer ? "Confirm payouts" : "View group facilities"}
+              </p>
             </button>
+            {canMoneyOps ? (
             <button type="button" onClick={() => setDeskPanel("expenses")}
               className="rounded-2xl border border-orange-500/25 bg-slate-900/80 p-4 text-left hover:border-orange-400/50">
               <p className="text-[10px] font-bold uppercase tracking-wide text-orange-300/80">Expenses</p>
               <p className="mt-1 text-2xl font-bold text-white">{groupExpenses.length}</p>
               <p className="mt-1 text-xs text-slate-400">Record spend from pots · full trail</p>
             </button>
+            ) : null}
             <button type="button" onClick={() => setDeskPanel("report")}
               className="rounded-2xl border border-sky-500/25 bg-slate-900/80 p-4 text-left hover:border-sky-400/50">
               <p className="text-[10px] font-bold uppercase tracking-wide text-sky-300/80">Reports</p>
               <p className="mt-1 text-sm font-bold text-white">Pot + expense Excel</p>
               <p className="mt-1 text-xs text-slate-400">Share with members</p>
             </button>
+            {canSettings ? (
             <button type="button" onClick={() => setDeskPanel("settings")}
               className="rounded-2xl border border-amber-500/30 bg-slate-900/80 p-4 text-left hover:border-amber-400/50 sm:col-span-2 lg:col-span-1">
               <p className="text-[10px] font-bold uppercase tracking-wide text-amber-300/80">Settings</p>
-              <p className="mt-1 text-sm font-bold text-white">Privacy · payments · M-Pesa</p>
-              <p className="mt-1 text-xs text-slate-400">
-                {chama.constitution?.paymentMode || "Pay mode not set"}
-                {" · "}
-                {chama.constitution?.memberFinanceVisibility === "all_members" ? "Open books" : "Private"}
-              </p>
+              <p className="mt-1 text-sm font-bold text-white">Privacy · payments · M-Pesa · pots</p>
+              <p className="mt-1 text-xs text-slate-400">Chairperson only</p>
             </button>
+            ) : null}
           </div>
         </div>
       )}
@@ -1296,11 +1316,11 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
       )}
 
       {/* Settings panel */}
-      {deskPanel === "settings" && (
+      {deskPanel === "settings" && canSettings && (
         <div className="space-y-3">
           <h3 className="text-lg font-bold text-white">Settings</h3>
           <p className="text-xs text-slate-400">
-            Tap a card to change settings.
+            Chairperson only — privacy, how members pay, M-Pesa keys, loan rates, active pots.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <button
@@ -1548,7 +1568,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
       
 
       {/* Expenses desk */}
-      <div className={`space-y-4 ${deskPanel === "expenses" ? "" : "hidden"}`}>
+      <div className={`space-y-4 ${deskPanel === "expenses" && canMoneyOps ? "" : "hidden"}`}>
         <div className="rounded-2xl border border-orange-500/30 bg-slate-900/80 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -2086,7 +2106,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
         </div>
       </div>
 
-      <div className={`rounded-2xl border border-rose-500/25 bg-slate-900/80 p-4 ${deskPanel === "pending" ? "" : "hidden"}`}>
+      <div className={`rounded-2xl border border-rose-500/25 bg-slate-900/80 p-4 ${deskPanel === "pending" && (canApproveAndDisburse || isChair) ? "" : "hidden"}`}>
         <p className="text-sm font-bold text-white">
           Payments waiting for approval ({pendingPays.length})
         </p>
@@ -2330,8 +2350,9 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                     }
                   }}
                 >
-                  Seed defaults
+                  {canSettings ? "Seed defaults" : "—"}
                 </button>
+                {canSettings ? (
                 <button
                   type="button"
                   className="rounded-xl border border-emerald-500/40 bg-emerald-500/15 px-3 py-1.5 text-[11px] font-bold text-emerald-200"
@@ -2339,6 +2360,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                 >
                   New plan
                 </button>
+                ) : null}
               </div>
             </div>
             <div className="mt-3 space-y-2">
@@ -2836,7 +2858,7 @@ Welfare / emergency kitty</p>
                   );
                 }
               }}
-              className={`rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-left text-xs font-bold text-sky-200 hover:bg-sky-500/15 ${treasuryCard === "contributions" ? "" : "hidden"}`}
+              className={`rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-left text-xs font-bold text-sky-200 hover:bg-sky-500/15 ${treasuryCard === "contributions" && canMoneyOps ? "" : "hidden"}`}
             >
               Record a member's payment
               <span className="mt-1 block text-[10px] font-normal text-slate-400">
@@ -2845,7 +2867,7 @@ Welfare / emergency kitty</p>
             </button>
             <button
               type="button"
-              className={`rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-left text-xs font-bold text-rose-200 hover:bg-rose-500/15 ${treasuryCard === "contributions" ? "" : "hidden"}`}
+              className={`rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-left text-xs font-bold text-rose-200 hover:bg-rose-500/15 ${treasuryCard === "contributions" && canMoneyOps ? "" : "hidden"}`}
               onClick={async () => {
                 try {
                   // Build dues from join date → now, then apply lateFineRate
@@ -3914,9 +3936,9 @@ Welfare / emergency kitty</p>
 
 
       <SimpleFieldsModal
-        open={planFormOpen}
+        open={planFormOpen && canSettings}
         onClose={() => setPlanFormOpen(false)}
-        title="New contribution plan"
+        title="New contribution plan (Chairperson)"
         subtitle="Members will owe this when you generate obligations"
         submitLabel="Save plan"
         fields={[
