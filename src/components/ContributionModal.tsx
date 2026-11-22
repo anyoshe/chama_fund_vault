@@ -45,9 +45,24 @@ type Channel = "manual" | "mpesa";
 const MANUAL_METHODS: { value: ContributionMethod; label: string; hint: string }[] = [
   { value: "Cash", label: "Cash", hint: "Handed to treasurer or collector" },
   { value: "Airtel Money", label: "Airtel Money", hint: "Sent to designated number" },
-  { value: "Bank Transfer", label: "Bank transfer", hint: "EFT / deposit to chama account" },
+  { value: "Bank EFT / RTGS", label: "Bank transfer", hint: "EFT / deposit to chama account" },
   { value: "Other", label: "Other", hint: "Any other rail — note in details" },
 ];
+
+/** DB check constraint only allows a fixed list */
+function toDbMethod(m: string): string {
+  const allowed = new Set([
+    "M-Pesa STK Push",
+    "Airtel Money",
+    "Bank EFT / RTGS",
+    "PesaLink",
+    "Other",
+  ]);
+  if (allowed.has(m)) return m;
+  if (m === "Bank Transfer" || m === "Bank") return "Bank EFT / RTGS";
+  if (m === "Cash" || m === "Manual") return "Other";
+  return "Other";
+}
 
 export default function ContributionModal({
   open,
@@ -154,7 +169,7 @@ export default function ContributionModal({
       chamaId: chama.id,
       amount,
       method:
-        channel === "mpesa" ? "M-Pesa STK Push" : method,
+        channel === "mpesa" ? "M-Pesa STK Push" : (toDbMethod(method) as ContributionMethod),
       destination,
       paymentDetails:
         channel === "mpesa" ? phone : paymentDetails || reference,

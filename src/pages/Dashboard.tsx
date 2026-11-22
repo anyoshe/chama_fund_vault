@@ -496,7 +496,22 @@ export default function Dashboard() {
     setContribOpen(true);
   };
 
+  const toDbPaymentMethod = (m: string) => {
+    const allowed = new Set([
+      "M-Pesa STK Push",
+      "Airtel Money",
+      "Bank EFT / RTGS",
+      "PesaLink",
+      "Other",
+    ]);
+    if (allowed.has(m)) return m;
+    if (m === "Bank Transfer" || m === "Bank") return "Bank EFT / RTGS";
+    if (m === "Cash" || m === "Manual") return "Other";
+    return "Other";
+  };
+
   const handleContribute = async (contribution: Contribution) => {
+
     // Default to manual if leaders have not set a mode yet (same as DB default)
     const mode =
       chama?.constitution?.paymentMode ||
@@ -629,7 +644,7 @@ export default function Dashboard() {
       p_chama_id: contribution.chamaId,
       p_amount: contribution.amount,
       p_destination: dest,
-      p_method: contribution.method,
+      p_method: toDbPaymentMethod(contribution.method || "Other"),
       p_reference: contribution.reference,
       p_payment_date: (contribution.date || new Date().toISOString()).slice(0, 10),
       p_payment_details: paymentDetails || null,

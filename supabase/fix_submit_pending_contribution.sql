@@ -1,3 +1,16 @@
+-- Allow Cash-like methods by mapping; also expand check for safety
+alter table public.contributions drop constraint if exists contributions_method_check;
+alter table public.contributions add constraint contributions_method_check
+  check (method in (
+    'M-Pesa STK Push',
+    'Airtel Money',
+    'Bank EFT / RTGS',
+    'PesaLink',
+    'Other',
+    'Cash',
+    'Bank Transfer'
+  ));
+
 -- Robust manual pending payment (run in Supabase SQL Editor)
 alter table public.contributions
   add column if not exists payment_date date;
@@ -56,7 +69,14 @@ begin
     auth.uid(),
     p_amount,
     trim(p_destination),
-    coalesce(nullif(trim(p_method), ''), 'Other'),
+    case
+      when nullif(trim(p_method), '') is null then 'Other'
+      when trim(p_method) in ('M-Pesa STK Push','Airtel Money','Bank EFT / RTGS','PesaLink','Other','Cash','Bank Transfer')
+        then trim(p_method)
+      when trim(p_method) in ('Bank','Bank Transfer') then 'Bank EFT / RTGS'
+      when trim(p_method) in ('Cash','Manual') then 'Other'
+      else 'Other'
+    end,
     nullif(trim(p_phone), ''),
     nullif(trim(p_payment_details), ''),
     v_ref,

@@ -101,7 +101,9 @@ export type ContributionMethod =
   | "M-Pesa STK Push"
   | "Airtel Money"
   | "Bank EFT / RTGS"
+  | "Bank Transfer"
   | "PesaLink"
+  | "Cash"
   | "Other";
 
 export type ContributionStatus = "completed" | "pending" | "failed" | "rejected" | "confirmed";
