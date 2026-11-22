@@ -497,13 +497,10 @@ export default function Dashboard() {
   };
 
   const handleContribute = async (contribution: Contribution) => {
-    const mode = chama?.constitution?.paymentMode;
-    if (!mode) {
-      toast.error(
-        "Leaders must choose how members pay first (Chama Finance → Settings).",
-      );
-      throw new Error("Payment mode not configured");
-    }
+    // Default to manual if leaders have not set a mode yet (same as DB default)
+    const mode =
+      chama?.constitution?.paymentMode ||
+      ("manual_confirm" as const);
 
     let dest = normalizeKitDestination(contribution.destination ?? "general-savings");
     let paymentDetails = contribution.paymentDetails || "";
@@ -638,7 +635,14 @@ export default function Dashboard() {
       p_payment_details: paymentDetails || null,
       p_phone: null,
     });
-    if (error) throw error;
+    if (error) {
+      const msg =
+        error.message ||
+        (error as { details?: string }).details ||
+        "Could not submit payment";
+      toast.error(msg);
+      throw new Error(msg);
+    }
     toast.success(
       paymentIntent?.kind === "loan_repay"
         ? "Repayment submitted — treasurer confirms, then your loan balance updates"

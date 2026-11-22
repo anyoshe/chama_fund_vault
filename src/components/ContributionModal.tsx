@@ -64,7 +64,7 @@ export default function ContributionModal({
   hideDestination = false,
 }: ContributionModalProps) {
   const effectiveMode =
-    paymentMode || chama.constitution?.paymentMode || null;
+    paymentMode || chama.constitution?.paymentMode || "manual_confirm";
   const payTo = payToLabel || chama.constitution?.payToLabel || null;
 
   const [step, setStep] = useState<Step>("channel");
@@ -132,7 +132,7 @@ export default function ContributionModal({
   const potOptions = potOptionsForChama(chama);
 
   const canSubmit = () => {
-    if (amount < 100) return false;
+    if (amount < 1) return false;
     if (channel === "mpesa") return phone.replace(/\D/g, "").length >= 9;
     if (channel === "manual") {
       if (!reference.trim() && !paymentDetails.trim()) return false;
@@ -229,10 +229,9 @@ export default function ContributionModal({
             </div>
 
             <div className="max-h-[75vh] overflow-y-auto p-5">
-              {!effectiveMode && (
-                <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-100">
-                  Leaders must set how this chama receives money first (
-                  <strong>Chama Finance → How members pay</strong>).
+              {!chama.constitution?.paymentMode && (
+                <div className="mb-4 rounded-xl border border-slate-600 bg-slate-800/80 p-3 text-xs text-slate-300">
+                  Paying offline for now. Leaders can set M-Pesa later under Settings.
                 </div>
               )}
 
