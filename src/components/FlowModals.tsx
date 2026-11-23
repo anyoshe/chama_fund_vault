@@ -351,8 +351,9 @@ type SimpleFieldsModalProps = {
     label: string;
     placeholder?: string;
     defaultValue?: string;
-    type?: "text" | "number";
+    type?: "text" | "number" | "select";
     required?: boolean;
+    options?: { value: string; label: string }[];
   }[];
   submitLabel?: string;
   onSubmit: (values: Record<string, string>) => void | Promise<void>;
@@ -423,16 +424,33 @@ export function SimpleFieldsModal({
     >
       {fields.map((f) => (
         <ModalField key={f.key} label={f.label}>
-          <input
-            className={modalInputClass}
-            type={f.type === "number" ? "text" : "text"}
-            inputMode={f.type === "number" ? "decimal" : "text"}
-            placeholder={f.placeholder}
-            value={values[f.key] ?? ""}
-            onChange={(e) =>
-              setValues((v) => ({ ...v, [f.key]: e.target.value }))
-            }
-          />
+          {f.type === "select" && f.options?.length ? (
+            <select
+              className={modalInputClass}
+              value={values[f.key] ?? ""}
+              onChange={(e) =>
+                setValues((v) => ({ ...v, [f.key]: e.target.value }))
+              }
+            >
+              <option value="">Select…</option>
+              {f.options.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              className={modalInputClass}
+              type={f.type === "number" ? "text" : "text"}
+              inputMode={f.type === "number" ? "decimal" : "text"}
+              placeholder={f.placeholder}
+              value={values[f.key] ?? ""}
+              onChange={(e) =>
+                setValues((v) => ({ ...v, [f.key]: e.target.value }))
+              }
+            />
+          )}
         </ModalField>
       ))}
       {error ? <p className="text-xs text-rose-400">{error}</p> : null}

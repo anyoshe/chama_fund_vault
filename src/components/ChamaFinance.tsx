@@ -3934,10 +3934,14 @@ Welfare / emergency kitty</p>
         fields={[
           {
             key: "kit",
-            label: "Kit code",
-            defaultValue: "registration-fees",
-            placeholder: "registration-fees | contingency | group-reserve | welfare",
+            label: "Pay from pot",
+            type: "select",
+            defaultValue: potOptionsForChama(chama)[0]?.value || "welfare",
             required: true,
+            options: potOptionsForChama(chama).map((p) => ({
+              value: p.value,
+              label: p.label,
+            })),
           },
           { key: "amount", label: "Amount (KES)", type: "number", required: true },
           {
@@ -4105,25 +4109,38 @@ Welfare / emergency kitty</p>
           { key: "amount", label: "Amount (KES)", type: "number", required: true },
           {
             key: "frequency",
-            label: "How often: one_off | weekly | monthly | quarterly | annually",
+            label: "How often",
+            type: "select",
             defaultValue: "monthly",
             required: true,
+            options: [
+              { value: "one_off", label: "One-time" },
+              { value: "weekly", label: "Weekly" },
+              { value: "monthly", label: "Monthly" },
+              { value: "quarterly", label: "Quarterly" },
+              { value: "annually", label: "Yearly" },
+            ],
           },
           {
             key: "kit",
-            label: "Destination pot / kit",
-            defaultValue: "table-banking",
+            label: "Destination pot",
+            type: "select",
+            defaultValue: potOptionsForChama(chama)[0]?.value || "table-banking",
             required: true,
+            options: potOptionsForChama(chama).map((p) => ({
+              value: p.value,
+              label: p.label,
+            })),
           },
           {
             key: "dueDay",
-            label: "If monthly/quarterly/yearly: due date (1–28 of the month)",
+            label: "Monthly / quarterly / yearly — due day of month (1–28)",
             type: "number",
             defaultValue: "5",
           },
           {
             key: "dueWeekday",
-            label: "If weekly: due weekday 0=Sun 1=Mon … 6=Sat",
+            label: "Weekly only — weekday (0=Sun, 1=Mon, … 6=Sat)",
             type: "number",
             defaultValue: "1",
           },
