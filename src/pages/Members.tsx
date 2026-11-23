@@ -353,9 +353,32 @@ export default function Members() {
               {inviteBusy ? "Creating…" : "Generate invite code"}
             </button>
             {inviteCode && (
-              <span className="font-mono text-xs font-bold text-emerald-200">
-                {inviteCode}
-              </span>
+              <div className="flex flex-col gap-1 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase text-emerald-400/90">
+                  Share this code
+                </p>
+                <p className="font-mono text-sm font-bold tracking-wider text-emerald-100">
+                  {inviteCode}
+                </p>
+                <p className="text-[11px] text-slate-300">
+                  Member opens <span className="text-white">/join</span>, signs in, enters code.
+                </p>
+                <button
+                  type="button"
+                  className="text-left text-[11px] font-bold text-emerald-300 underline"
+                  onClick={() => {
+                    const link = `${window.location.origin}/join?code=${inviteCode}`;
+                    void navigator.clipboard.writeText(
+                      `Join our chama on ChamaVault.
+Code: ${inviteCode}
+${link}`,
+                    );
+                    toast.success("Invite text copied");
+                  }}
+                >
+                  Copy message
+                </button>
+              </div>
             )}
             <button
               onClick={() => setShowAdd((v) => !v)}

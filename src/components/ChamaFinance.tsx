@@ -795,6 +795,97 @@ function OpsReportCards({
 }
 
 
+
+function LateFineSettingsForm({
+  chamaId,
+  rate,
+  grace,
+  autoOn,
+  onSaved,
+  onClose,
+}: {
+  chamaId: string;
+  rate: number;
+  grace: number;
+  autoOn: boolean;
+  onSaved: () => void;
+  onClose: () => void;
+}) {
+  const [r, setR] = useState(String(rate));
+  const [g, setG] = useState(String(grace));
+  const [auto, setAuto] = useState(autoOn);
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="space-y-3 text-sm">
+      <p className="text-xs text-slate-300">
+        Example: due was the 5th, grace 3 days → fine from the 9th. Fine = % of the unpaid amount
+        for that period, stored under <strong className="text-white">Welfare · fines</strong>.
+      </p>
+      <label className="block text-xs text-slate-300">
+        Late fine rate (%)
+        <input
+          type="number"
+          min={0}
+          max={100}
+          step={0.5}
+          className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+          value={r}
+          onChange={(e) => setR(e.target.value)}
+        />
+      </label>
+      <label className="block text-xs text-slate-300">
+        Grace days after due date
+        <input
+          type="number"
+          min={0}
+          max={60}
+          className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+          value={g}
+          onChange={(e) => setG(e.target.value)}
+        />
+      </label>
+      <label className="flex items-center gap-2 text-xs text-slate-200">
+        <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
+        Auto-apply on schedule (daily job)
+      </label>
+      <div className="flex flex-wrap gap-2 pt-2">
+        <button
+          type="button"
+          className="rounded-xl border border-slate-600 px-4 py-2 text-xs font-semibold text-slate-300"
+          onClick={onClose}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          className="rounded-xl bg-rose-500 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const { error } = await supabase.rpc("set_chama_late_fine_settings", {
+                p_chama_id: chamaId,
+                p_late_fine_rate: Number(r) || 0,
+                p_grace_days: Number(g) || 0,
+                p_auto_fines: auto,
+              });
+              if (error) throw error;
+              toast.success("Late fine rules saved");
+              onSaved();
+            } catch (e) {
+              toast.error(e instanceof Error ? e.message : "Could not save");
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {busy ? "Saving…" : "Save fine rules"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ChamaFinance(props: ChamaFinanceProps) {
   const {
     chama,
@@ -960,7 +1051,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
     new Date().toISOString().slice(0, 10),
   );
   const [settingsModal, setSettingsModal] = useState<
-    null | "privacy" | "payment" | "mpesa" | "rates"
+    null | "privacy" | "payment" | "mpesa" | "rates" | "fines"
   >(null);
   const [mpesaStatus, setMpesaStatus] = useState<{
     configured?: boolean;
@@ -1361,6 +1452,19 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
               <p className="mt-1 text-xs text-slate-400">
                 Default {chama.constitution?.loanInterestMonthlyPercent ?? 10}% / mo · reserve{" "}
                 {chama.constitution?.interestReservePercent ?? 20}%
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSettingsModal("fines")}
+              className="rounded-2xl border border-rose-500/30 bg-slate-900/80 p-4 text-left hover:border-rose-400/50"
+            >
+              <p className="text-sm font-bold text-white">Late fines</p>
+              <p className="mt-1 text-xs text-slate-300">
+                {Number(chama.constitution?.lateFineRate) > 0
+                  ? `${chama.constitution?.lateFineRate}% after ${chama.constitution?.lateFineGraceDays ?? 0} grace day(s)`
+                  : "Not set — members not fined for late dues"}
+                {chama.constitution?.autoFinesEnabled === false ? " · auto off" : " · auto on"}
               </p>
             </button>
             <button
@@ -3597,7 +3701,28 @@ Welfare / emergency kitty</p>
         </AppModal>
       )}
 
+      
       <AppModal
+        open={settingsModal === "fines"}
+        onClose={() => setSettingsModal(null)}
+        title="Late fines"
+        subtitle="Chairperson only — applied when a member misses a due date"
+        footer={null}
+      >
+        <LateFineSettingsForm
+          chamaId={chamaId}
+          rate={Number(chama.constitution?.lateFineRate) || 0}
+          grace={Number(chama.constitution?.lateFineGraceDays) || 0}
+          autoOn={chama.constitution?.autoFinesEnabled !== false}
+          onSaved={() => {
+            setSettingsModal(null);
+            window.location.reload();
+          }}
+          onClose={() => setSettingsModal(null)}
+        />
+      </AppModal>
+
+<AppModal
         open={settingsModal === "mpesa"}
         onClose={() => setSettingsModal(null)}
         title="M-Pesa / Daraja credentials"

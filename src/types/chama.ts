@@ -197,7 +197,9 @@ export interface Chama {
   monthCollected: number;
   constitution: {
     minMonthlyContribution: number;
-    lateFineRate: number; // % per missed cycle
+    lateFineRate: number;
+    lateFineGraceDays?: number;
+    autoFinesEnabled?: boolean; // % per missed cycle
     quorumPercent: number; // e.g. 60
     maxLoanMultiple: number; // e.g. 3x own savings
     payoutCycle: string; // e.g. "1st Monday"
