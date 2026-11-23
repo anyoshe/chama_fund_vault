@@ -232,3 +232,15 @@
 .cv-app-shell .bg-slate-950\/60 {
   background-color: rgb(15 23 42 / 0.75);
 }
+
+
+/* Modal + select viewport safety */
+.cv-app-shell select,
+.cv-app-shell input,
+.cv-app-shell textarea {
+  max-width: 100%;
+}
+/* Keep fixed overlays above sticky navs */
+[role="dialog"] {
+  max-width: 100vw;
+}

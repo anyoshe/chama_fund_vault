@@ -3696,8 +3696,17 @@ Welfare / emergency kitty</p>
       />
 
       {settingsModal === "rates" && isChair && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/70 p-4 sm:items-center">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-4 shadow-xl">
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-3 sm:p-6"
+          style={{
+            paddingTop: "max(0.75rem, env(safe-area-inset-top))",
+            paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
+          }}
+        >
+          <div
+            className="w-full max-w-lg overflow-y-auto overscroll-contain rounded-2xl border border-slate-700 bg-slate-900 p-4 shadow-xl"
+            style={{ maxHeight: "min(90dvh, 90vh)" }}
+          >
             <div className="mb-3 flex items-center justify-between">
               <p className="text-sm font-bold text-white">Loan rates & interest rules</p>
               <button type="button" className="text-xs font-bold text-slate-400" onClick={() => setSettingsModal(null)}>

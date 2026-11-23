@@ -426,7 +426,7 @@ export function SimpleFieldsModal({
         <ModalField key={f.key} label={f.label}>
           {f.type === "select" && f.options?.length ? (
             <select
-              className={modalInputClass}
+              className={`${modalInputClass} max-w-full appearance-auto`}
               value={values[f.key] ?? ""}
               onChange={(e) =>
                 setValues((v) => ({ ...v, [f.key]: e.target.value }))
