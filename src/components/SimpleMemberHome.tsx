@@ -357,7 +357,7 @@ export default function SimpleMemberHome({
       <div className="mx-auto max-w-lg space-y-4 pb-8">
         <Back onClick={() => setPanel("home")} />
         <h2 className="text-2xl font-bold text-white">What I need to pay</h2>
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-slate-300">
           Amounts the chama expects from you. Tap{" "}
           <strong className="text-white">Pay now</strong>.
         </p>
@@ -367,7 +367,7 @@ export default function SimpleMemberHome({
           <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center">
             <CheckCircle size={40} className="mx-auto text-emerald-400" weight="fill" />
             <p className="mt-3 text-lg font-bold text-white">You are up to date</p>
-            <p className="mt-1 text-sm text-slate-400">
+            <p className="mt-1 text-sm text-slate-300">
               No open dues. You can still pay into a pot anytime.
             </p>
             <button
@@ -415,7 +415,7 @@ export default function SimpleMemberHome({
                 className="rounded-2xl border border-amber-500/30 bg-slate-900 p-4"
               >
                 <p className="text-lg font-bold text-white">Late fine</p>
-                <p className="mt-1 text-sm text-slate-400">
+                <p className="mt-1 text-sm text-slate-300">
                   {f.reason || "Welfare · fines"}
                 </p>
                 <p className="mt-3 font-mono text-3xl font-bold text-amber-300">
@@ -453,7 +453,7 @@ export default function SimpleMemberHome({
                 className="rounded-2xl border border-amber-500/30 bg-slate-900 p-4"
               >
                 <p className="text-lg font-bold text-white">{o.planName}</p>
-                <p className="mt-1 text-sm text-slate-400">
+                <p className="mt-1 text-sm text-slate-300">
                   {potName(o.destinationKit)}
                   {o.dueDate ? ` · pay by ${String(o.dueDate).slice(0, 10)}` : ""}
                   {o.dueDate &&
@@ -501,7 +501,7 @@ export default function SimpleMemberHome({
       <div className="mx-auto max-w-lg space-y-4 pb-8">
         <Back onClick={() => setPanel("home")} />
         <h2 className="text-2xl font-bold text-white">Where should this money go?</h2>
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-slate-300">
           Choose one pot, then enter amount and confirm — like sending M-Pesa.
         </p>
         <div className="space-y-2">
@@ -536,7 +536,7 @@ export default function SimpleMemberHome({
       <div className="mx-auto max-w-lg space-y-4 pb-8">
         <Back onClick={() => setPanel("home")} />
         <h2 className="text-2xl font-bold text-white">My money in each pot</h2>
-        <p className="text-sm text-slate-400">What you have in each account so far.</p>
+        <p className="text-sm text-slate-300">What you have in each account so far.</p>
         {myPots.length === 0 ? (
           <p className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-center text-sm text-slate-500">
             No balances yet. Pay into a pot to see it here.
@@ -569,13 +569,13 @@ export default function SimpleMemberHome({
       <div className="mx-auto max-w-lg space-y-4 pb-8">
         <Back onClick={() => setPanel("home")} />
         <h2 className="text-2xl font-bold text-white">My loan</h2>
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-slate-300">
           How much you still owe, and how to pay it back.
         </p>
         {myOpenLoans.length === 0 ? (
           <div className="rounded-2xl border border-slate-700 bg-slate-900 p-6">
             <p className="text-lg font-bold text-white">You have no open loan</p>
-            <p className="mt-2 text-sm text-slate-400">
+            <p className="mt-2 text-sm text-slate-300">
               You may request up to{" "}
               <strong className="text-emerald-300">{fmtKsh(availableLoanLimit)}</strong>{" "}
               (from your shares). The group votes before money is sent.
@@ -607,7 +607,7 @@ export default function SimpleMemberHome({
                   key={p.id}
                   className="rounded-2xl border border-violet-500/30 bg-slate-900 p-5"
                 >
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-slate-300">
                     {p.status === "active"
                       ? "Waiting for group votes"
                       : p.status === "approved"
@@ -620,7 +620,7 @@ export default function SimpleMemberHome({
                   <p className="font-mono text-3xl font-bold text-violet-200">
                     {fmtKsh(out)}
                   </p>
-                  <div className="mt-3 space-y-1 text-sm text-slate-400">
+                  <div className="mt-3 space-y-1 text-sm text-slate-300">
                     <p className="flex justify-between">
                       <span>Borrowed</span>
                       <span className="font-mono text-slate-200">{fmtKsh(principal)}</span>
@@ -656,7 +656,7 @@ export default function SimpleMemberHome({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-2xl font-bold text-white">My statement</h2>
-            <p className="text-sm text-slate-400">Every payment — date, pot, amount.</p>
+            <p className="text-sm text-slate-300">Every payment — date, pot, amount.</p>
           </div>
           <button
             type="button"
@@ -697,7 +697,7 @@ export default function SimpleMemberHome({
                     <p className="truncate text-sm font-semibold text-white">
                       {potName(c.destination)}
                     </p>
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-xs text-slate-300">
                       {String(c.date).slice(0, 10)}
                     </p>
                   </div>
@@ -795,7 +795,7 @@ export default function SimpleMemberHome({
           <PiggyBank size={36} className="shrink-0 text-sky-400" />
           <div>
             <p className="text-base font-bold text-white">My pots (balances)</p>
-            <p className="text-sm text-slate-400">Table banking, shares, and more</p>
+            <p className="text-sm text-slate-300">Table banking, shares, and more</p>
           </div>
         </button>
 
@@ -807,7 +807,7 @@ export default function SimpleMemberHome({
           <HandCoins size={36} className="shrink-0 text-violet-400" />
           <div>
             <p className="text-base font-bold text-white">My loan</p>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-slate-300">
               {loanBalance > 0
                 ? `Still to repay: ${fmtKsh(loanBalance)}`
                 : "Borrow or check your loan"}
@@ -823,7 +823,7 @@ export default function SimpleMemberHome({
           <ListBullets size={36} className="shrink-0 text-slate-300" />
           <div>
             <p className="text-base font-bold text-white">My statement</p>
-            <p className="text-sm text-slate-400">History of everything you paid</p>
+            <p className="text-sm text-slate-300">History of everything you paid</p>
           </div>
         </button>
       </div>

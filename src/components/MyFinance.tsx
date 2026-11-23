@@ -139,7 +139,7 @@ function Card({
         {title}
       </div>
       <p className="mt-2 font-mono text-xl font-bold tabular-nums text-white">{value}</p>
-      {sub && <p className="mt-1 text-[11px] text-slate-500">{sub}</p>}
+      {sub && <p className="mt-1 text-xs text-slate-300">{sub}</p>}
     </div>
   );
 }
@@ -427,7 +427,7 @@ export default function MyFinance({
             <p className="text-xs font-bold text-white">
               Repay · {primaryLoan.title}
             </p>
-            <p className="mt-1 text-[11px] text-slate-500">
+            <p className="mt-1 text-xs text-slate-300">
               Outstanding balance {fmtKsh(primaryOutstanding)}. Edit amount if paying part of it.
             </p>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
@@ -480,7 +480,7 @@ export default function MyFinance({
 
       {financePanel === null ? (
         <div className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
             Open a card for details
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -598,13 +598,13 @@ export default function MyFinance({
             Download PDF
           </button>
         </div>
-        <p className="mt-1 text-[11px] text-slate-500">
+        <p className="mt-1 text-xs text-slate-300">
           What was expected, what you paid, and what is left
         </p>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[28rem] text-left text-[11px]">
             <thead>
-              <tr className="border-b border-slate-800 text-slate-500">
+              <tr className="border-b border-slate-800 text-slate-400">
                 <th className="py-1.5 pr-2 font-semibold">Date</th>
                 <th className="py-1.5 pr-2 font-semibold">Description</th>
                 <th className="py-1.5 pr-2 font-semibold text-right">Expected</th>
@@ -615,14 +615,14 @@ export default function MyFinance({
             <tbody>
               {statementRows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-3 text-slate-500">
+                  <td colSpan={5} className="py-3 text-slate-400">
                     No statement lines yet.
                   </td>
                 </tr>
               ) : (
                 statementRows.slice(0, 40).map((r, i) => (
                   <tr key={i} className="border-b border-slate-800/60">
-                    <td className="py-1.5 pr-2 text-slate-500">
+                    <td className="py-1.5 pr-2 text-slate-400">
                       {r.date ? String(r.date).slice(0, 10) : "—"}
                     </td>
                     <td className="py-1.5 pr-2 text-slate-300">
@@ -660,11 +660,11 @@ export default function MyFinance({
             </p>
           </div>
           {oblLoading ? (
-            <span className="text-[10px] text-slate-500">Loading…</span>
+            <span className="text-[11px] text-slate-300">Loading…</span>
           ) : null}
         </div>
         {obligations.length === 0 && !oblLoading ? (
-          <p className="mt-3 text-xs text-slate-500">
+          <p className="mt-3 text-xs text-slate-400">
             Nothing outstanding right now.
           </p>
         ) : (
@@ -676,7 +676,7 @@ export default function MyFinance({
               >
                 <div>
                   <p className="text-sm font-semibold text-white">{o.planName}</p>
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-xs text-slate-300">
                     {o.periodKey}
                     {o.dueDate ? ` · due ${o.dueDate}` : ""}
                     {" · "}
@@ -688,7 +688,7 @@ export default function MyFinance({
                     <p className="font-mono text-sm font-bold text-amber-200">
                       {fmtKsh(o.outstanding)}
                     </p>
-                    <p className="text-[10px] text-slate-500">
+                    <p className="text-[11px] text-slate-300">
                       of {fmtKsh(o.expectedAmount)}
                     </p>
                   </div>
@@ -756,7 +756,7 @@ export default function MyFinance({
                 <p className="mt-1 font-mono text-sm text-emerald-300">
                   {fmtKsh(Number(bal) || 0)}
                 </p>
-                <p className="mt-2 text-[10px] font-semibold text-slate-500">
+                <p className="mt-2 text-[10px] font-semibold text-slate-400">
                   Tap to contribute here →
                 </p>
               </button>
@@ -765,7 +765,7 @@ export default function MyFinance({
         </div>
         <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
           <p className="text-xs font-bold text-white">Request withdrawal</p>
-          <p className="mt-1 text-[11px] text-slate-500">
+          <p className="mt-1 text-xs text-slate-300">
             Ask officials to release shares or savings when your chama rules allow.
           </p>
           <button
@@ -789,12 +789,12 @@ export default function MyFinance({
           <p className="flex items-center gap-2 text-sm font-bold text-white">
             <ChartLineUp size={18} className="text-emerald-400" /> Holdings by kit
           </p>
-          <p className="mt-1 text-[11px] text-slate-500">
+          <p className="mt-1 text-xs text-slate-300">
             Live balances (contributions plus any interest credited to you)
           </p>
           <div className="mt-3 space-y-2">
             {byKit.length === 0 ? (
-              <p className="text-xs text-slate-500">No balances yet — make a contribution.</p>
+              <p className="text-xs text-slate-400">No balances yet — make a contribution.</p>
             ) : (
               byKit.map(([code, amount]) => (
                 <div
@@ -810,7 +810,7 @@ export default function MyFinance({
             )}
           </div>
           {groupPool > 0 && (
-            <p className="mt-3 text-[11px] text-slate-500">
+            <p className="mt-3 text-xs text-slate-300">
               Your share of group pots:{" "}
               <span className="font-semibold text-slate-300">{myShareOfGroup}%</span> of{" "}
               {fmtKsh(groupPool)}
@@ -828,7 +828,7 @@ export default function MyFinance({
             <WarningCircle size={18} className="text-amber-400" />{" "}
             {cycle.monthLabel} cycle & fines
           </p>
-          <p className="mt-1 text-[11px] text-slate-500">
+          <p className="mt-1 text-xs text-slate-300">
             Contribution window {cycle.startLabel} → due{" "}
             <span className="font-semibold text-slate-300">{cycle.dueLabel}</span>
             {" · "}
@@ -892,7 +892,7 @@ export default function MyFinance({
             {myPenalties.length > 0 && (
               <div className="max-h-28 space-y-1 overflow-y-auto">
                 {myPenalties.slice(0, 5).map((e) => (
-                  <p key={e.id} className="text-[10px] text-slate-500">
+                  <p key={e.id} className="text-[11px] text-slate-300">
                     {e.description} · {fmtKsh(e.amount)}
                   </p>
                 ))}
@@ -910,7 +910,7 @@ export default function MyFinance({
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[28rem] text-left text-xs">
             <thead>
-              <tr className="border-b border-slate-800 text-[10px] uppercase tracking-wide text-slate-500">
+              <tr className="border-b border-slate-800 text-[10px] uppercase tracking-wide text-slate-400">
                 <th className="pb-2 font-semibold">Date</th>
                 <th className="pb-2 font-semibold">Kit</th>
                 <th className="pb-2 font-semibold">Method</th>
@@ -920,7 +920,7 @@ export default function MyFinance({
             <tbody>
               {myContributions.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-4 text-slate-500">
+                  <td colSpan={4} className="py-4 text-slate-400">
                     No payments yet.
                   </td>
                 </tr>
@@ -931,7 +931,7 @@ export default function MyFinance({
                       {c.date ? fmtLongDate(c.date) : "—"}
                     </td>
                     <td className="py-2 text-slate-300">{kitLabel(c.destination)}</td>
-                    <td className="py-2 text-slate-500">{c.method || "—"}</td>
+                    <td className="py-2 text-slate-400">{c.method || "—"}</td>
                     <td className="py-2 text-right font-mono font-semibold text-emerald-300">
                       {fmtKsh(c.amount)}
                     </td>
@@ -941,7 +941,7 @@ export default function MyFinance({
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-[11px] text-slate-500">
+        <p className="mt-2 text-xs text-slate-300">
           Total paid: {fmtKsh(totalContributed)}
         </p>
       </div>
@@ -953,7 +953,7 @@ export default function MyFinance({
             <HandCoins size={18} className="text-violet-400" /> My loans
           </p>
           {myLoans.length === 0 ? (
-            <p className="mt-3 text-xs text-slate-500">No open or pending loan applications.</p>
+            <p className="mt-3 text-xs text-slate-400">No open or pending loan applications.</p>
           ) : (
             <div className="mt-3 space-y-2">
               {myLoans.map((p) => {
@@ -972,7 +972,7 @@ export default function MyFinance({
                         {p.status}
                       </span>
                     </div>
-                    <p className="mt-1 font-mono text-[11px] text-slate-400">
+                    <p className="mt-1 font-mono text-xs text-slate-300">
                       Principal {fmtKsh(p.amount)}
                       {p.status === "disbursed" ? ` · remaining ${fmtKsh(unpaid)}` : ""}
                     </p>
@@ -988,7 +988,7 @@ export default function MyFinance({
             <TrendUp size={18} className="text-teal-400" /> Recent repayments
           </p>
           {myRepayments.length === 0 ? (
-            <p className="mt-3 text-xs text-slate-500">No repayment events on your account yet.</p>
+            <p className="mt-3 text-xs text-slate-400">No repayment events on your account yet.</p>
           ) : (
             <div className="mt-3 max-h-48 space-y-2 overflow-y-auto">
               {myRepayments.slice(0, 12).map((e) => (
@@ -996,7 +996,7 @@ export default function MyFinance({
                   key={e.id}
                   className="flex items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2"
                 >
-                  <p className="text-[11px] text-slate-400 line-clamp-2">{e.description}</p>
+                  <p className="text-xs text-slate-300 line-clamp-2">{e.description}</p>
                   <span className="shrink-0 font-mono text-xs font-bold text-teal-300">
                     {fmtKsh(e.amount)}
                   </span>

@@ -1590,14 +1590,14 @@ Nothing was stored for the group. Fix database (proposals SQL) or try again. Oth
   // Wait quietly for membership / members — do not block sign-in with a "not linked" screen
   if (!chama || displayMembers.length === 0) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-sm text-slate-400">
+      <div className="cv-app-shell flex min-h-screen items-center justify-center bg-slate-950 text-sm text-slate-300">
         Opening your chama…
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="cv-app-shell min-h-screen bg-slate-950 text-slate-100">
       <Navbar
         chamas={displayChamas}
         activeChamaId={activeChamaId}

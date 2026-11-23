@@ -63,7 +63,7 @@ export default function GovernanceVoting({
         <div className="flex flex-col items-center rounded-2xl border border-dashed border-slate-800 bg-slate-900/50 py-12 text-center">
           <ShieldCheck size={32} className="text-emerald-500" />
           <p className="mt-3 text-sm font-semibold text-slate-300">No motions awaiting your vote</p>
-          <p className="mt-1 text-xs text-slate-500">New loan or withdrawal requests appear here for quorum voting.</p>
+          <p className="mt-1 text-xs text-slate-400">New loan or withdrawal requests appear here for quorum voting.</p>
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
@@ -98,7 +98,7 @@ export default function GovernanceVoting({
                         <span className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${meta.chip}`}>
                           {meta.icon} {meta.label}
                         </span>
-                        <span className="font-mono text-[10px] text-slate-500">#{p.id.slice(1)}</span>
+                        <span className="font-mono text-[11px] text-slate-300">#{p.id.slice(1)}</span>
                       </div>
                       <h3 className="mt-2 text-sm font-bold leading-snug text-white">{p.title}</h3>
                     </div>
@@ -131,7 +131,7 @@ export default function GovernanceVoting({
                   {/* Quorum progress */}
                   <div className="mt-4">
                     <div className="flex items-center justify-between text-[11px]">
-                      <span className="font-semibold uppercase tracking-[0.12em] text-slate-500">
+                      <span className="font-semibold uppercase tracking-[0.12em] text-slate-400">
                         Approvals {approvals}/{required} required
                       </span>
                       <span className={`font-mono font-bold ${passed ? "text-emerald-400" : "text-amber-300"}`}>
@@ -146,7 +146,7 @@ export default function GovernanceVoting({
                         className={`h-full rounded-full ${passed ? "bg-emerald-500" : "bg-gradient-to-r from-amber-400 to-orange-400"}`}
                       />
                     </div>
-                    <p className="mt-1 text-[10px] text-slate-500">
+                    <p className="mt-1 text-[11px] text-slate-300">
                       {passed
                         ? "✓ Quorum reached — funds will auto-execute"
                         : rejections > 0
@@ -202,12 +202,12 @@ export default function GovernanceVoting({
                     >
                       <div className="space-y-3 bg-slate-950/50 p-4">
                         <div>
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Reason</p>
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">Reason</p>
                           <p className="mt-1 text-xs leading-relaxed text-slate-300">{p.reason}</p>
                         </div>
                         {p.guarantorIds && p.guarantorIds.length > 0 && (
                           <div>
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
                               Guarantors pledged
                             </p>
                             <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -226,7 +226,7 @@ export default function GovernanceVoting({
                           </div>
                         )}
                         <div>
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
                             Cast votes ({approvals + rejections}/{voterCount} eligible)
                           </p>
                           <div className="mt-1.5 flex flex-wrap gap-1.5">

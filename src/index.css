@@ -189,3 +189,46 @@
     letter-spacing: var(--tracking-normal);
   }
 }
+
+
+/* —— ChamaVault readability (dark UI) —— */
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background-color: #0b1220;
+    color: #e8eef7;
+    line-height: 1.5;
+  }
+  /* Inputs readable on dark */
+  input, textarea, select {
+    color-scheme: dark;
+  }
+}
+
+/* Soft lift for the app canvas vs pure black */
+.cv-app-shell {
+  background-color: #0b1220;
+  color: #e8eef7;
+}
+
+.cv-app-shell .text-slate-500 {
+  color: #94a3b8; /* was too dim on slate-950 */
+}
+.cv-app-shell .text-slate-400 {
+  color: #cbd5e1;
+}
+.cv-app-shell .text-slate-600 {
+  color: #94a3b8;
+}
+.cv-app-shell .border-slate-800 {
+  border-color: rgb(51 65 85 / 0.9); /* slate-700-ish */
+}
+.cv-app-shell .bg-slate-950\/50,
+.cv-app-shell .bg-slate-950\/40,
+.cv-app-shell .bg-slate-950\/60 {
+  background-color: rgb(15 23 42 / 0.75);
+}

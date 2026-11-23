@@ -230,7 +230,7 @@ export default function ContributionModal({
                   <h2 className="text-sm font-bold text-white">
                     {purposeLabel || "Make a payment"}
                   </h2>
-                  <p className="text-[11px] text-slate-400">{chama.name}</p>
+                  <p className="text-xs text-slate-300">{chama.name}</p>
                 </div>
               </div>
               <button
@@ -353,7 +353,7 @@ export default function ContributionModal({
                             }`}
                           >
                             <span className="font-bold">{m.label}</span>
-                            <span className="mt-0.5 block text-[10px] text-slate-500">
+                            <span className="mt-0.5 block text-[11px] text-slate-300">
                               {m.hint}
                             </span>
                           </button>
@@ -465,20 +465,20 @@ export default function ContributionModal({
                   <p className="text-sm font-bold text-white">Confirm payment</p>
                   <ul className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-sm">
                     <li className="flex justify-between">
-                      <span className="text-slate-500">Channel</span>
+                      <span className="text-slate-400">Channel</span>
                       <span className="text-white">
                         {channel === "mpesa" ? "M-Pesa STK" : `Manual · ${method}`}
                       </span>
                     </li>
                     <li className="flex justify-between">
-                      <span className="text-slate-500">Pot</span>
+                      <span className="text-slate-400">Pot</span>
                       <span className="text-white">
                         {CHAMA_ACTIVITIES.find((a) => a.value === destination)
                           ?.label || destination}
                       </span>
                     </li>
                     <li className="flex justify-between">
-                      <span className="text-slate-500">Amount</span>
+                      <span className="text-slate-400">Amount</span>
                       <span className="font-mono font-bold text-emerald-300">
                         {fmtKsh(amount)}
                       </span>
@@ -486,25 +486,25 @@ export default function ContributionModal({
                     {channel === "manual" && (
                       <>
                         <li className="flex justify-between gap-2">
-                          <span className="text-slate-500">Reference</span>
+                          <span className="text-slate-400">Reference</span>
                           <span className="text-right text-white">
                             {reference || "(auto)"}
                           </span>
                         </li>
                         <li className="flex justify-between">
-                          <span className="text-slate-500">Date</span>
+                          <span className="text-slate-400">Date</span>
                           <span className="text-white">{paymentDate}</span>
                         </li>
                       </>
                     )}
                     {channel === "mpesa" && (
                       <li className="flex justify-between">
-                        <span className="text-slate-500">Phone</span>
+                        <span className="text-slate-400">Phone</span>
                         <span className="text-white">{phone}</span>
                       </li>
                     )}
                   </ul>
-                  <p className="text-[11px] text-slate-500">
+                  <p className="text-xs text-slate-300">
                     {channel === "manual"
                       ? "Treasurer must approve before this amount is added to the pot."
                       : "Complete the M-Pesa PIN prompt on your phone."}
@@ -545,7 +545,7 @@ export default function ContributionModal({
                     Enter your PIN on the phone prompt. We will update the pot as soon as
                     Safaricom confirms.
                   </p>
-                  <p className="font-mono text-xs text-slate-500">Ref {savedRef}</p>
+                  <p className="font-mono text-xs text-slate-400">Ref {savedRef}</p>
                 </div>
               )}
 
@@ -561,7 +561,7 @@ export default function ContributionModal({
                     {fmtKsh(amount)} has been received. Your pot and the group pool are
                     updated. No treasurer approval needed for M-Pesa.
                   </p>
-                  <p className="font-mono text-xs text-slate-500">Ref {savedRef}</p>
+                  <p className="font-mono text-xs text-slate-400">Ref {savedRef}</p>
                   <button
                     type="button"
                     onClick={() => {
@@ -628,7 +628,7 @@ export default function ContributionModal({
                     Your payment is registered. The treasurer will approve when money is
                     received — then pots update.
                   </p>
-                  <p className="font-mono text-xs text-slate-500">Ref {savedRef}</p>
+                  <p className="font-mono text-xs text-slate-400">Ref {savedRef}</p>
                   <button
                     type="button"
                     onClick={onClose}

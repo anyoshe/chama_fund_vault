@@ -81,7 +81,7 @@ export default function Navbar({
                 transition={{ duration: 0.16, ease: "easeOut" }}
                 className="absolute left-0 top-full z-[100] mt-2 w-72 overflow-hidden rounded-2xl border border-slate-700/70 bg-slate-900 shadow-2xl shadow-black/50"
               >
-                <div className="border-b border-slate-800 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                <div className="border-b border-slate-800 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
                   My Chamas
                 </div>
                 {chamas.map((c) => (
@@ -167,7 +167,7 @@ export default function Navbar({
                   <div className="flex items-center gap-3 border-b border-slate-800 px-4 py-3">
                     <UserCircle size={24} className="text-emerald-400" />
                     <div className="min-w-0">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Signed in as</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">Signed in as</p>
                       <p className="truncate text-sm font-semibold text-slate-100">{currentUserName ?? "Member"}</p>
                     </div>
                   </div>

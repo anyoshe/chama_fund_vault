@@ -82,7 +82,7 @@ function MetricCard({
       </div>
       <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{label}</p>
       <p className={`mt-1 font-mono text-xl font-bold tabular-nums tracking-tight ${a.text}`}>{value}</p>
-      {sub && <p className="mt-1 text-xs text-slate-500">{sub}</p>}
+      {sub && <p className="mt-1 text-xs text-slate-400">{sub}</p>}
     </motion.div>
   );
 }
@@ -314,7 +314,7 @@ export default function ChamaOverview({
               className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400"
             />
           </div>
-          <p className="mt-1.5 text-[11px] text-slate-500">
+          <p className="mt-1.5 text-xs text-slate-300">
             Money available for members to borrow this month.
           </p>
         </div>
@@ -368,7 +368,7 @@ export default function ChamaOverview({
       {filterVisibleKits(kits, chama).length > 0 && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
           <h3 className="text-sm font-bold text-white">Kits (separate pots)</h3>
-          <p className="mt-1 text-[11px] text-slate-500">
+          <p className="mt-1 text-xs text-slate-300">
             Money stays in the kit you contribute to. Loan fund is separate from shares.
           </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -419,7 +419,7 @@ export default function ChamaOverview({
             <span className="flex items-center gap-2 text-sm font-bold text-white">
               <ShieldCheck size={18} className="text-emerald-400" /> Group rules
             </span>
-            <span className="text-[11px] font-medium text-slate-500">{viewRule ? "Hide" : "View"} rules</span>
+            <span className="text-[11px] font-medium text-slate-400">{viewRule ? "Hide" : "View"} rules</span>
           </div>
           <AnimatedRule visible={viewRule} chama={chama} />
         </button>
@@ -463,7 +463,7 @@ export default function ChamaOverview({
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-sm font-bold text-white">Member contributions</h3>
-            <p className="mt-1 text-[11px] text-slate-500">
+            <p className="mt-1 text-xs text-slate-300">
               Who has paid into this pot
             </p>
           </div>
@@ -479,7 +479,7 @@ export default function ChamaOverview({
             ))}
           </select>
         </div>
-        <p className="mt-3 text-[11px] text-slate-500">
+        <p className="mt-3 text-xs text-slate-300">
           Account pool: <span className="font-mono font-semibold text-emerald-300">{fmtKsh(accountPool)}</span>
         </p>
         <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
@@ -489,7 +489,7 @@ export default function ChamaOverview({
                 ? "all_members"
                 : "private";
             return (
-              <p className="mb-2 text-[11px] text-slate-500 sm:col-span-2">
+              <p className="mb-2 text-xs text-slate-300 sm:col-span-2">
                 {visibility === "private" ? (
                   isOfficial ? (
                     <>

@@ -101,7 +101,7 @@ export function ModalField({
         {label}
       </span>
       {children}
-      {hint ? <span className="mt-1 block text-[10px] text-slate-500">{hint}</span> : null}
+      {hint ? <span className="mt-1 block text-[11px] text-slate-300">{hint}</span> : null}
     </label>
   );
 }
