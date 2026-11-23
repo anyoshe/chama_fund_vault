@@ -820,8 +820,9 @@ function LateFineSettingsForm({
   return (
     <div className="space-y-3 text-sm">
       <p className="text-xs text-slate-300">
-        Example: due was the 5th, grace 3 days → fine from the 9th. Fine = % of the unpaid amount
-        for that period, stored under <strong className="text-white">Welfare · fines</strong>.
+        Each pot has its own due date (or weekday). Grace days are added on top of that
+        deadline; fines only start the day after due + grace. Fine = % of unpaid amount →{" "}
+        <strong className="text-white">Welfare · fines</strong>.
       </p>
       <label className="block text-xs text-slate-300">
         Late fine rate (%)
@@ -2512,7 +2513,11 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                       <p className="text-[11px] text-slate-500">
                         {p.frequency} · {fmtKsh(Number(p.amount))} · kit{" "}
                         {p.destinationKit}
-                        {p.dueDay ? ` · due day ${p.dueDay}` : ""}
+                        {p.frequency === "weekly"
+                          ? ` · weekday ${p.dueWeekday ?? p.due_weekday ?? "?"}`
+                          : p.dueDay
+                            ? ` · due date ${p.dueDay}`
+                            : ""}
                       </p>
                     </div>
                     <button
@@ -4092,45 +4097,63 @@ Welfare / emergency kitty</p>
       <SimpleFieldsModal
         open={planFormOpen && canSettings}
         onClose={() => setPlanFormOpen(false)}
-        title="New contribution plan (Chairperson)"
-        subtitle="Members will owe this when you generate obligations"
-        submitLabel="Save plan"
+        title="New pot contribution schedule"
+        subtitle="Calendar deadline per pot. Fines start after due date + grace (Settings → Late fines)."
+        submitLabel="Save schedule"
         fields={[
           { key: "name", label: "Name", defaultValue: "Monthly contribution", required: true },
           { key: "amount", label: "Amount (KES)", type: "number", required: true },
           {
             key: "frequency",
-            label: "Frequency (one_off | weekly | monthly | quarterly | annually)",
+            label: "How often: one_off | weekly | monthly | quarterly | annually",
             defaultValue: "monthly",
             required: true,
           },
           {
             key: "kit",
-            label: "Destination kit",
+            label: "Destination pot / kit",
             defaultValue: "table-banking",
             required: true,
           },
-          { key: "dueDay", label: "Due day of month (1-28)", type: "number", defaultValue: "5" },
+          {
+            key: "dueDay",
+            label: "If monthly/quarterly/yearly: due date (1–28 of the month)",
+            type: "number",
+            defaultValue: "5",
+          },
+          {
+            key: "dueWeekday",
+            label: "If weekly: due weekday 0=Sun 1=Mon … 6=Sat",
+            type: "number",
+            defaultValue: "1",
+          },
         ]}
         onSubmit={async (v) => {
           const amount = Number(v.amount);
           if (!amount || amount <= 0) throw new Error("Invalid amount");
+          const freq = String(v.frequency || "monthly").trim().toLowerCase();
           const { error } = await supabase.rpc("upsert_contribution_plan", {
             p_chama_id: chamaId,
             p_name: v.name,
             p_amount: amount,
-            p_frequency: v.frequency.trim(),
+            p_frequency: freq,
             p_destination_kit: v.kit.trim(),
             p_due_day: Math.min(28, Math.max(1, Math.floor(Number(v.dueDay) || 5))),
             p_is_mandatory: true,
             p_allow_partial: false,
             p_description: null,
             p_plan_id: null,
+            p_due_weekday: Math.min(6, Math.max(0, Math.floor(Number(v.dueWeekday) || 1))),
           });
           if (error) throw error;
-          toast.success(
-            "Plan saved — obligations created for all active members this period",
-          );
+          try {
+            await supabase.rpc("ensure_current_period_obligations", {
+              p_chama_id: chamaId,
+            });
+          } catch {
+            /* optional */
+          }
+          toast.success("Schedule saved — current period dues synced to the calendar");
           const { data } = await supabase.rpc("list_contribution_plans", {
             p_chama_id: chamaId,
           });

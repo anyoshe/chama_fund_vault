@@ -8,6 +8,7 @@ type LateItem = {
   planName?: string;
   periodKey?: string;
   dueDate?: string;
+  fineStartsOn?: string;
   outstanding?: number;
 };
 
@@ -172,8 +173,10 @@ export default function TreasurerLateList({
                       <ul className="mt-1 space-y-0.5 text-[11px] text-slate-400">
                         {(row.lateItems || []).slice(0, 4).map((it, i) => (
                           <li key={i}>
-                            {it.planName} · {it.periodKey} · due{" "}
-                            {String(it.dueDate || "").slice(0, 10)}
+                            {it.planName} · due {String(it.dueDate || "").slice(0, 10)}
+                            {it.fineStartsOn
+                              ? ` · fines from ${String(it.fineStartsOn).slice(0, 10)}`
+                              : ""}
                           </li>
                         ))}
                       </ul>
