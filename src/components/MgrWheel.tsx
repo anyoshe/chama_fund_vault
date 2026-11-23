@@ -80,6 +80,10 @@ export default function MgrWheel({
 
   const spin = async () => {
     if (spinning) return;
+    if (status?.myNumber != null) {
+      toast.message(`You already have number ${status.myNumber} — only one spin`);
+      return;
+    }
     setSpinning(true);
     setDisplayNum(null);
     // Visual spin
@@ -209,8 +213,8 @@ export default function MgrWheel({
           </button>
         )}
         {open && status?.myNumber != null && (
-          <p className="text-center text-xs text-slate-400">
-            You already have a number. Wait for others to finish.
+          <p className="text-center text-sm font-semibold text-emerald-300/90">
+            Done — you only spin once. Your number is #{status.myNumber}. Wait for others.
           </p>
         )}
       </div>
