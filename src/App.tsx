@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import InstallAppBanner from "@/components/InstallAppBanner";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -63,6 +64,7 @@ export default function App() {
             },
           }}
         />
+        <InstallAppBanner />
       </AuthProvider>
       </ErrorBoundary>
     </BrowserRouter>

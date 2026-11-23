@@ -116,7 +116,7 @@ export default function Landing() {
         <a href="/legal/privacy" className="hover:text-emerald-400">Privacy</a>
         {" · "}
         <span className="text-slate-600">
-          Support {import.meta.env.VITE_SUPPORT_EMAIL || "support@chamavault.local"}
+          Install: Android Chrome → menu → Install app · iPhone Safari → Share → Add to Home Screen · Support {import.meta.env.VITE_SUPPORT_EMAIL || "support@chamavault.local"}
         </span>
       </p>
 </div>
