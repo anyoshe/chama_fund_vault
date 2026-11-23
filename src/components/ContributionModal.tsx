@@ -373,10 +373,7 @@ export default function ContributionModal({
                         }
                         className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white disabled:opacity-70"
                       >
-                        {(potOptions.length
-                          ? potOptions
-                          : CHAMA_ACTIVITIES
-                        ).map((a) => (
+                        {(potOptions.length ? potOptions : []).map((a) => (
                           <option key={a.value} value={a.value}>
                             {a.label}
                           </option>
