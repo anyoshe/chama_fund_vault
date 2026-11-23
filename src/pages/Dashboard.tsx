@@ -54,8 +54,6 @@ function fmtMonthYearDash(d = new Date()) {
   return `${MONTH_NAMES_UI[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-const LS_KEY = "chamavault-state-v1";
-
 /** Loans that still block new borrowing: pending vote, approved, or disbursed unpaid */
 function memberOpenLoans(
   proposals: Proposal[],
@@ -115,26 +113,6 @@ function buildFlatMonthlySchedule(principal: number, months: number, monthlyRate
   };
 }
 
-
-interface PersistedState {
-  contributions: Contribution[];
-  proposals: Proposal[];
-  ledger: AuditEvent[];
-}
-
-function loadPersisted(): PersistedState | null {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as PersistedState;
-    if (!Array.isArray(parsed.contributions) || !Array.isArray(parsed.proposals) || !Array.isArray(parsed.ledger)) {
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-}
 
 type Tab = "home" | "overview" | "voting" | "loans" | "my-finance" | "members";
 
@@ -709,7 +687,10 @@ export default function Dashboard() {
           });
         }
       } catch (e) {
-        console.warn("Server proposals unavailable — using local until SQL is applied", e);
+        console.warn("Server proposals unavailable", e);
+        toast.error(
+          "Could not load loans/votes from server. Run proposals SQL or check connection.",
+        );
       }
     };
     void load();
@@ -1443,24 +1424,11 @@ ${labels}`,
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not save proposal on server";
       console.error("create_loan_proposal failed", e);
-      // Local fallback so user still sees it on their device
-      setProposals((prev) => [newProposal, ...prev]);
-      setLedger((prev) =>
-        pushAudit(prev, {
-          memberId: user.id,
-          type: "loan-disbursed",
-          description: `Proposed ${title} · ${months} installments · ${monthlyRate}%/mo flat`,
-          amount: 0,
-        }),
-      );
-      setLoanRequestOpen(false);
       fail(
-        "Loan not saved for the whole group",
+        "Loan not saved",
         `${msg}
 
-Other members may not see this request until the server accepts it. Ask an official to run supabase/fix_proposals_visibility.sql in Supabase, then try again.
-
-A local copy was kept on this device only.`,
+Nothing was stored for the group. Fix database (proposals SQL) or try again. Other members will not see this request until it succeeds on the server.`,
       );
       return;
     }

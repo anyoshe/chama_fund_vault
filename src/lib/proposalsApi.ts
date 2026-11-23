@@ -223,7 +223,7 @@ export async function appendAudit(
   if (error) console.error("append_audit_event", error);
 }
 
-/** Merge server proposals for one chama without dropping in-flight local rows. */
+/** Replace this chama's proposals with server rows only (no local-only loans/votes). */
 export function mergeProposalsForChama(
   prev: Proposal[],
   chamaId: string,
@@ -231,20 +231,5 @@ export function mergeProposalsForChama(
 ): Proposal[] {
   const cid = String(chamaId).toLowerCase();
   const others = prev.filter((p) => String(p.chamaId).toLowerCase() !== cid);
-  const localOnly = prev.filter(
-    (p) =>
-      String(p.chamaId).toLowerCase() === cid &&
-      (String(p.id).startsWith("loan-") || String(p.id).startsWith("local-")),
-  );
-  const merged = [...server];
-  for (const loc of localOnly) {
-    const dup = server.some(
-      (s) =>
-        s.requesterId === loc.requesterId &&
-        s.status === loc.status &&
-        Math.abs(s.amount - loc.amount) < 0.5,
-    );
-    if (!dup) merged.unshift(loc);
-  }
-  return [...merged, ...others];
+  return [...server, ...others];
 }
