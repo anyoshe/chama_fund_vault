@@ -31,6 +31,7 @@ import { filterVisibleKits, potOptionsForChama, isRetiredWelfareExpenseKit } fro
 import { toast } from "sonner";
 import SystemHealthCheck from "./SystemHealthCheck";
 import MgrWheel from "./MgrWheel";
+import TreasurerLateList from "./TreasurerLateList";
 import {
   buildMonthlyPotMatrix,
   downloadTextFile,
@@ -1359,6 +1360,14 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
               </p>
             </button>
             ) : null}
+            {(canApproveAndDisburse || isChair) ? (
+            <button type="button" onClick={() => setDeskPanel("late")}
+              className="rounded-2xl border border-rose-500/30 bg-slate-900/80 p-4 text-left hover:border-rose-400/50">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-rose-300/80">Late payers</p>
+              <p className="mt-1 text-sm font-bold text-white">Arrears & fines</p>
+              <p className="mt-1 text-xs text-slate-400">List + WhatsApp reminder</p>
+            </button>
+            ) : null}
             <button type="button" onClick={() => { setSection("command"); setDeskPanel("command"); }}
               className="rounded-2xl border border-violet-500/25 bg-slate-900/80 p-4 text-left hover:border-violet-400/50">
               <p className="text-[10px] font-bold uppercase tracking-wide text-violet-300/80">Treasury</p>
@@ -1409,7 +1418,11 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
       )}
 
       {/* Settings panel */}
-      {deskPanel === "settings" && canSettings && (
+      
+      {deskPanel === "late" && (canApproveAndDisburse || isChair) && (
+        <TreasurerLateList chamaId={chamaId} chamaName={chama.name} />
+      )}
+{deskPanel === "settings" && canSettings && (
         <div className="space-y-3">
           <h3 className="text-lg font-bold text-white">Settings</h3>
           <p className="text-xs text-slate-400">
