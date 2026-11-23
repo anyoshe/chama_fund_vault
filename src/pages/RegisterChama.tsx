@@ -1,6 +1,7 @@
 import ChamaVaultLogo from "@/components/ChamaVaultLogo";
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { motion } from "framer-motion";
 import {
   Eye,
@@ -86,6 +87,7 @@ export default function RegisterChama() {
       setCheckEmail(email.trim());
       return;
     }
+    toast.success("Chama created — follow the setup guide to finish pots, payments, and members");
     navigate("/app", { replace: true });
   };
 

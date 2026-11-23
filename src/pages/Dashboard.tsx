@@ -10,6 +10,7 @@ import { LoanRequestModal, DisburseModal } from "@/components/FlowModals";
 import AppModal from "@/components/AppModal";
 import LoansAndLedger from "@/components/LoansAndLedger";
 import ChamaFinance from "@/components/ChamaFinance";
+import ChamaSetupGuide from "@/components/ChamaSetupGuide";
 import Members from "@/pages/Members";
 import MyFinance from "@/components/MyFinance";
 import SimpleMemberHome from "@/components/SimpleMemberHome";
@@ -1560,6 +1561,7 @@ Nothing was stored for the group. Fix database (proposals SQL) or try again. Oth
   }, [role]);
 
   /** Who may open each restricted area */
+  const isChair = currentMember?.role === "Chairperson";
   const canChamaFinance =
     role === "Chairperson" || role === "Treasurer" || role === "Secretary";
   const canManageMembers =
@@ -1734,6 +1736,20 @@ Nothing was stored for the group. Fix database (proposals SQL) or try again. Oth
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.22, ease: "easeOut" }}
           >
+            
+            {isChair && chama && (
+              <ChamaSetupGuide
+                chama={chama}
+                members={displayMembers}
+                isChair={isChair}
+                onGoSettings={() => {
+                  switchTab("loans");
+                }}
+                onGoMembers={() => switchTab("members")}
+                onGoPlans={() => switchTab("loans")}
+              />
+            )}
+
             {tab === "home" && (
               <SimpleMemberHome
                 chamaId={activeChamaId}
