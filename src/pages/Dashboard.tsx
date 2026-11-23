@@ -135,7 +135,7 @@ export default function Dashboard() {
           name: c.name,
           tagline: c.tagline,
           kind: c.kind,
-          memberCount: 0,
+          memberCount: Number((c as { member_count?: number }).member_count) || 0,
           poolBalance: Number(c.pool_balance) || 0,
           monthlyTarget: Number(c.monthly_target) || 0,
           monthCollected: Number(c.month_collected) || 0,
@@ -265,9 +265,15 @@ export default function Dashboard() {
           };
         }),
       );
-      const nMembers = ((memberRows ?? []) as MemberRow[]).length;
-      setDisplayChamas((prev) =>
-        prev.map((c) =>
+      const memberList = (memberRows ?? []) as MemberRow[];
+      const nMembers = memberList.filter(
+        (m) => String(m.role || "") !== "New Applicant",
+      ).length;
+      setDisplayChamas((prev) => {
+        if (!prev.some((c) => c.id === activeChamaId)) {
+          return prev;
+        }
+        return prev.map((c) =>
           c.id === activeChamaId
             ? {
                 ...c,
@@ -281,8 +287,18 @@ export default function Dashboard() {
                     : c.poolBalance,
               }
             : c,
-        ),
-      );
+        );
+      });
+
+
+      // Current period dues for all members (idempotent)
+      try {
+        await supabase.rpc("ensure_current_period_obligations", {
+          p_chama_id: activeChamaId,
+        });
+      } catch (e) {
+        console.warn("ensure_current_period_obligations", e);
+      }
 
       if (contributionsError) {
         console.error("loadDashboardContributions", contributionsError);

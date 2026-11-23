@@ -172,6 +172,13 @@ export default function SimpleMemberHome({
   const loadObligations = async () => {
     setLoading(true);
     try {
+      try {
+        await supabase.rpc("ensure_current_period_obligations", {
+          p_chama_id: chamaId,
+        });
+      } catch {
+        /* optional until SQL applied */
+      }
       const { data, error } = await supabase.rpc("list_my_payment_dues", {
         p_chama_id: chamaId,
       });

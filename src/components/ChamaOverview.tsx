@@ -262,7 +262,7 @@ export default function ChamaOverview({
             <p className="mt-1 max-w-xl text-sm text-slate-400">{chama.tagline}</p>
             <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-400">
               <span className="flex items-center gap-1.5">
-                <UsersFour size={14} className="text-emerald-400" /> {(chama.memberCount > 0 ? chama.memberCount : members.length)} members
+                <UsersFour size={14} className="text-emerald-400" /> {Math.max(chama.memberCount || 0, members.length)} members
               </span>
               <span className="flex items-center gap-1.5">
                 <ShieldCheck size={14} className="text-emerald-400" /> Quorum{" "}
