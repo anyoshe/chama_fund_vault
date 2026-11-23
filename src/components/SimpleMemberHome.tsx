@@ -10,6 +10,7 @@ import {
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import MgrWheel from "./MgrWheel";
 import { potOptionsForChama } from "@/lib/kitVisibility";
 import { downloadMemberStatementPdf } from "@/lib/memberStatementPdf";
 import { fmtKsh } from "@/data/mockChamaData";
@@ -828,10 +829,12 @@ export default function SimpleMemberHome({
         </button>
       </div>
 
+      <MgrWheel chamaId={chamaId} isOfficial={isOfficial} />
+
       <button
         type="button"
         onClick={() => setPanel("help")}
-        className="w-full text-center text-sm font-semibold text-slate-500 hover:text-slate-300"
+        className="w-full text-center text-sm font-semibold text-slate-400 hover:text-slate-300"
       >
         How do I use this app?
       </button>

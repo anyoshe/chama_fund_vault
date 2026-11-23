@@ -30,6 +30,7 @@ import { supabase } from "@/lib/supabase";
 import { filterVisibleKits, potOptionsForChama, isRetiredWelfareExpenseKit } from "@/lib/kitVisibility";
 import { toast } from "sonner";
 import SystemHealthCheck from "./SystemHealthCheck";
+import MgrWheel from "./MgrWheel";
 import {
   buildMonthlyPotMatrix,
   downloadTextFile,
@@ -1415,6 +1416,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
             Chairperson only — privacy, how members pay, M-Pesa keys, loan rates, active pots.
 
           <SystemHealthCheck />
+          <div className="mt-3"><MgrWheel chamaId={chamaId} isOfficial /></div>
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <button
