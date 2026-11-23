@@ -211,7 +211,7 @@ export default function ContributionModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-3 sm:p-6"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-3 sm:p-6" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))", paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
           onClick={onClose}
         >
           <motion.div
@@ -219,9 +219,9 @@ export default function ContributionModal({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 40, opacity: 0 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-auto min-w-[min(92vw,18rem)] max-w-[min(92vw,28rem)] max-h-[min(90vh,40rem)] overflow-hidden rounded-3xl border border-slate-700 bg-slate-900 shadow-2xl"
+            className="flex w-full max-w-[min(92vw,28rem)] flex-col overflow-hidden rounded-3xl border border-slate-700 bg-slate-900 shadow-2xl" style={{ maxHeight: "min(90dvh, 90vh)" }}
           >
-            <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-800 px-5 py-4">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-400">
                   <Receipt size={19} />
@@ -243,7 +243,7 @@ export default function ContributionModal({
               </button>
             </div>
 
-            <div className="max-h-[75vh] overflow-y-auto p-5">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5" style={{ WebkitOverflowScrolling: "touch" }}>
               {!chama.constitution?.paymentMode && (
                 <div className="mb-4 rounded-xl border border-slate-600 bg-slate-800/80 p-3 text-xs text-slate-300">
                   Paying offline for now. Leaders can set M-Pesa later under Settings.
@@ -446,14 +446,6 @@ export default function ContributionModal({
                     </>
                   )}
 
-                  <button
-                    type="button"
-                    disabled={!canSubmit() || !effectiveMode}
-                    onClick={() => setStep("confirm")}
-                    className="w-full rounded-xl bg-emerald-500 py-3.5 text-sm font-bold text-white disabled:opacity-40"
-                  >
-                    Continue
-                  </button>
                 </div>
               )}
 
@@ -506,22 +498,6 @@ export default function ContributionModal({
                       ? "Treasurer must approve before this amount is added to the pot."
                       : "Complete the M-Pesa PIN prompt on your phone."}
                   </p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setStep("details")}
-                      className="flex-1 rounded-xl border border-slate-600 py-3 text-sm font-semibold text-slate-300"
-                    >
-                      Back
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleConfirmPay}
-                      className="flex-1 rounded-xl bg-emerald-500 py-3 text-sm font-bold text-white"
-                    >
-                      Submit payment
-                    </button>
-                  </div>
                 </div>
               )}
 
