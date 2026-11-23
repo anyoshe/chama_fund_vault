@@ -1012,7 +1012,7 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
   >([]);
   const [section, setSection] = useState<"command" | "operations">("command");
   const [deskPanel, setDeskPanel] = useState<
-    null | "settings" | "pending" | "report" | "command" | "operations" | "expenses"
+    null | "settings" | "pending" | "report" | "command" | "operations" | "expenses" | "late"
   >(null);
   const [draftEnabledKits, setDraftEnabledKits] = useState<string[] | null>(null);
   const [savingKits, setSavingKits] = useState(false);
