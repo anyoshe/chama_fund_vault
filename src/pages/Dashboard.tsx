@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -118,7 +119,7 @@ function buildFlatMonthlySchedule(principal: number, months: number, monthlyRate
 type Tab = "home" | "overview" | "voting" | "loans" | "my-finance" | "members";
 
 export default function Dashboard() {
-  const {
+  const { loading, 
     user,
     activeChamaId: authChamaId,
     setActiveChamaId: setAuthChamaId,
@@ -228,9 +229,10 @@ export default function Dashboard() {
           })),
         );
       }
-      if (cancelled || membersError) {
-        if (membersError) console.error("loadDashboardMembers", membersError);
-        return;
+      if (cancelled) return;
+      if (membersError) {
+        console.error("loadDashboardMembers", membersError);
+        // Fall through with empty list — fallback self below
       }
       type ProfileRow = {
         id: string;
@@ -249,8 +251,7 @@ export default function Dashboard() {
       const profileMap = new Map<string, ProfileRow>(
         ((profiles ?? []) as ProfileRow[]).map((profile) => [profile.id, profile]),
       );
-      setDisplayMembers(
-        ((memberRows ?? []) as MemberRow[]).map((membership) => {
+      let mapped = ((memberRows ?? []) as MemberRow[]).map((membership) => {
           const profile = profileMap.get(membership.user_id);
           return {
             id: membership.user_id,
@@ -264,8 +265,26 @@ export default function Dashboard() {
             activeLoans: Number(membership.active_loans) || 0,
             isCurrentUser: membership.user_id === user?.id,
           };
-        }),
-      );
+        });
+      // After wipe / RPC gap: still show signed-in user so UI is not stuck
+      if (mapped.length === 0 && user?.id) {
+        const mem = user.memberships?.find((m) => m.chama_id === activeChamaId);
+        mapped = [
+          {
+            id: user.id,
+            name: user.profile?.full_name || user.email || "You",
+            phone: user.profile?.phone || "",
+            role: (mem?.role as Member["role"]) || "Chairperson",
+            avatarHue: user.profile?.avatar_hue ?? 150,
+            joinedAt: new Date().toISOString(),
+            monthlyContribution: 0,
+            totalPaid: 0,
+            activeLoans: 0,
+            isCurrentUser: true,
+          },
+        ];
+      }
+      setDisplayMembers(mapped);
       const memberList = (memberRows ?? []) as MemberRow[];
       const nMembers = memberList.filter(
         (m) => String(m.role || "") !== "New Applicant",
@@ -1589,11 +1608,52 @@ Nothing was stored for the group. Fix database (proposals SQL) or try again. Oth
       : []),
   ];
 
-  // Wait quietly for membership / members — do not block sign-in with a "not linked" screen
-  if (!chama || displayMembers.length === 0) {
+  const membershipCount = user?.memberships?.length ?? 0;
+  const stillLoadingMembers =
+    Boolean(activeChamaId) && displayMembers.length === 0;
+
+  // No chama after DB wipe or new account
+  if (!loading && membershipCount === 0) {
     return (
-      <div className="cv-app-shell flex min-h-screen items-center justify-center bg-slate-950 text-sm text-slate-300">
-        Opening your chama…
+      <div className="cv-app-shell flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-950 px-6 text-center">
+        <p className="text-lg font-bold text-white">No chama on this account</p>
+        <p className="max-w-sm text-sm text-slate-400">
+          Data may have been cleared, or you have not created/joined a group yet.
+          Register a new chama or sign out and use another account.
+        </p>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Link
+            to="/register"
+            className="rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-white"
+          >
+            Create a chama
+          </Link>
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="rounded-xl border border-slate-600 px-4 py-2.5 text-sm font-semibold text-slate-300"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Brief wait while members load (max UX: always show progress, not infinite blank)
+  if (!chama || stillLoadingMembers) {
+    return (
+      <div className="cv-app-shell flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-950 px-6 text-center">
+        <div className="h-9 w-9 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+        <p className="text-sm text-slate-300">Opening your chama…</p>
+        <p className="text-xs text-slate-500">If this lasts more than a few seconds, try refresh or sign out.</p>
+        <button
+          type="button"
+          onClick={() => void logout()}
+          className="mt-2 text-xs font-semibold text-slate-400 underline"
+        >
+          Sign out
+        </button>
       </div>
     );
   }

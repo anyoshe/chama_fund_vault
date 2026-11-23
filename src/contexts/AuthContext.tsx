@@ -293,6 +293,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (prev && memberships.some((m) => m.chama_id === prev)) return prev;
         return memberships[0].chama_id;
       });
+    } else {
+      setActiveChamaId(null);
     }
   }, []);
 
