@@ -27,7 +27,7 @@ import { LoanRatesChairPanel } from "./LoansAndLedger";
 import { SimpleFieldsModal, ChoiceModal } from "./FlowModals";
 import AppModal from "./AppModal";
 import { supabase } from "@/lib/supabase";
-import { filterVisibleKits, potOptionsForChama, isRetiredWelfareExpenseKit } from "@/lib/kitVisibility";
+import { filterVisibleKits, potOptionsForChama, potOptionsFromKits, isRetiredWelfareExpenseKit } from "@/lib/kitVisibility";
 import { toast } from "sonner";
 import SystemHealthCheck from "./SystemHealthCheck";
 import MgrWheel from "./MgrWheel";
@@ -3936,12 +3936,9 @@ Welfare / emergency kitty</p>
             key: "kit",
             label: "Pay from pot",
             type: "select",
-            defaultValue: potOptionsForChama(chama)[0]?.value || "welfare",
+            defaultValue: potOptionsFromKits(chama, kits)[0]?.value || "welfare",
             required: true,
-            options: potOptionsForChama(chama).map((p) => ({
-              value: p.value,
-              label: p.label,
-            })),
+            options: potOptionsFromKits(chama, kits),
           },
           { key: "amount", label: "Amount (KES)", type: "number", required: true },
           {
@@ -4125,12 +4122,9 @@ Welfare / emergency kitty</p>
             key: "kit",
             label: "Destination pot",
             type: "select",
-            defaultValue: potOptionsForChama(chama)[0]?.value || "table-banking",
+            defaultValue: potOptionsFromKits(chama, kits)[0]?.value || "table-banking",
             required: true,
-            options: potOptionsForChama(chama).map((p) => ({
-              value: p.value,
-              label: p.label,
-            })),
+            options: potOptionsFromKits(chama, kits),
           },
           {
             key: "dueDay",

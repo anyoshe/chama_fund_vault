@@ -53,19 +53,49 @@ export function filterVisibleKits<
 
 export function potOptionsForChama(chama: Chama | null | undefined) {
   const enabled = getEnabledKitCodes(chama);
-  if (enabled == null) return [...CHAMA_ACTIVITIES];
-  const set = new Set(enabled);
-  const fromList = CHAMA_ACTIVITIES.filter((a) => set.has(a.value));
-  for (const code of enabled) {
-    if (isRetiredWelfareExpenseKit(code)) continue;
-    // welfare-fines is a sub-pot of welfare
-    if (!fromList.some((a) => a.value === code)) {
-      fromList.push({
-        value: code as (typeof CHAMA_ACTIVITIES)[number]["value"],
-        label: code,
-        description: "",
-      });
+  // Only activated pots — never the full catalogue when the chama has a list
+  if (enabled != null && enabled.length > 0) {
+    const set = new Set(enabled);
+    const fromList = CHAMA_ACTIVITIES.filter((a) => set.has(a.value));
+    for (const code of enabled) {
+      if (isRetiredWelfareExpenseKit(code)) continue;
+      if (!fromList.some((a) => a.value === code)) {
+        fromList.push({
+          value: code as (typeof CHAMA_ACTIVITIES)[number]["value"],
+          label: labelForKitCode(code),
+          description: "",
+        });
+      }
     }
+    return fromList;
   }
-  return fromList.length ? fromList : [...CHAMA_ACTIVITIES];
+  // No enabledKitCodes saved yet → show standard list (chair should set pots in Settings)
+  return [...CHAMA_ACTIVITIES];
+}
+
+function labelForKitCode(code: string): string {
+  const known = CHAMA_ACTIVITIES.find((a) => a.value === code);
+  if (known) return known.label;
+  return code
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+/** Options limited to kits present on the group book AND enabled (if set) */
+export function potOptionsFromKits(
+  chama: Chama | null | undefined,
+  kits: { kit_code: string; label?: string }[],
+) {
+  const visible = filterVisibleKits(kits, chama);
+  if (visible.length > 0) {
+    return visible.map((k) => ({
+      value: k.kit_code,
+      label: k.label || labelForKitCode(k.kit_code),
+    }));
+  }
+  return potOptionsForChama(chama).map((p) => ({
+    value: p.value,
+    label: p.label,
+  }));
 }
