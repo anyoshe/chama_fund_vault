@@ -636,6 +636,37 @@ export default function ContributionModal({
                 </div>
               )}
             </div>
+
+            {step === "details" && (
+              <div className="shrink-0 border-t border-slate-800 bg-slate-900 px-5 py-3">
+                <button
+                  type="button"
+                  disabled={!canSubmit() || !effectiveMode}
+                  onClick={() => setStep("confirm")}
+                  className="w-full rounded-xl bg-emerald-500 py-3.5 text-sm font-bold text-white disabled:opacity-40"
+                >
+                  Continue
+                </button>
+              </div>
+            )}
+            {step === "confirm" && (
+              <div className="flex shrink-0 gap-2 border-t border-slate-800 bg-slate-900 px-5 py-3">
+                <button
+                  type="button"
+                  onClick={() => setStep("details")}
+                  className="flex-1 rounded-xl border border-slate-600 py-3 text-sm font-semibold text-slate-300"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmPay}
+                  className="flex-1 rounded-xl bg-emerald-500 py-3 text-sm font-bold text-white"
+                >
+                  Submit payment
+                </button>
+              </div>
+            )}
           </motion.div>
         </motion.div>
       )}
