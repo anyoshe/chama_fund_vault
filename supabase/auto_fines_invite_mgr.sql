@@ -22,7 +22,7 @@ begin
     raise exception 'Only the Chairperson can set late fine rules';
   end if;
   if p_late_fine_rate is null or p_late_fine_rate < 0 or p_late_fine_rate > 100 then
-    raise exception 'Late fine rate must be between 0 and 100 (%)';
+    raise exception 'Late fine rate must be between 0 and 100 percent';
   end if;
 
   update public.chamas
