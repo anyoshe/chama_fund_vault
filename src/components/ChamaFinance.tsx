@@ -2143,16 +2143,27 @@ export default function ChamaFinance(props: ChamaFinanceProps) {
                         className="rounded-lg bg-emerald-500 px-3 py-1.5 text-[11px] font-bold text-white"
                         onClick={async () => {
                           try {
-                            const { error } = await supabase.rpc(
+                            const { data, error } = await supabase.rpc(
                               "approve_pending_contribution",
                               { p_contribution_id: p.id },
                             );
                             if (error) throw error;
-                            toast.success("Approved — pot updated");
-                            setPendingPays((prev) => prev.filter((x) => x.id !== p.id));
-                            window.location.reload();
+                            const obl = (data as { obligationId?: string } | null)
+                              ?.obligationId;
+                            toast.success(
+                              obl
+                                ? "Approved — pot updated and member due cleared"
+                                : "Approved — pot updated",
+                            );
+                            setPendingPays((prev) =>
+                              prev.filter((x) => x.id !== p.id),
+                            );
+                            // Full refresh so kits, pool, statement, obligations match server
+                            window.setTimeout(() => window.location.reload(), 400);
                           } catch (e) {
-                            toast.error(e instanceof Error ? e.message : "Approve failed");
+                            toast.error(
+                              e instanceof Error ? e.message : "Approve failed — nothing changed",
+                            );
                           }
                         }}
                       >

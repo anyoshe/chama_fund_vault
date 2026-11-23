@@ -131,6 +131,7 @@ export const ORDERED_SQL_FILES = [
   "phase1_contribution_plans.sql",
   "dual_payment_modes.sql",
   "fix_submit_pending_contribution.sql",
+  "harden_approve_pending.sql",
   "loaning_pool.sql / kits_operations.sql",
   "proposals_ledger_persistence.sql",
   "chama_expenses_full.sql",

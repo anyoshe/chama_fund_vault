@@ -287,6 +287,25 @@ export default function Dashboard() {
           };
         }),
       );
+      const nMembers = ((memberRows ?? []) as MemberRow[]).length;
+      setDisplayChamas((prev) =>
+        prev.map((c) =>
+          c.id === activeChamaId
+            ? {
+                ...c,
+                memberCount: nMembers,
+                poolBalance:
+                  kitRows && Array.isArray(kitRows)
+                    ? (kitRows as { balance?: number }[]).reduce(
+                        (s, k) => s + (Number(k.balance) || 0),
+                        0,
+                      )
+                    : c.poolBalance,
+              }
+            : c,
+        ),
+      );
+
       if (contributionsError) {
         console.error("loadDashboardContributions", contributionsError);
       } else {
@@ -787,32 +806,16 @@ export default function Dashboard() {
       }
       return;
     } catch (e) {
-      console.warn("Server vote failed, local fallback", e);
+      // Revert optimistic UI — no fake success
+      setProposals((prev) =>
+        prev.map((p) => (p.id === proposalId ? target : p)),
+      );
+      toast.error(
+        e instanceof Error
+          ? e.message
+          : "Vote could not be saved. Check connection and try again.",
+      );
     }
-    const nextVotes = { ...target.votes, [currentMemberId]: vote };
-    const voterCount =
-      displayMembers.filter(
-        (m) => m.role !== "New Applicant" && m.id !== target.requesterId,
-      ).length || 1;
-    const required = Math.ceil(voterCount * target.quorumThreshold);
-    const approvals = Object.values(nextVotes).filter((v) => v === "approve").length;
-    const passed = target.status === "active" && approvals >= required;
-
-    setProposals((prev) =>
-      prev.map((p) => {
-        if (p.id !== proposalId) return p;
-        return { ...p, votes: nextVotes, status: passed ? "approved" : p.status };
-      }),
-    );
-    setLedger((prev) =>
-      pushAudit(prev, {
-        memberId: currentMemberId,
-        type: "vote",
-        description: `Voted ${vote} on proposal ${proposalId}`,
-        amount: 0,
-      }),
-    );
-    if (passed) toast.success("Quorum reached — awaiting treasurer disbursement", { description: target.title });
   };
 
   const handleDisburse = (proposalId: string) => {
