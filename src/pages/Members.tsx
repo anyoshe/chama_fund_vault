@@ -212,9 +212,9 @@ export default function Members() {
     }
 
     // 2) Brand-new person → need a temporary password to create Auth user
-    if (!password || password.length < 6) {
+    if (!password || password.length < 4) {
       setSubmitting(false);
-      toast.error("New members need a temporary password (at least 6 characters).");
+      toast.error("New members need a temporary password (at least 4 characters (letters, numbers, or both)).");
       return;
     }
 

@@ -61,8 +61,8 @@ export default function RegisterChama() {
         setError("Please fill in your name, email and password.");
         return;
       }
-      if (password.length < 6) {
-        setError("Password must be at least 6 characters.");
+      if (password.length < 4) {
+        setError("Password must be at least 4 characters (letters, numbers, or both).");
         return;
       }
       setError(null);
@@ -192,7 +192,7 @@ export default function RegisterChama() {
                         id="password"
                         type={showPassword ? "text" : "password"}
                         autoComplete="new-password"
-                        placeholder="Min. 6 characters"
+                        placeholder="Min. 4 characters (any letters or numbers)"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="w-full rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-3 pr-12 text-sm text-slate-100 placeholder:text-slate-600 outline-none transition focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20"

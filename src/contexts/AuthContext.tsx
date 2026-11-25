@@ -411,8 +411,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!fullName || !email || !password) {
       return { error: "Please fill in all required fields." };
     }
-    if (password.length < 6) {
-      return { error: "Password must be at least 6 characters." };
+    if (password.length < 4) {
+      return { error: "Password must be at least 4 characters (letters, numbers, or both)." };
     }
 
     // 1. Create auth user
@@ -496,8 +496,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (currentPassword.length === 0) {
       return { error: "Enter your current password." };
     }
-    if (newPassword.length < 6) {
-      return { error: "Password must be at least 6 characters." };
+    if (newPassword.length < 4) {
+      return { error: "Password must be at least 4 characters (letters, numbers, or both)." };
     }
     const { data: sessionData } = await supabase.auth.getSession();
     const email = sessionData.session?.user.email;
