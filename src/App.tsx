@@ -33,14 +33,7 @@ export default function App() {
               </PublicOnly>
             }
           />
-          <Route
-            path="/register"
-            element={
-              <PublicOnly>
-                <RegisterChama />
-              </PublicOnly>
-            }
-          />
+          <Route path="/register" element={<RegisterChama />} />
           <Route
             path="/app"
             element={

@@ -373,17 +373,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       minMonthlyContribution,
     } = payload;
 
-    if (!fullName || !email || !password || !chamaName) {
-      return { error: "Please fill in all required fields." };
-    }
-    if (password.length < 6) {
-      return { error: "Password must be at least 6 characters." };
+    if (!chamaName) {
+      return { error: "Please enter the chama name." };
     }
     if (!activities || activities.length === 0) {
       return { error: "Select at least one activity that applies to your chama." };
     }
 
     const normalizedPhone = phone ? normalizePhone(phone) : null;
+
+    // Already signed in (e.g. after DB wipe) — only create the group
+    {
+      const { data: existingSession } = await supabase.auth.getSession();
+      const existingUser = existingSession.session?.user;
+      if (existingUser) {
+        if (fullName?.trim()) {
+          await supabase.from("profiles").upsert({
+            id: existingUser.id,
+            full_name: fullName.trim(),
+            email: (existingUser.email ?? email ?? "").toLowerCase(),
+            phone: normalizedPhone,
+            avatar_hue: Math.floor(Math.random() * 360),
+          });
+        }
+        const created = await createChamaForUser(existingUser.id, {
+          chamaName,
+          tagline,
+          activities,
+          minMonthlyContribution,
+        });
+        if (created.error) return { error: created.error };
+        await hydrateUser(existingUser);
+        return {};
+      }
+    }
+
+    if (!fullName || !email || !password) {
+      return { error: "Please fill in all required fields." };
+    }
+    if (password.length < 6) {
+      return { error: "Password must be at least 6 characters." };
+    }
 
     // 1. Create auth user
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({

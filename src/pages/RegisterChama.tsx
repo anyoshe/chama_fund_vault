@@ -1,5 +1,5 @@
 import ChamaVaultLogo from "@/components/ChamaVaultLogo";
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -14,10 +14,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { CHAMA_ACTIVITIES, type ChamaActivity } from "@/types/chama";
 
 export default function RegisterChama() {
-  const { registerChama } = useAuth();
+  const { registerChama, session, user } = useAuth();
   const navigate = useNavigate();
+  const loggedIn = Boolean(session?.user);
 
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2>(loggedIn ? 2 : 1);
   const [error, setError] = useState<string | null>(null);
   const [checkEmail, setCheckEmail] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -38,6 +39,15 @@ export default function RegisterChama() {
   ]);
   const [minContribution, setMinContribution] = useState(5000);
 
+  useEffect(() => {
+    if (!loggedIn || !user) return;
+    setFullName(user.profile?.full_name || "");
+    setEmail(user.email || session?.user?.email || "");
+    setPhone(user.profile?.phone || "");
+    setStep(2);
+  }, [loggedIn, user, session]);
+
+
   const toggleActivity = (value: ChamaActivity) => {
     setActivities((prev) =>
       prev.includes(value) ? prev.filter((a) => a !== value) : [...prev, value],
@@ -46,7 +56,7 @@ export default function RegisterChama() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (step === 1) {
+    if (step === 1 && !loggedIn) {
       if (!fullName.trim() || !email.trim() || !password) {
         setError("Please fill in your name, email and password.");
         return;
@@ -68,10 +78,10 @@ export default function RegisterChama() {
     setError(null);
     setSubmitting(true);
     const result = await registerChama({
-      fullName,
-      email,
+      fullName: fullName || user?.profile?.full_name || "Chairperson",
+      email: email || user?.email || session?.user?.email || "",
       phone,
-      password,
+      password: loggedIn ? "unused-logged-in" : password,
       chamaName,
       tagline,
       activities,
@@ -96,6 +106,12 @@ export default function RegisterChama() {
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-900/20 via-slate-950 to-slate-950" />
 
       <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 py-12">
+        {loggedIn ? (
+          <p className="mb-4 max-w-md rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-center text-sm text-emerald-100">
+            You are signed in. Enter the new group details below — no need to create another account.
+          </p>
+        ) : null}
+
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
